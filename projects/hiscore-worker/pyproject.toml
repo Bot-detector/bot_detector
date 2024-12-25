@@ -1,0 +1,20 @@
+[build-system]
+requires = ["hatchling", "hatch-polylith-bricks"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hiscore-worker"
+version = "0.1.0"
+
+
+
+requires-python = ">=3.12"
+
+dependencies = []
+
+[tool.hatch.build.hooks.polylith-bricks]
+
+[tool.polylith.bricks]
+
+[tool.hatch.build.targets.wheel]
+packages = ["bot_detector"]
