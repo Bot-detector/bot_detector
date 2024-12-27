@@ -1,3 +1,3 @@
-from bot_detector.schema import core
+from bot_detector.schema import Player
 
-__all__ = ["core"]
+__all__ = ["core", "Player"]

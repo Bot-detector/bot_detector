@@ -10,6 +10,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "aiohttp>=3.11.11",
+    "aiokafkaengine>=0.1.0",
     "osrs>=0.0.14",
     "pydantic-settings>=2.7.0",
     "pydantic>=2.10.4",
@@ -18,6 +19,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "kafka-python>=2.0.2",
     "polylith-cli>=1.24.0",
     "pytest>=8.3.4",
     "ruff>=0.8.4",
