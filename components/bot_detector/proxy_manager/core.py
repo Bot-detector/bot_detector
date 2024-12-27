@@ -71,13 +71,13 @@ class ProxyManager:
         """
         headers = {"Authorization": f"Token {self.api_key}"}
         next_url = self.URL
-        _proxy_list = []
+        _proxy_list: list[Proxy] = []
 
         async with ClientSession() as session:
             while next_url:
                 proxies, resp = await self._fetch(session, next_url, headers)
                 # Add proxy URLs to the local list
-                _proxy_list.extend([proxy.url for proxy in proxies])
+                _proxy_list.extend(proxies)
 
                 # Check for the next page URL
                 next = resp.get("next")
@@ -86,7 +86,7 @@ class ProxyManager:
 
         # Safely update the proxy list with a lock
         async with self.lock:
-            self.proxy_list = _proxy_list
+            self.proxy_list = [proxy.url for proxy in _proxy_list]
         return self.proxy_list
 
     async def get_proxy(self, index=None):
@@ -95,12 +95,6 @@ class ProxyManager:
 
         Args:
             index (int, optional): The index of the proxy to retrieve.
-
-        Returns:
-            str or list: A single proxy URL or the entire list of proxies.
-
-        Raises:
-            IndexError: If the index is out of range.
         """
         async with self.lock:
             if index is None:
@@ -109,7 +103,7 @@ class ProxyManager:
             if not (0 <= index < len(self.proxy_list)):
                 return None, IndexError("Proxy index out of range.")
 
-            return self.proxy_list[index], None
+        return self.proxy_list[index], None
 
     async def rotate_proxies(self):
         """
