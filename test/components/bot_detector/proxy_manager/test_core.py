@@ -31,11 +31,12 @@ async def test_get_proxy():
     proxy_manager = ProxyManager(api_key=api_key)
     await proxy_manager.fetch_proxies()
 
-    all_proxies = await proxy_manager.get_proxy()
+    all_proxies, error = await proxy_manager.get_proxy()
+    assert error is None
     assert len(all_proxies) > 0
 
     # Fetch a specific proxy by index
-    proxy = await proxy_manager.get_proxy(index=0)
+    proxy, error = await proxy_manager.get_proxy(index=0)
     assert isinstance(proxy, str)
     assert proxy is not None, "Failed to retrieve proxy by index"
 
@@ -45,6 +46,7 @@ async def test_rotate_proxies():
     """
     Test the rotate_proxies method to ensure it fetches a fresh list of proxies.
     """
+    # there may or may not be rotation, we do not pay for manual rotation, but broken proxies will be rotated by the provider
     api_key = os.environ.get("PROXY_API_KEY")
     assert api_key, "API key not found in environment variables"
 
@@ -52,13 +54,31 @@ async def test_rotate_proxies():
 
     # Fetch initial list of proxies
     await proxy_manager.fetch_proxies()
-    proxies_before = await proxy_manager.get_proxy()
+    proxies_before, error = await proxy_manager.get_proxy()
+    assert error is None
     assert len(proxies_before) > 0
 
     # Rotate proxies
     await proxy_manager.rotate_proxies()
-    proxies_after = await proxy_manager.get_proxy()
+    proxies_after, error = await proxy_manager.get_proxy()
+    assert error is None
     assert len(proxies_after) > 0
 
     assert len(proxies_before) == len(proxies_after)
-    # there may or may not be rotation, we do not pay for manual rotation, but broken proxies will be rotated by the provider
+
+
+@pytest.mark.asyncio
+async def test_get_proxy_index_error():
+    """
+    Test the get_proxy method for retrieving specific proxies or all proxies.
+    """
+    api_key = os.environ.get("PROXY_API_KEY")
+    assert api_key, "API key not found in environment variables"
+
+    proxy_manager = ProxyManager(api_key=api_key)
+    proxies = await proxy_manager.fetch_proxies()
+
+    # Fetch a specific proxy by index
+    proxy, error = await proxy_manager.get_proxy(index=len(proxies) + 1)
+    assert isinstance(error, IndexError)
+    assert proxy is None

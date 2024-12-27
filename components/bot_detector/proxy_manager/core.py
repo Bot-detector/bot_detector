@@ -104,12 +104,12 @@ class ProxyManager:
         """
         async with self.lock:
             if index is None:
-                return list(self.proxy_list)  # Return a copy of the list
+                return list(self.proxy_list), None
 
             if not (0 <= index < len(self.proxy_list)):
-                raise IndexError("Proxy index out of range.")
+                return None, IndexError("Proxy index out of range.")
 
-            return self.proxy_list[index]
+            return self.proxy_list[index], None
 
     async def rotate_proxies(self):
         """
