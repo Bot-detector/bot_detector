@@ -1,4 +1,4 @@
-from bot_detector.scraper import core
+from bot_detector.scraper_service import core
 
 
 def test_sample():
