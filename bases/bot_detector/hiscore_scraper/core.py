@@ -7,6 +7,7 @@ from aiohttp import ClientSession
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 from AioKafkaEngine import ConsumerEngine, ProducerEngine
 from bot_detector.proxy_manager import ProxyManager
+from bot_detector.schema import Player
 from osrs.asyncio import Hiscore, HSMode
 from osrs.exceptions import PlayerDoesNotExist, UnexpectedRedirection
 from osrs.utils import RateLimiter
@@ -77,16 +78,17 @@ class Worker:
         logger.debug(f"Worker {self.worker_id}: Performing task with proxy {proxy}")
 
         # TODO: get name from kafka
-        # player = await self.to_scrape_queue.get()
-        player = {}
-        player_name = "extreme4all"
+        player: Player = await self.to_scrape_queue.get()
+        print(player)
+        # player = {}
+        # player_name = "extreme4all"
 
         # get data from osrs hiscore
         try:
             hiscore_instance = Hiscore(proxy=proxy, rate_limiter=self.limiter)
             player_stats = await hiscore_instance.get(
                 mode=HSMode.OLDSCHOOL,
-                player=player_name,
+                player=player.name,
                 session=session,
             )
         except PlayerDoesNotExist:

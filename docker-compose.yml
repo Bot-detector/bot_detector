@@ -64,11 +64,10 @@ services:
     build:
       context: ./
       dockerfile: ./projects/hiscore_scraper/Dockerfile
-    command: ["sleep", "infinity"]
-    volumes:
-      - ./projects/hiscore_scraper:/app/projects  # Mount the project directory for dynamic updates
     networks:
       - botdetector-network
+    env_file:
+      - .env
     depends_on:
       kafka:
         condition: service_healthy
