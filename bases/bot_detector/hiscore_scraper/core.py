@@ -72,13 +72,16 @@ class Worker:
                     logger.error(
                         f"Worker {self.worker_id}: Error using proxy {proxy}: {e}"
                     )
+                    await asyncio.sleep(10)
+                    continue
 
     async def perform_task(self, proxy: str, session: ClientSession):
         """Perform a specific task using the provided proxy."""
         logger.debug(f"Worker {self.worker_id}: Performing task with proxy {proxy}")
 
         # TODO: get name from kafka
-        player: Player = await self.to_scrape_queue.get()
+        msg = await self.to_scrape_queue.get()
+        player = Player(**msg[0].value)
         print(player)
         # player = {}
         # player_name = "extreme4all"
@@ -93,21 +96,26 @@ class Worker:
             )
         except PlayerDoesNotExist:
             # TODO: push data to kafka runemetrics topic
-            await self.not_found_queue.put(item=player)
-            pass
+            await self.not_found_queue.put(item=player.model_dump(mode="json"))
+            return
         except UnexpectedRedirection:
             # TODO: push data to kafka scraper topic
-            self.error_queue.put(item=player)
-            pass
+            self.error_queue.put(item=player.model_dump(mode="json"))
+            return
 
         hiscore_data = {
-            "skills": {
-                skill.name: skill.xp for skill in player_stats.skills if skill.xp > 0
-            },
-            "activities": {
-                activity.name: activity.score
-                for activity in player_stats.activities
-                if activity.score > 0
+            "player_data": player.model_dump(),
+            "hiscore_data": {
+                "skills": {
+                    skill.name: skill.xp
+                    for skill in player_stats.skills
+                    if skill.xp > 0
+                },
+                "activities": {
+                    activity.name: activity.score
+                    for activity in player_stats.activities
+                    if activity.score > 0
+                },
             },
         }
         print(hiscore_data)
@@ -126,7 +134,7 @@ async def consume_players_to_scrape(queue: Queue):
             auto_offset_reset="earliest",
         ),
         queue=queue,
-        batch_size=10,
+        batch_size=1,
         timeout=1,
     )
     await engine.start()
