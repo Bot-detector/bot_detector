@@ -58,5 +58,20 @@ services:
       kafka:
         condition: service_healthy
 
+  hiscore_scraper:
+    container_name: hiscore_scraper
+    image: bd/hiscore_scraper # tags the image if build
+    build:
+      context: ./
+      dockerfile: ./projects/hiscore_scraper/Dockerfile
+    command: ["sleep", "infinity"]
+    volumes:
+      - ./projects/hiscore_scraper:/app/projects  # Mount the project directory for dynamic updates
+    networks:
+      - botdetector-network
+    depends_on:
+      kafka:
+        condition: service_healthy
 networks:
   botdetector-network:
+    name: bd-network

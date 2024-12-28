@@ -1,21 +1,21 @@
 # Base stage
-FROM python:3.11-slim-bookworm as base
+FROM python:3.11-slim-bookworm AS base
 COPY --from=ghcr.io/astral-sh/uv:0.5.13 /uv /uvx /bin/
 
-# set the working directory
-WORKDIR /project
+# Set the working directory
+WORKDIR /app
 
-COPY ./pyproject.toml /project
-COPY ./uv.lock /project
+# Copy the project configuration files
+COPY ./projects/hiscore_scraper/pyproject.toml /app
+COPY ./projects/hiscore_scraper/uv.lock /app
+
+# Sync dependencies with uv
 RUN uv sync --frozen
 
-# copy the scripts to the folder
-COPY ./src /project/src
+# Copy all components, bases, and projects
+COPY ./components ./app/components
+COPY ./bases ./app/bases
+COPY ./projects ./app/projects
 
-# Production stage for highscore
-FROM base as production-highscore
-# Creates a non-root user with an explicit UID and adds permission to access the /project folder
-RUN adduser -u 5678 --disabled-password --gecos "" appuser && chown -R appuser /project
-USER appuser
-
-CMD ["python", "src/main_highscore.py"]
+# Set the entry point for the application
+CMD ["uv", "run", "hiscore_scraper"]
