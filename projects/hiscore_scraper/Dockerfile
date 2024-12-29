@@ -1,23 +1,33 @@
-# Base stage
-FROM python:3.11-slim-bookworm
+# Build stage: Use uv to build the wheel
+FROM python:3.11-slim-bookworm AS builder
+
+# Copy uv from external repository
 COPY --from=ghcr.io/astral-sh/uv:0.5.13 /uv /uvx /bin/
 
-ARG wheel=hiscore_scraper-0.1.0-py3-none-any.whl
+# Set the working directory for the build stage
+WORKDIR /app
 
-# This is when using workspaces, and when exported the requirements
-ARG deps=requirements.txt
+# Copy only necessary files for building the wheel
+COPY ./projects/hiscore_scraper/pyproject.toml .
+COPY ./projects/hiscore_scraper/uv.lock .
+COPY ./projects/hiscore_scraper/ .
 
-RUN python -m pip install --upgrade pip
+# Build the wheel using uv
+RUN uv build --out-dir ./dist
 
-WORKDIR /code
+# Production stage: Prepare the final production environment
+FROM python:3.11-slim-bookworm AS production
 
-COPY ./dist/$wheel /code/$wheel
-COPY ./$deps /code/$deps
+# Copy uv from the builder stage
+COPY --from=ghcr.io/astral-sh/uv:0.5.13 /uv /uvx /bin/
 
-# This is adjusted to install third-party dependencies separately (the --no-deps) and install from requirements
-RUN pip install --no-cache-dir --upgrade --no-deps /code/$wheel
-RUN pip install -r /code/$deps
+# Copy the built wheel from the build stage
+WORKDIR /app
+COPY --from=builder /app/dist/ .
+COPY --from=builder /app/pyproject.toml .
+COPY --from=builder /app/uv.lock .
+# Install the wheel using uv
+# RUN uv install --wheel ./dist/*.whl
 
-# Set the entry point for the application
-CMD ["uv", "run", "bases/bot_detector/hiscore_scraper/core.py"]
- 
+# Run the package using uv
+CMD ["uv", "run", "hiscore_scraper"]

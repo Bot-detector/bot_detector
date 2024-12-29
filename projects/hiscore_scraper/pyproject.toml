@@ -13,8 +13,12 @@ requires-python = ">=3.10"
 dependencies = [
     "aiokafkaengine>=0.1.0",
     "osrs>=0.0.14",
+    "pydantic-settings>=2.7.0",
     "pydantic>=2.10.4",
 ]
+
+[project.scripts]
+hiscore_scraper = "bot_detector.hiscore_scraper.core:main"
 
 # This section is needed for building
 [tool.hatch.build.targets.wheel]
