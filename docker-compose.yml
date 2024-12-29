@@ -61,9 +61,14 @@ services:
   hiscore_scraper:
     container_name: hiscore_scraper
     image: bd/hiscore_scraper # tags the image if build
+  
     build:
       context: ./
       dockerfile: ./projects/hiscore_scraper/Dockerfile
+      args:
+        - wheel=projects/hiscore_scraper/dist/hiscore_scraper-0.1.0-py3-none-any.whl
+        - deps=projects/hiscore_scraper/requirements.txt
+    command: ["sleep", "infinity"]
     networks:
       - botdetector-network
     env_file:
