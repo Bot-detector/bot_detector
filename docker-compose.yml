@@ -80,6 +80,10 @@ services:
       context: ./
       dockerfile: Dockerfile
     # command: ["uv", "run", "bases/bot_detector/hiscore_scraper/core.py"]
+    volumes:
+      - ./bases:/app/bases
+      - ./components:/app/components
+      - ./projects:/app/projects
     command: ["sleep", "infinity"]
     networks:
       - botdetector-network

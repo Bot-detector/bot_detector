@@ -18,6 +18,4 @@ COPY ./bases ./bases
 COPY ./components ./components
 COPY ./projects ./projects
 
-WORKDIR /app/projects/hiscore_scraper/
-
-CMD [ "uv", "run", "bases/bot_detector/hiscore_scraper/core.py" ]
+CMD [ "sleep", "infinity" ]
