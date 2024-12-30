@@ -1,45 +1,33 @@
-documentation on the architecture https://davidvujic.github.io/python-polylith-docs/
+# The Polylith Architecture
 
-basic commands
+## Overview
+The Polylith architecture is a modular approach to organizing codebases, aimed at improving maintainability, reducing duplication, and providing better oversight of projects. It is particularly well-suited for managing large, complex applications.
+
+### Why Use Polylith?
+1. **Reduce Duplication**: With many repositories, schemas and functionalities are often replicated, leading to inconsistencies and maintenance challenges. Polylith consolidates shared code into reusable components.
+2. **Improve Oversight**: Managing multiple repositories can obscure the overall project structure. Polylith centralizes the architecture, making it easier to navigate and understand.
+3. **Streamline Onboarding**: New developers can quickly understand the project structure without needing to navigate numerous repositories.
+
+## Documentation
+For an in-depth guide on Polylith architecture, visit the [Polylith Documentation](https://davidvujic.github.io/python-polylith-docs/).
+
+## Commands
+Below are the essential commands for working with Polylith in your project.
+
+### Create a Base
+A base serves as the foundation for your architecture, often containing shared logic or configurations.
+
 ```sh
-# create a base
-uv run poly create base --name my_base
-
-# create a component
-uv run poly create component --name my_component
-
-# create a project
-uv run poly create project --name scraper
+uv run poly create base --name <base_name>
+```
+### Create a Component
+A component is a reusable, self-contained module that encapsulates specific functionality.
+```sh
+uv run poly create component --name <component_name>
 ```
 
-
-# scraping
-idea for topic naming
-
-Topic for player data to scrape:
-players.to_scrape
-
-Topic for scraped player data (hiscores and player data):
-players.scraped
-
-Topic for player data not found in hiscores (advanced scraping):
-players.not_found
-
-idea for data structure
-```json
-{
-  "metadata": {
-    "id": "uuid",
-    "timestamp": "2024-12-25T12:34:56Z",
-    "source": "game_api"
-  },
-  "player_data": {
-    "player_name": "example_user",
-    ...
-  },
-  "hiscore_data":{
-    "player_name": "example_user",
-    ...
-  }
-}
-``` 
+### Create a Project
+A project is the entry point for your application, built using the base and components.
+```sh
+uv run poly create project --name <project_name>
+```
