@@ -1,11 +1,9 @@
 import asyncio
-import json
 import logging
 from asyncio import Queue
 
 from aiohttp import ClientSession
-from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
-from AioKafkaEngine import ConsumerEngine, ProducerEngine
+from bot_detector.kafka_client import KafkaConsumer, KafkaProducer
 from bot_detector.proxy_manager import ProxyManager
 from bot_detector.schema import Player
 from osrs.asyncio import Hiscore, HSMode
@@ -79,12 +77,9 @@ class Worker:
         """Perform a specific task using the provided proxy."""
         logger.debug(f"Worker {self.worker_id}: Performing task with proxy {proxy}")
 
-        # TODO: get name from kafka
+        # get name from kafka
         msg = await self.to_scrape_queue.get()
         player = Player(**msg[0].value)
-        print(player)
-        # player = {}
-        # player_name = "extreme4all"
 
         # get data from osrs hiscore
         try:
@@ -95,11 +90,11 @@ class Worker:
                 session=session,
             )
         except PlayerDoesNotExist:
-            # TODO: push data to kafka runemetrics topic
+            # push data to kafka players.not_found
             await self.not_found_queue.put(item=player.model_dump(mode="json"))
             return
         except UnexpectedRedirection:
-            # TODO: push data to kafka scraper topic
+            # push data to kafka: players.to_scrape
             self.error_queue.put(item=player.model_dump(mode="json"))
             return
 
@@ -120,70 +115,8 @@ class Worker:
         }
         print(hiscore_data)
 
-        # TODO: push data to kafka hiscore topic
+        # push data players.scraped
         await self.scraped_queue.put(item=hiscore_data)
-
-
-async def consume_players_to_scrape(queue: Queue):
-    engine = ConsumerEngine(
-        consumer=AIOKafkaConsumer(
-            *["players.to_scrape"],
-            bootstrap_servers=SETTINGS.KAFKA_BOOTSTRAP_SERVERS,
-            group_id="my_group",
-            value_deserializer=lambda x: json.loads(x.decode("utf-8")),
-            auto_offset_reset="earliest",
-        ),
-        queue=queue,
-        batch_size=1,
-        timeout=1,
-    )
-    await engine.start()
-    return asyncio.create_task(engine.consume())
-
-
-async def produce_players_to_scrape(queue: Queue):
-    engine = ProducerEngine(
-        producer=AIOKafkaProducer(
-            bootstrap_servers=SETTINGS.KAFKA_BOOTSTRAP_SERVERS,
-            value_serializer=lambda v: json.dumps(v).encode(),
-            acks="all",
-        ),
-        queue=queue,
-        topic="players.to_scrape",
-    )
-    await engine.start()
-
-    return asyncio.create_task(engine.produce())
-
-
-async def produce_scraped_players(queue: Queue):
-    engine = ProducerEngine(
-        producer=AIOKafkaProducer(
-            bootstrap_servers=SETTINGS.KAFKA_BOOTSTRAP_SERVERS,
-            value_serializer=lambda v: json.dumps(v).encode(),
-            acks="all",
-        ),
-        queue=queue,
-        topic="players.scraped",
-    )
-    await engine.start()
-
-    return asyncio.create_task(engine.produce())
-
-
-async def produce_players_not_found(queue: Queue):
-    engine = ProducerEngine(
-        producer=AIOKafkaProducer(
-            bootstrap_servers=SETTINGS.KAFKA_BOOTSTRAP_SERVERS,
-            value_serializer=lambda v: json.dumps(v).encode(),
-            acks="all",
-        ),
-        queue=queue,
-        topic="players.not_found",
-    )
-    await engine.start()
-
-    return asyncio.create_task(engine.produce())
 
 
 async def main():
@@ -197,11 +130,24 @@ async def main():
     scraped_queue = Queue()
     not_found_queue = Queue()
 
+    # Kafka Consumers
+    consumer = KafkaConsumer(
+        bootstrap_servers=SETTINGS.KAFKA_BOOTSTRAP_SERVERS,
+        group_id="scraper",
+    )
+
+    # Kafka Producers
+    producer = KafkaProducer(bootstrap_servers=SETTINGS.KAFKA_BOOTSTRAP_SERVERS)
+
     kafka_tasks = [
-        await consume_players_to_scrape(queue=to_scrape_queue),
-        await produce_players_to_scrape(queue=error_queue),
-        await produce_scraped_players(queue=scraped_queue),
-        await produce_players_not_found(queue=not_found_queue),
+        await consumer.consume(
+            topic="players.to_scrape",
+            queue=to_scrape_queue,
+            batch_size=1,
+        ),
+        await producer.produce(topic="players.to_scrape", queue=error_queue),
+        await producer.produce(topic="players.scraped", queue=scraped_queue),
+        await producer.produce(topic="players.not_found", queue=not_found_queue),
     ]
 
     workers = [
