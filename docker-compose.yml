@@ -61,7 +61,6 @@ services:
   hiscore_scraper:
     container_name: hiscore_scraper
     image: bd/hiscore_scraper # tags the image if build
-  
     build:
       context: ./
       dockerfile: ./projects/hiscore_scraper/Dockerfile
@@ -70,9 +69,24 @@ services:
       - botdetector-network
     env_file:
       - .env
-    depends_on:
-      kafka:
-        condition: service_healthy
+  #   depends_on:
+  #     kafka:
+  #       condition: service_healthy
+  project_debugger:
+    container_name: anything_debug
+    image: bd/anything_debug # tags the image if build
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    # command: ["uv", "run", "bases/bot_detector/hiscore_scraper/core.py"]
+    command: ["sleep", "infinity"]
+    networks:
+      - botdetector-network
+    env_file:
+      - .env
+    # depends_on:
+    #   kafka:
+    #     condition: service_healthy
 networks:
   botdetector-network:
     name: bd-network

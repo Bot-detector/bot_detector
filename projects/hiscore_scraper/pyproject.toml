@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.scripts]
-hiscore_scraper = "bot_detector.hiscore_scraper.core:main"
+hiscore_scraper = "bot_detector.hiscore_scraper.core:run"
 
 # This section is needed for building
 [tool.hatch.build.targets.wheel]
