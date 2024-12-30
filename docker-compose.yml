@@ -74,8 +74,8 @@ services:
         condition: service_healthy
   
   project_debugger:
-    container_name: anything_debug
-    image: bd/anything_debug # tags the image if build
+    container_name: project_debugger
+    image: bd/project_debugger # tags the image if build
     build:
       context: ./
       dockerfile: Dockerfile

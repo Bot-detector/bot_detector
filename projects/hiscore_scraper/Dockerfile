@@ -13,9 +13,7 @@ COPY ./projects ./projects
 
 WORKDIR /app/projects/hiscore_scraper
 
-RUN uv venv
-RUN uv build --out-dir ./dist
-RUN uv pip install /app/projects/hiscore_scraper/dist/hiscore_scraper-0.1.0-py3-none-any.whl
+# RUN uv build
 RUN uv sync --frozen --no-editable
 
 # Production stage: Prepare the final production environment
