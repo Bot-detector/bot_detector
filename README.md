@@ -2,19 +2,31 @@
 
 ## Requirements
 - Docker
-- Webshare API key
 
-## Steps
+## General Setup
+
+1. create an .env file from the .env.example contents
+
+    ```
+    PROXY_API_KEY=""
+    KAFKA_BOOTSTRAP_SERVERS="kafka:9092"
+    ```
+
+2. Build and start the Docker container:
+    ```sh
+    docker compose up --build
+    ```
+
+## Other Setup
+### Web Scraper
+
 1. Generate an API key from [Webshare](https://www.webshare.io/?referral_code=qvpjdwxqsblt).
 2. Copy the contents of `.env.example` to a new `.env` file.
 3. Replace `<api key>` in the `.env` file with your API key:
+
     ```env
     PROXY_API_KEY="<api key>"
     KAFKA_BOOTSTRAP_SERVERS="kafka:9092"
-    ```
-4. Build and start the Docker container:
-    ```sh
-    docker compose up --build
     ```
 
 # The Polylith Architecture
