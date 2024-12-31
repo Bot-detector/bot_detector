@@ -1,3 +1,22 @@
+# Setup
+
+## Requirements
+- Docker
+- Webshare API key
+
+## Steps
+1. Generate an API key from [Webshare](https://www.webshare.io/?referral_code=qvpjdwxqsblt).
+2. Copy the contents of `.env.example` to a new `.env` file.
+3. Replace `<api key>` in the `.env` file with your API key:
+    ```env
+    PROXY_API_KEY="<api key>"
+    KAFKA_BOOTSTRAP_SERVERS="kafka:9092"
+    ```
+4. Build and start the Docker container:
+    ```sh
+    docker compose up --build
+    ```
+
 # The Polylith Architecture
 
 ## Overview
