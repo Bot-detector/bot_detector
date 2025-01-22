@@ -17,11 +17,11 @@ class KafkaProducer:
             topic (str): Kafka topic to produce to.
             queue (asyncio.Queue): Queue to pull messages from and produce.
         """
-        producer = AIOKafkaProducer(
+        self.producer = AIOKafkaProducer(
             bootstrap_servers=self.bootstrap_servers,
             value_serializer=lambda v: json.dumps(v).encode(),
             acks="all",
         )
-        engine = ProducerEngine(producer=producer, queue=queue, topic=topic)
-        await engine.start()
-        return asyncio.create_task(engine.produce())
+        self.engine = ProducerEngine(producer=self.producer, queue=queue, topic=topic)
+        await self.engine.start()
+        return asyncio.create_task(self.engine.produce())

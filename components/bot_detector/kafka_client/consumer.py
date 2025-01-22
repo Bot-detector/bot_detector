@@ -22,15 +22,15 @@ class KafkaConsumer:
             batch_size (int): Number of messages to consume in one batch.
             timeout (int): Timeout for consuming messages.
         """
-        consumer = AIOKafkaConsumer(
+        self.consumer = AIOKafkaConsumer(
             topic,
             bootstrap_servers=self.bootstrap_servers,
             group_id=self.group_id,
             value_deserializer=lambda x: json.loads(x.decode("utf-8")),
             auto_offset_reset="earliest",
         )
-        engine = ConsumerEngine(
-            consumer=consumer, queue=queue, batch_size=batch_size, timeout=timeout
+        self.engine = ConsumerEngine(
+            consumer=self.consumer, queue=queue, batch_size=batch_size, timeout=timeout
         )
-        await engine.start()
-        return asyncio.create_task(engine.consume())
+        await self.engine.start()
+        return asyncio.create_task(self.engine.consume())

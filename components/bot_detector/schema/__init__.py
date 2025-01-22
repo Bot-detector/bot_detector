@@ -1,3 +1,13 @@
-from bot_detector.schema.core import Player
+from bot_detector.schema.core import (
+    HighscoreData,
+    Player,
+    ScraperData,
+    ScraperHiscoreData,
+)
 
-__all__ = ["Player"]
+__all__ = [
+    "Player",
+    "HighscoreData",
+    "ScraperData",
+    "ScraperHiscoreData",
+]

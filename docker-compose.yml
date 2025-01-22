@@ -62,20 +62,42 @@ services:
       kafka:
         condition: service_healthy
 
-  hiscore_scraper:
-    container_name: hiscore_scraper
-    image: bd/hiscore_scraper # tags the image if build
+  mysql:
+    container_name: database
     build:
-      context: ./
-      dockerfile: ./projects/hiscore_scraper/Dockerfile
-    # command: ["sleep", "infinity"]
+      context: ./_mysql
+    image: bd/mysql:latest
+    environment:
+      - MYSQL_ROOT_PASSWORD=root_bot_buster
+    volumes:
+      - ./_mysql/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
+    ports:
+      - 3306:3306
+    expose:
+      - 3306
     networks:
       - botdetector-network
-    env_file:
-      - .env
-    depends_on:
-      kafka:
-        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -proot_bot_buster"]
+      interval: 10s
+      retries: 3
+      start_period: 30s
+      timeout: 5s
+
+  # hiscore_scraper:
+  #   container_name: hiscore_scraper
+  #   image: bd/hiscore_scraper # tags the image if build
+  #   build:
+  #     context: ./
+  #     dockerfile: ./projects/hiscore_scraper/Dockerfile
+  #   # command: ["sleep", "infinity"]
+  #   networks:
+  #     - botdetector-network
+  #   env_file:
+  #     - .env
+  #   depends_on:
+  #     kafka:
+  #       condition: service_healthy
   
   project_debugger:
     container_name: project_debugger
@@ -93,9 +115,7 @@ services:
       - botdetector-network
     env_file:
       - .env
-    # depends_on:
-    #   kafka:
-    #     condition: service_healthy
+
 networks:
   botdetector-network:
     name: bd-network

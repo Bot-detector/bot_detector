@@ -62,3 +62,18 @@ A project is the entry point for your application, built using the base and comp
 ```sh
 uv run poly create project --name <project_name>
 ```
+
+# get new_highscore_data
+# select highscore_data_latest
+# calculate highscore_data_delta
+# insert highscore_data_delta
+# insert highscore_data
+
+
+
+# insert highscore_data
+	# trigger after insert
+		# insert highscore_data_latest on duplicate_key update
+			# trigger after insert
+				# calculate delta
+				# insert delta

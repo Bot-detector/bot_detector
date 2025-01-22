@@ -5,7 +5,7 @@ from asyncio import Queue
 from aiohttp import ClientSession
 from bot_detector.kafka_client import KafkaConsumer, KafkaProducer
 from bot_detector.proxy_manager import ProxyManager
-from bot_detector.schema import Player
+from bot_detector.schema import Player, ScraperData, ScraperHiscoreData
 from osrs.asyncio import Hiscore, HSMode
 from osrs.exceptions import PlayerDoesNotExist, UnexpectedRedirection
 from osrs.utils import RateLimiter
@@ -98,25 +98,19 @@ class Worker:
             self.error_queue.put(item=player.model_dump(mode="json"))
             return
 
-        hiscore_data = {
-            "player_data": player.model_dump(),
-            "hiscore_data": {
-                "skills": {
-                    skill.name: skill.xp
-                    for skill in player_stats.skills
-                    if skill.xp > 0
-                },
-                "activities": {
-                    activity.name: activity.score
-                    for activity in player_stats.activities
-                    if activity.score > 0
-                },
-            },
-        }
-        print(hiscore_data)
+        skills = {s.name: s.xp for s in player_stats.skills if s.xp > 0}
+        activities = {a.name: a.score for a in player_stats.activities if a.score > 0}
+
+        hiscore_data = ScraperData(
+            player_data=player,
+            hiscore_data=ScraperHiscoreData(
+                skills=skills,
+                activities=activities,
+            ),
+        )
 
         # push data players.scraped
-        await self.scraped_queue.put(item=hiscore_data)
+        await self.scraped_queue.put(item=hiscore_data.model_dump())
 
 
 async def main():

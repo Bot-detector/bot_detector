@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling", "hatch-polylith-bricks"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hiscore_worker"
+version = "0.1.0"
+
+
+
+requires-python = ">=3.10"
+
+dependencies = []
+
+[tool.hatch.build.hooks.polylith-bricks]
+
+[tool.polylith.bricks]
+"../../bases/bot_detector/hiscore_scraper" = "bot_detector/hiscore_scraper"
+"../../components/bot_detector/proxy_manager" = "bot_detector/proxy_manager"
+"../../components/bot_detector/kafka_client" = "bot_detector/kafka_client"
+"../../components/bot_detector/schema" = "bot_detector/schema"
