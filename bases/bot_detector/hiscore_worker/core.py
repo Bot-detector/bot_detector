@@ -16,9 +16,52 @@ class Settings(BaseSettings):
 
 
 async def batch_insert(data: list[HighscoreData]):
+    data_to_insert = [
+        {
+            "player_id": d.player_id,
+            "scrape_ts": d.scrape_ts,
+            "skills": d.skills,
+            "activities": d.activities,
+        }
+        for d in data
+    ]
+    sql_temp = sqla.text("""
+        CREATE TABLE `temp_hs_data` (
+        `player_id` INT NOT NULL,
+        `scrape_ts` DATETIME NOT NULL,
+        `start_ts` DATETIME NOT NULL,
+        `scrape_year` INT AS (YEAR(scrape_ts)) STORED,
+        `scrape_week` INT AS (WEEK(scrape_ts, 3)) STORED,
+        `skills` JSON DEFAULT NULL,
+        `activities` JSON DEFAULT NULL,
+        PRIMARY KEY (`player_id`, `scrape_year`, `scrape_week`),
+        );
+    """)
+    sql_insert_temp_table = sqla.text("""
+        INSERT INTO temp_hs_data (player_id, scrape_ts, skills, activities)
+        VALUES (:player_id, :scrape_ts, :skills, :activities)
+    """)
+
+    sql_insert = """
+        INSERT INTO highscore_data (player_id, scrape_ts, skills, activities, skills_delta, activities_delta)
+        SELECT 
+            tmp.player_id, 
+            tmp.scrape_ts, 
+            tmp.skills, 
+            tmp.activities 
+        FROM temp_hs_data tmp
+        INNER JOIN highscore_data hsd ON (
+            tmp.player_id = hsd.player_id and 
+            tmp.scrape_week => hsd.scrape_week
+            tmp.
+
+        )
+        ON DUPLICATE KEY UPDATE ()
+    """
     sql = sqla.insert(dbHighscoreData).values([d.model_dump() for d in data])
     async with Session.begin() as session:
-        await session.execute()
+        await session.execute(sql_temp)
+        await session.execute(sql_insert_temp_table, params=data_to_insert)
 
 
 async def process_data(queue: Queue, error_queue=Queue):
@@ -27,7 +70,9 @@ async def process_data(queue: Queue, error_queue=Queue):
         batched: list[ScraperData] = [ScraperData(**m.value) for m in batch]
         del batch  # saving some memory
 
-        print(batched[0])
+        parsed_batch = []
+        for msg in batched:
+            HighscoreData()
         break
 
 
