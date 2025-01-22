@@ -22,12 +22,9 @@ CREATE TABLE Players (
 CREATE TABLE `highscore_data` (
   `player_id` INT NOT NULL,
   `scrape_ts` DATETIME NOT NULL,
-  `start_ts` DATETIME NOT NULL,
   `scrape_year` INT AS (YEAR(scrape_ts)) STORED,
   `scrape_week` INT AS (WEEK(scrape_ts, 3)) STORED,
   `skills` JSON DEFAULT NULL,
   `activities` JSON DEFAULT NULL,
-  `skills_delta` JSON DEFAULT NULL,
-  `activities_delta` JSON DEFAULT NULL,
-  PRIMARY KEY (`player_id`, `scrape_year`, `scrape_week`),
+  PRIMARY KEY (`player_id`, `scrape_year`, `scrape_week`)
 ) PARTITION BY HASH (`player_id`) PARTITIONS 10;

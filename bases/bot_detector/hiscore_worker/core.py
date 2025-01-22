@@ -1,7 +1,10 @@
 import asyncio
 from asyncio import Queue
 
-import sqlalchemy as sqla
+import sqlalchemy
+import sqlalchemy.dialects.mysql as sqla
+
+# import sqlalchemy as sqla
 from aiokafka import ConsumerRecord
 from bot_detector.database import Session
 from bot_detector.database.models import dbHighscoreData
@@ -25,43 +28,40 @@ async def batch_insert(data: list[HighscoreData]):
         }
         for d in data
     ]
-    sql_temp = sqla.text("""
-        CREATE TABLE `temp_hs_data` (
-        `player_id` INT NOT NULL,
-        `scrape_ts` DATETIME NOT NULL,
-        `start_ts` DATETIME NOT NULL,
-        `scrape_year` INT AS (YEAR(scrape_ts)) STORED,
-        `scrape_week` INT AS (WEEK(scrape_ts, 3)) STORED,
-        `skills` JSON DEFAULT NULL,
-        `activities` JSON DEFAULT NULL,
-        PRIMARY KEY (`player_id`, `scrape_year`, `scrape_week`),
-        );
-    """)
-    sql_insert_temp_table = sqla.text("""
-        INSERT INTO temp_hs_data (player_id, scrape_ts, skills, activities)
-        VALUES (:player_id, :scrape_ts, :skills, :activities)
-    """)
 
-    sql_insert = """
-        INSERT INTO highscore_data (player_id, scrape_ts, skills, activities, skills_delta, activities_delta)
-        SELECT 
-            tmp.player_id, 
-            tmp.scrape_ts, 
-            tmp.skills, 
-            tmp.activities 
-        FROM temp_hs_data tmp
-        INNER JOIN highscore_data hsd ON (
-            tmp.player_id = hsd.player_id and 
-            tmp.scrape_week => hsd.scrape_week
-            tmp.
+    # Step 1: Construct the insert statement
+    sql_insert = sqla.insert(dbHighscoreData).values(data_to_insert)
 
-        )
-        ON DUPLICATE KEY UPDATE ()
-    """
-    sql = sqla.insert(dbHighscoreData).values([d.model_dump() for d in data])
+    # Step 2: Add ON DUPLICATE KEY UPDATE with conditional logic using SQLAlchemy case
+    sql_insert = sql_insert.on_duplicate_key_update(
+        scrape_ts=sqlalchemy.case(
+            (
+                dbHighscoreData.scrape_ts < sqlalchemy.bindparam("scrape_ts"),
+                sqlalchemy.bindparam("scrape_ts"),
+            ),
+            else_=dbHighscoreData.scrape_ts,
+        ),
+        skills=sqlalchemy.case(
+            (
+                dbHighscoreData.scrape_ts < sqlalchemy.bindparam("scrape_ts"),
+                sqlalchemy.bindparam("skills"),
+            ),
+            else_=dbHighscoreData.skills,
+        ),
+        activities=sqlalchemy.case(
+            (
+                dbHighscoreData.scrape_ts < sqlalchemy.bindparam("scrape_ts"),
+                sqlalchemy.bindparam("activities"),
+            ),
+            else_=dbHighscoreData.activities,
+        ),
+    )
+
+    # Step 3: Execute the insert statement
     async with Session.begin() as session:
-        await session.execute(sql_temp)
-        await session.execute(sql_insert_temp_table, params=data_to_insert)
+        await session.execute(
+            sql_insert, data_to_insert
+        )  # Bind the data_to_insert correctly
 
 
 async def process_data(queue: Queue, error_queue=Queue):
@@ -70,17 +70,27 @@ async def process_data(queue: Queue, error_queue=Queue):
         batched: list[ScraperData] = [ScraperData(**m.value) for m in batch]
         del batch  # saving some memory
 
-        parsed_batch = []
+        hs_data = []
         for msg in batched:
-            HighscoreData()
-        break
+            if msg.hiscore_data is None:
+                continue
+
+            hs_data.append(
+                HighscoreData(
+                    player_id=msg.player_data.id,
+                    scrape_ts=msg.player_data.updated_at,
+                    skills=msg.hiscore_data.skills,
+                    activities=msg.hiscore_data.activities,
+                )
+            )
+        await batch_insert(hs_data)
 
 
 async def main():
     global SETTINGS
     SETTINGS = Settings()
 
-    scraped_queue = Queue()
+    scraped_queue = Queue(maxsize=1)
     error_queue = Queue()
 
     # Kafka Consumers
@@ -98,7 +108,7 @@ async def main():
         await consumer.consume(
             topic="players.scraped",
             queue=scraped_queue,
-            batch_size=1000,
+            batch_size=1,
         ),
         await producer.produce(
             topic="players.scraped",
