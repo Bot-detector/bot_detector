@@ -31,9 +31,13 @@ clean-test: ## cleanup pytests leftovers
 	rm -f test-results.html
 	rm -f output.xml
 
+docker-dev-restart: ## restart containers
+	docker compose -f 'docker-compose-dev.yml' down
+	docker compose -f 'docker-compose-dev.yml' up -d --build
+
 docker-restart: ## restart containers
-	docker compose down
-	docker compose up --build -d
+	docker compose -f 'docker-compose.yml' down
+	docker compose -f 'docker-compose.yml' up -d --build
 
 docker-test: docker-restart ## restart containers & test
 	uv run pytest
