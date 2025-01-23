@@ -11,7 +11,7 @@ COPY ./bases ./bases
 COPY ./components ./components
 COPY ./projects ./projects
 
-WORKDIR /app/projects/hiscore_scraper
+WORKDIR /app/projects/hiscore_worker
 
 # RUN uv build
 RUN uv sync --frozen --no-editable
@@ -19,8 +19,8 @@ RUN uv sync --frozen --no-editable
 # Production stage: Prepare the final production environment
 FROM python:3.11-slim-bookworm AS production
 
-WORKDIR /app/projects/hiscore_scraper
+WORKDIR /app/projects/hiscore_worker
 
-COPY --from=builder --chown=app:app /app/projects/hiscore_scraper/.venv /app/projects/hiscore_scraper/.venv
+COPY --from=builder --chown=app:app /app/projects/hiscore_worker/.venv /app/projects/hiscore_worker/.venv
 
-CMD [".venv/bin/hiscore_scraper"]
+CMD [".venv/bin/hiscore_worker"]
