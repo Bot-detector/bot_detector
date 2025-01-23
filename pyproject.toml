@@ -11,6 +11,8 @@ requires-python = ">=3.10"
 dependencies = [
     "aiohttp>=3.11.11",
     "aiokafkaengine>=0.1.0",
+    "asyncmy>=0.2.10",
+    "cryptography>=44.0.0",
     "osrs>=0.0.14",
     "pydantic-settings>=2.7.0",
     "pydantic>=2.10.4",

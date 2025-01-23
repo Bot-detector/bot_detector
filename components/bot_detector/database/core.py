@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str
     POOL_TIMEOUT: int = 25
     POOL_RECYCLE: int = 25
+    DEBUG: bool = False
 
 
 SETTINGS = Settings()
@@ -18,7 +19,7 @@ engine = create_async_engine(
     max_overflow=90,
     pool_timeout=SETTINGS.POOL_TIMEOUT,
     pool_recycle=SETTINGS.POOL_RECYCLE,
-    # echo=(settings.ENV != "PRD"),
+    echo=SETTINGS.DEBUG,
 )
 
 Session = async_sessionmaker(

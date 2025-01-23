@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from asyncio import Queue
+from datetime import datetime
 
 from aiohttp import ClientSession
 from bot_detector.kafka_client import KafkaConsumer, KafkaProducer
@@ -100,6 +101,8 @@ class Worker:
 
         skills = {s.name: s.xp for s in player_stats.skills if s.xp > 0}
         activities = {a.name: a.score for a in player_stats.activities if a.score > 0}
+
+        player.updated_at = datetime.now().isoformat()
 
         hiscore_data = ScraperData(
             player_data=player,

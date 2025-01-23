@@ -19,13 +19,10 @@ class Player(BaseModel):
 class HighscoreData(BaseModel):
     player_id: int
     scrape_ts: datetime
-    start_ts: datetime
-    scrape_year: int
-    scrape_week: int
+    scrape_year: Optional[int] = None
+    scrape_week: Optional[int] = None
     skills: Optional[dict[str, int]] = None
     activities: Optional[dict[str, int]] = None
-    skills_delta: Optional[dict[str, int]] = None
-    activities_delta: Optional[dict[str, int]] = None
 
 
 class ScraperHiscoreData(BaseModel):
@@ -34,5 +31,5 @@ class ScraperHiscoreData(BaseModel):
 
 
 class ScraperData(BaseModel):
-    player_data: Player | None
-    hiscore_data: ScraperHiscoreData
+    player_data: Player
+    hiscore_data: ScraperHiscoreData | None
