@@ -10,12 +10,19 @@ version = "0.1.0"
 
 requires-python = ">=3.10"
 
-dependencies = []
+dependencies = [
+    "aiokafkaengine>=0.1.0",
+    "asyncmy>=0.2.10",
+    "cryptography>=44.0.0",
+    "pydantic-settings>=2.7.0",
+    "pydantic>=2.10.4",
+    "sqlalchemy>=2.0.37",
+]
 
 [tool.hatch.build.hooks.polylith-bricks]
 
 [tool.polylith.bricks]
-"../../bases/bot_detector/hiscore_scraper" = "bot_detector/hiscore_scraper"
-"../../components/bot_detector/proxy_manager" = "bot_detector/proxy_manager"
+"../../bases/bot_detector/hiscore_worker" = "bot_detector/hiscore_worker"
+"../../components/bot_detector/database" = "bot_detector/database"
 "../../components/bot_detector/kafka_client" = "bot_detector/kafka_client"
 "../../components/bot_detector/schema" = "bot_detector/schema"
