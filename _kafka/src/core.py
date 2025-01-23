@@ -1,5 +1,6 @@
 import json
 import os
+import random
 
 import kafka_data
 import kafka_topics
@@ -25,10 +26,27 @@ def insert_data(producer: KafkaProducer):
     player_generator = kafka_data.create_player()
     for player in player_generator:
         print(player.name)
-        producer.send(topic="players.to_scrape", value=player.model_dump())
+        producer.send(
+            topic="players.to_scrape",
+            value=player.model_dump(mode="json"),
+        )
+
+        scrape_gen = kafka_data.create_scraped_data(player, n_records=30)
+        scraped_data = list()
+        for d in scrape_gen:
+            print("\t", d.player_data.updated_at)
+            scraped_data.append(d.model_copy(deep=True))
+        random.shuffle(scraped_data)
+
+        for scrape_data in scraped_data:
+            producer.send(
+                topic="players.scraped",
+                value=scrape_data.model_dump(mode="json"),
+            )
 
 
 def main():
+    random.seed(43)
     kafka_topics.create_topics()
     producer = create_kafka_producer()
     insert_data(producer=producer)
