@@ -235,7 +235,6 @@ dependencies = [
     { name = "osrs" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
-    { name = "pytest-asyncio" },
     { name = "sqlalchemy" },
 ]
 
@@ -244,6 +243,7 @@ dev = [
     { name = "kafka-python" },
     { name = "polylith-cli" },
     { name = "pytest" },
+    { name = "pytest-asyncio" },
     { name = "ruff" },
 ]
 
@@ -256,7 +256,6 @@ requires-dist = [
     { name = "osrs", specifier = ">=0.0.14" },
     { name = "pydantic", specifier = ">=2.10.4" },
     { name = "pydantic-settings", specifier = ">=2.7.0" },
-    { name = "pytest-asyncio", specifier = ">=0.25.0" },
     { name = "sqlalchemy", specifier = ">=2.0.37" },
 ]
 
@@ -265,6 +264,7 @@ dev = [
     { name = "kafka-python", specifier = ">=2.0.2" },
     { name = "polylith-cli", specifier = ">=1.24.0" },
     { name = "pytest", specifier = ">=8.3.4" },
+    { name = "pytest-asyncio", specifier = ">=0.25.0" },
     { name = "ruff", specifier = ">=0.8.4" },
 ]
 

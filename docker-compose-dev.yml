@@ -63,10 +63,10 @@ services:
         condition: service_healthy
 
   mysql:
-    container_name: database
+    container_name: mysql
+    image: bd/mysql
     build:
       context: ./_mysql
-    image: bd/mysql:latest
     environment:
       - MYSQL_ROOT_PASSWORD=root_bot_buster
     volumes:
@@ -83,7 +83,20 @@ services:
       retries: 3
       start_period: 30s
       timeout: 5s
-      
+  mysql_setup:
+    container_name: mysql_setup
+    image: bd/mysql_setup # tags the image if build
+    build:
+      context: ./_mysql_data
+    # command: ["sleep", "infinity"]
+    environment:
+      - DATABASE_URL=mysql+asyncmy://root:root_bot_buster@mysql:3306/playerdata
+      - DEBUG=False
+    networks:
+      - botdetector-network
+    depends_on:
+      mysql:
+        condition: service_healthy
   project_debugger:
     container_name: project_debugger
     image: bd/project_debugger # tags the image if build
