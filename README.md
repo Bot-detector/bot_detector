@@ -1,7 +1,9 @@
 # Setup
 
 ## Requirements
-- Docker
+- [Docker](https://docs.docker.com/desktop/setup/install/linux/)
+- [uv](https://docs.astral.sh/uv/getting-started/installation/)
+- api key: [Webshare](https://www.webshare.io/?referral_code=qvpjdwxqsblt)
 
 ## General Setup
 
