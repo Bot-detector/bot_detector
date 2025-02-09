@@ -7,8 +7,8 @@ from pydantic import BaseModel
 class Player(BaseModel):
     id: int
     name: str
-    created_at: str
-    updated_at: str | None
+    created_at: datetime
+    updated_at: datetime | None
     possible_ban: int
     confirmed_ban: int
     confirmed_player: int
@@ -30,6 +30,12 @@ class ScraperHiscoreData(BaseModel):
     activities: dict[str, int]
 
 
+class MetaData(BaseModel):
+    version: int
+    source: str
+
+
 class ScraperData(BaseModel):
+    metadata: MetaData
     player_data: Player
     hiscore_data: ScraperHiscoreData | None

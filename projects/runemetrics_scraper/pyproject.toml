@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling", "hatch-polylith-bricks"]
+build-backend = "hatchling.build"
+
+[project]
+name = "runemetrics_scraper"
+version = "0.1.0"
+requires-python = ">=3.10"
+
+dependencies = [
+    "aiokafkaengine>=0.1.0",
+    "osrs>=0.0.14",
+    "pydantic-settings>=2.7.0",
+    "pydantic>=2.10.4",
+]
+
+[project.scripts]
+runemetrics_scraper = "bot_detector.runemetrics_scraper.core:run"
+
+# This section is needed for building
+[tool.hatch.build.targets.wheel]
+packages = ["bot_detector"]
+
+[tool.hatch.build.hooks.polylith-bricks]
+
+[tool.polylith.bricks]
+"../../bases/bot_detector/runemetrics_scraper" = "bot_detector/runemetrics_scraper"
+"../../components/bot_detector/runemetrics_api" = "bot_detector/runemetrics_api"
+"../../components/bot_detector/proxy_manager" = "bot_detector/proxy_manager"
+"../../components/bot_detector/kafka_client" = "bot_detector/kafka_client"
+"../../components/bot_detector/schema" = "bot_detector/schema"

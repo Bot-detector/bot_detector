@@ -22,7 +22,13 @@ class ScraperHiscoreData(BaseModel):
     activities: dict[str, int]
 
 
+class MetaData(BaseModel):
+    version: int
+    source: str
+
+
 class ScraperData(BaseModel):
+    metadata: MetaData
     player_data: Player
     hiscore_data: ScraperHiscoreData | None
 
@@ -75,8 +81,8 @@ def create_player() -> Generator[Player, None, None]:
             id=idx,
             name=name,
             created_at=datetime.fromtimestamp(
-                random.randint(1609459200, 1735689600)
-            ),  # Random date between 2021-01-01 and 2024-12-31
+                random.randint(1609459200, 1672444800)
+            ),  # Random date between 2021-01-01 and 2022-12-31
             updated_at=None,
             possible_ban=0,
             confirmed_ban=0,
@@ -104,6 +110,7 @@ def create_scraped_data(
 
         # Yield the ScraperData object
         yield ScraperData(
+            metadata=MetaData(version=0, source="init"),
             player_data=player,
             hiscore_data=ScraperHiscoreData(
                 skills=skills,

@@ -6,9 +6,9 @@ from datetime import datetime
 from aiohttp import ClientSession
 from bot_detector.kafka_client import KafkaConsumer, KafkaProducer
 from bot_detector.proxy_manager import ProxyManager
-from bot_detector.schema import MetaData, Player, ScraperData, ScraperHiscoreData
-from osrs.asyncio import Hiscore, HSMode
-from osrs.exceptions import PlayerDoesNotExist, UnexpectedRedirection
+from bot_detector.runemetrics_api import RuneMetrics
+from bot_detector.runemetrics_api.exceptions import UnexpectedRedirection
+from bot_detector.schema import MetaData, Player, ScraperData
 from osrs.utils import RateLimiter
 from pydantic_settings import BaseSettings
 
@@ -25,7 +25,6 @@ class Worker:
         self,
         worker_id: int,
         proxy_manager: ProxyManager,
-        to_scrape_queue: Queue,
         scraped_queue: Queue,
         not_found_queue: Queue,
         error_queue: Queue,
@@ -42,7 +41,6 @@ class Worker:
         # 100 calls per minute
         self.limiter = RateLimiter(calls_per_interval=100, interval=60)
         # queue's
-        self.to_scrape_queue = to_scrape_queue
         self.scraped_queue = scraped_queue
         self.not_found_queue = not_found_queue
         self.error_queue = error_queue
@@ -79,45 +77,49 @@ class Worker:
         logger.debug(f"Worker {self.worker_id}: Performing task with proxy {proxy}")
 
         # get name from kafka
-        batch = await self.to_scrape_queue.get()
+        msg = await self.not_found_queue.get()
+        player = Player(**msg[0].value)
 
-        for msg in batch:
-            player = Player(**msg.value)
-            # get data from osrs hiscore
-            try:
-                hiscore_instance = Hiscore(proxy=proxy, rate_limiter=self.limiter)
-                player_stats = await hiscore_instance.get(
-                    mode=HSMode.OLDSCHOOL,
-                    player=player.name,
-                    session=session,
-                )
-            except PlayerDoesNotExist:
-                # push data to kafka players.not_found
-                await self.not_found_queue.put(item=player.model_dump(mode="json"))
-                return
-            except UnexpectedRedirection:
-                # push data to kafka: players.to_scrape
-                self.error_queue.put(item=player.model_dump(mode="json"))
-                return
-
-            skills = {s.name: s.xp for s in player_stats.skills if s.xp > 0}
-            activities = {
-                a.name: a.score for a in player_stats.activities if a.score > 0
-            }
-
-            player.updated_at = datetime.now()
-
-            hiscore_data = ScraperData(
-                metadata=MetaData(version=1, source="hiscore_scraper"),
-                player_data=player,
-                hiscore_data=ScraperHiscoreData(
-                    skills=skills,
-                    activities=activities,
-                ),
+        # get data from osrs hiscore
+        try:
+            api = RuneMetrics(proxy=proxy, rate_limiter=self.limiter)
+            data = await api.get(
+                player_name=player.name,
+                session=session,
             )
+        # push data to kafka players.not_found
+        # await self.not_found_queue.put(item=player.model_dump(mode="json"))
+        except UnexpectedRedirection:
+            # push data to kafka: players.to_scrape
+            self.error_queue.put(item=player.model_dump(mode="json"))
+            return
 
-            # push data players.scraped
-            await self.scraped_queue.put(item=hiscore_data.model_dump(mode="json"))
+        player.updated_at = datetime.now()
+        player.possible_ban = 1
+        player.confirmed_player = 0
+
+        match data.error:
+            # username is not associated to an account
+            case "NO_PROFILE":
+                player.label_jagex = 1
+            # account is perm banned
+            case "NOT_A_MEMBER":
+                player.label_jagex = 2
+            # runemetrics is set to private. either they're too low level or they're banned.
+            case "PROFILE_PRIVATE":
+                player.label_jagex = 3
+            case _:
+                # account is active, probably just too low stats for hiscores
+                player.label_jagex = 0
+
+        hiscore_data = ScraperData(
+            metadata=MetaData(version=1, source="runemetrics_scraper"),
+            player_data=player,
+            hiscore_data=None,
+        )
+
+        # push data players.scraped
+        await self.scraped_queue.put(item=hiscore_data.model_dump(mode="json"))
 
 
 async def main():
@@ -126,7 +128,6 @@ async def main():
     proxy_manager = ProxyManager(api_key=SETTINGS.PROXY_API_KEY)
     proxies = await proxy_manager.fetch_proxies()
 
-    to_scrape_queue = Queue()
     error_queue = Queue()
     scraped_queue = Queue()
     not_found_queue = Queue()
@@ -142,20 +143,18 @@ async def main():
 
     kafka_tasks = [
         await consumer.consume(
-            topic="players.to_scrape",
-            queue=to_scrape_queue,
+            topic="players.not_found",
+            queue=not_found_queue,
             batch_size=1,
         ),
-        await producer.produce(topic="players.to_scrape", queue=error_queue),
+        await producer.produce(topic="players.not_found", queue=error_queue),
         await producer.produce(topic="players.scraped", queue=scraped_queue),
-        await producer.produce(topic="players.not_found", queue=not_found_queue),
     ]
 
     workers = [
         Worker(
             worker_id=worker_id,
             proxy_manager=proxy_manager,
-            to_scrape_queue=to_scrape_queue,
             scraped_queue=scraped_queue,
             not_found_queue=not_found_queue,
             error_queue=error_queue,
