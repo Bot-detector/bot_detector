@@ -2,7 +2,7 @@ from datetime import datetime
 
 import pytest
 from bot_detector.hiscore_worker.worker import (
-    extract_data_from_batch,  # adjust "your_module" as needed
+    extract_data_from_batch,
 )
 from bot_detector.schema import (
     MetaData,
