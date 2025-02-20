@@ -5,13 +5,28 @@ build-backend = "hatchling.build"
 [project]
 name = "scrape_task_producer"
 version = "0.1.0"
-
-
-
 requires-python = ">=3.10"
 
-dependencies = []
+dependencies = [
+    "asyncmy>=0.2.10",
+    "cryptography>=44.0.0",
+    "pydantic-settings>=2.7.0",
+    "pydantic>=2.10.4",
+    "sqlalchemy>=2.0.37",
+    "aiokafkaengine>=0.1.0",
+]
+
+[project.scripts]
+scrape_task_producer = "bot_detector.scrape_task_producer.core:run"
+
+# This section is needed for building
+[tool.hatch.build.targets.wheel]
+packages = ["bot_detector"]
 
 [tool.hatch.build.hooks.polylith-bricks]
 
 [tool.polylith.bricks]
+"../../bases/bot_detector/scrape_task_producer" = "bot_detector/scrape_task_producer"
+"../../components/bot_detector/database" = "bot_detector/database"
+"../../components/bot_detector/kafka_client" = "bot_detector/kafka_client"
+"../../components/bot_detector/schema" = "bot_detector/schema"

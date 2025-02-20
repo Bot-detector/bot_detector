@@ -143,6 +143,21 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
+  scrape_task_producer:
+    container_name: scrape_task_producer
+    image: bd/scrape_task_producer # tags the image if build
+    build:
+      context: ./
+      dockerfile: ./projects/scrape_task_producer/Dockerfile
+      target: production
+    # command: ["sleep", "infinity"]
+    networks:
+      - botdetector-network
+    env_file:
+      - .env
+    depends_on:
+      kafka:
+        condition: service_healthy
 
 networks:
   botdetector-network:
