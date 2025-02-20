@@ -1,0 +1,17 @@
+[build-system]
+requires = ["hatchling", "hatch-polylith-bricks"]
+build-backend = "hatchling.build"
+
+[project]
+name = "scrape_task_producer"
+version = "0.1.0"
+
+
+
+requires-python = ">=3.10"
+
+dependencies = []
+
+[tool.hatch.build.hooks.polylith-bricks]
+
+[tool.polylith.bricks]

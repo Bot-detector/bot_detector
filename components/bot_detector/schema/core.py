@@ -9,9 +9,9 @@ class Player(BaseModel):
     name: str
     created_at: datetime
     updated_at: datetime | None
-    possible_ban: int
-    confirmed_ban: int
-    confirmed_player: int
+    possible_ban: bool
+    confirmed_ban: bool
+    confirmed_player: bool
     label_id: int
     label_jagex: int
 

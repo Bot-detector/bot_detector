@@ -8,6 +8,7 @@ from bot_detector.kafka_client import KafkaConsumer, KafkaProducer
 from bot_detector.proxy_manager import ProxyManager
 from bot_detector.schema import MetaData, Player, ScraperData, ScraperHiscoreData
 from osrs.asyncio import Hiscore, HSMode
+from osrs.asyncio.osrs.hiscores import PlayerStats
 from osrs.exceptions import PlayerDoesNotExist, UnexpectedRedirection
 from osrs.utils import RateLimiter
 from pydantic_settings import BaseSettings
@@ -74,6 +75,26 @@ class Worker:
                     await asyncio.sleep(10)
                     continue
 
+    def transform_player_stats(
+        self,
+        player_stats: PlayerStats,
+        player: Player,
+    ) -> ScraperData:
+        player.updated_at = datetime.now()
+
+        skills = {s.name: s.xp for s in player_stats.skills if s.xp > 0}
+        activities = {a.name: a.score for a in player_stats.activities if a.score > 0}
+
+        hiscore_data = ScraperData(
+            metadata=MetaData(version=1, source="hiscore_scraper"),
+            player_data=player,
+            hiscore_data=ScraperHiscoreData(
+                skills=skills,
+                activities=activities,
+            ),
+        )
+        return hiscore_data
+
     async def perform_task(self, proxy: str, session: ClientSession):
         """Perform a specific task using the provided proxy."""
         logger.debug(f"Worker {self.worker_id}: Performing task with proxy {proxy}")
@@ -100,22 +121,10 @@ class Worker:
                 self.error_queue.put(item=player.model_dump(mode="json"))
                 return
 
-            skills = {s.name: s.xp for s in player_stats.skills if s.xp > 0}
-            activities = {
-                a.name: a.score for a in player_stats.activities if a.score > 0
-            }
-
-            player.updated_at = datetime.now()
-
-            hiscore_data = ScraperData(
-                metadata=MetaData(version=1, source="hiscore_scraper"),
-                player_data=player,
-                hiscore_data=ScraperHiscoreData(
-                    skills=skills,
-                    activities=activities,
-                ),
+            hiscore_data = self.transform_player_stats(
+                player_stats=player_stats,
+                player=player,
             )
-
             # push data players.scraped
             await self.scraped_queue.put(item=hiscore_data.model_dump(mode="json"))
 
