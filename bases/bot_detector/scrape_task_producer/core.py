@@ -61,11 +61,9 @@ async def fetch_players(
         sql = sql.limit(limit)
 
     async with async_session() as session:
-        result = await session.execute(sql, params={"days": days})
-        # we need mapping to get the column names
-        players = result.mappings().all()
-
-    return [Player(**player) for player in players]
+        result = await session.scalars(sql, params={"days": days})
+        players = result.all()
+    return [Player(**player.__dict__) for player in players]
 
 
 async def determine_fetch_params(
@@ -99,7 +97,7 @@ async def work(async_session: async_sessionmaker[AsyncSession], queue: Queue):
     player_id = 0
     days = 7
     confirmed_ban = False
-    limit = 10_000
+    limit = 10
 
     while True:
         players = await fetch_players(

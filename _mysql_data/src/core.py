@@ -1,6 +1,8 @@
 import asyncio
+import os
 import random
 import time
+from asyncio import Semaphore
 from datetime import datetime
 from typing import Generator
 
@@ -63,7 +65,7 @@ def create_player() -> Generator[Player, None, None]:
 
 async def insert_player(player: Player):
     sql = sqlalchemy.text("""
-    INSERT INTO Players (id, name, created_at)
+    INSERT IGNORE INTO Players (id, name, created_at)
     VALUES (:id, :name, :created_at)
     """)
     print(player.name)
@@ -71,16 +73,48 @@ async def insert_player(player: Player):
         await session.execute(sql, player.model_dump(mode="json"))
 
 
+async def execute_sql(sql: str, name: str, semaphore: Semaphore):
+    print(f"Executing {name}")
+    print(sql)
+    async with semaphore:
+        async with Session.begin() as session:
+            await session.execute(sqlalchemy.text(sql))
+
+
+async def run_sql_file():
+    semaphore = Semaphore(10)
+    scripts = {}
+
+    for file_name in os.listdir("src/"):
+        if not file_name.endswith(".sql"):
+            continue
+
+        with open(f"src/{file_name}", "r", encoding="utf-8-sig") as f:
+            sql = f.read()
+            _sql = sql.split(";")
+            if len(_sql) > 1:  # Split the file into individual queries
+                for i in range(len(_sql) - 1):
+                    if sql[i].strip() == "":
+                        continue
+                    scripts[f"{file_name}_{i}"] = _sql[i]
+        del _sql
+
+    await asyncio.gather(
+        *[execute_sql(sql=v, name=k, semaphore=semaphore) for k, v in scripts.items()]
+    )
+
+
 def main():
-    time.sleep(10)  # Wait for the database to be ready
+    time.sleep(15)  # Wait for the database to start
     player_gen = create_player()
 
     async def run():
         await asyncio.gather(
             *[insert_player(p.model_copy(deep=True)) for p in player_gen]
         )
+        await run_sql_file()
 
-    asyncio.run(run())  # Run the async function in an event loop
+    asyncio.run(run())
 
 
 if __name__ == "__main__":
