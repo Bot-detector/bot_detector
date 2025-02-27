@@ -53,7 +53,8 @@ class Worker:
         async with ClientSession() as session:
             while True:
                 proxy, error = await self.proxy_manager.get_proxy(self.worker_id)
-
+                proxy: str  # http://username:password@ip:port
+                safe_proxy = f"http://{proxy.split('@')[1]}"
                 # lets have this send us a bunch of errors so we certainly don't miss it
                 if error:
                     logger.error(f"Worker {self.worker_id}: {error}")
@@ -66,11 +67,11 @@ class Worker:
                     continue
 
                 try:
-                    logger.info(f"Worker {self.worker_id}: Using proxy {proxy}")
+                    logger.info(f"Worker {self.worker_id}: Using proxy {safe_proxy}")
                     await self.perform_task(proxy=proxy, session=session)
                 except Exception as e:
                     logger.error(
-                        f"Worker {self.worker_id}: Error using proxy {proxy}: {e}"
+                        f"Worker {self.worker_id}: Error using proxy {safe_proxy}: {e}"
                     )
                     await asyncio.sleep(10)
                     continue

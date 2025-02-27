@@ -16,7 +16,7 @@ class RuneMetricsError(BaseModel):
 
 class RuneMetricsPlayer(BaseModel):
     name: str
-    rank: str
+    rank: str | None
     totalskill: int
     totalxp: int
     combatlevel: int

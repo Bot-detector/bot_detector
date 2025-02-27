@@ -10,6 +10,7 @@ from bot_detector.runemetrics_api import RuneMetrics
 from bot_detector.runemetrics_api.exceptions import UnexpectedRedirection
 from bot_detector.schema import MetaData, Player, ScraperData
 from osrs.utils import RateLimiter
+from pydantic import ValidationError
 from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
@@ -50,7 +51,8 @@ class Worker:
         async with ClientSession() as session:
             while True:
                 proxy, error = await self.proxy_manager.get_proxy(self.worker_id)
-
+                proxy: str  # http://username:password@ip:port
+                safe_proxy = f"http://{proxy.split('@')[1]}"
                 # lets have this send us a bunch of errors so we certainly don't miss it
                 if error:
                     logger.error(f"Worker {self.worker_id}: {error}")
@@ -63,11 +65,11 @@ class Worker:
                     continue
 
                 try:
-                    logger.info(f"Worker {self.worker_id}: Using proxy {proxy}")
+                    logger.info(f"Worker {self.worker_id}: Using proxy {safe_proxy}")
                     await self.perform_task(proxy=proxy, session=session)
                 except Exception as e:
                     logger.error(
-                        f"Worker {self.worker_id}: Error using proxy {proxy}: {e}"
+                        f"Worker {self.worker_id}: Error using proxy {safe_proxy}: {e}"
                     )
                     await asyncio.sleep(10)
                     continue
@@ -91,7 +93,11 @@ class Worker:
         # await self.not_found_queue.put(item=player.model_dump(mode="json"))
         except UnexpectedRedirection:
             # push data to kafka: players.to_scrape
-            self.error_queue.put(item=player.model_dump(mode="json"))
+            await self.error_queue.put(item=player.model_dump(mode="json"))
+            return
+        except ValidationError as e:
+            logger.error(f"Error validating player: {e} for {player.name}")
+            await self.error_queue.put(item=player.model_dump(mode="json"))
             return
 
         player.updated_at = datetime.now()
