@@ -1,3 +1,3 @@
-from bot_detector.hiscore_worker import core
+from bot_detector import logfmt
 
-__all__ = ["core"]
+__all__ = ["logfmt"]

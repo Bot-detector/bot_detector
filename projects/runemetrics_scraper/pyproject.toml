@@ -29,3 +29,4 @@ packages = ["bot_detector"]
 "../../components/bot_detector/proxy_manager" = "bot_detector/proxy_manager"
 "../../components/bot_detector/kafka_client" = "bot_detector/kafka_client"
 "../../components/bot_detector/schema" = "bot_detector/schema"
+"../../components/bot_detector/logfmt" = "bot_detector/logfmt"

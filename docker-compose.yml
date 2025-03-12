@@ -110,8 +110,8 @@ services:
     env_file:
       - .env
     depends_on:
-      kafka:
-        condition: service_healthy
+      kafka_setup:
+        condition: service_completed_successfully
   runemetrics_scraper:
     container_name: runemetrics_scraper
     image: bd/runemetrics_scraper # tags the image if build
@@ -125,8 +125,8 @@ services:
     env_file:
       - .env
     depends_on:
-      kafka:
-        condition: service_healthy
+      kafka_setup:
+        condition: service_completed_successfully
   hiscore_worker:
     container_name: hiscore_worker
     image: bd/hiscore_worker # tags the image if build
@@ -140,10 +140,10 @@ services:
     env_file:
       - .env
     depends_on:
-      kafka:
-        condition: service_healthy
-      mysql:
-        condition: service_healthy
+      kafka_setup:
+        condition: service_completed_successfully
+      mysql_setup:
+        condition: service_completed_successfully
   scrape_task_producer:
     container_name: scrape_task_producer
     image: bd/scrape_task_producer # tags the image if build
@@ -157,10 +157,8 @@ services:
     env_file:
       - .env
     depends_on:
-      kafka:
-        condition: service_healthy
-      mysql:
-        condition: service_healthy 
+      kafka_setup:
+        condition: service_completed_successfully
       mysql_setup:
         condition: service_completed_successfully
 networks:

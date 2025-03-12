@@ -78,7 +78,7 @@ services:
     networks:
       - botdetector-network
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -proot_bot_buster"]
+      test: ['/usr/bin/mysql --user=root --password=root_bot_buster --execute "SHOW DATABASES;"']
       interval: 10s
       retries: 3
       start_period: 30s

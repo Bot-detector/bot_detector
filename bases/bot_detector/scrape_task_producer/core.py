@@ -48,7 +48,7 @@ async def fetch_players(
 
     if days:
         sql = sql.where(
-            dbPlayer.updated_at > sqla.func.now() - sqla.text("interval :days day")
+            dbPlayer.updated_at < sqla.func.now() - sqla.text("interval :days day")
         )
 
     if player_id:
