@@ -70,8 +70,6 @@ services:
     environment:
       - MYSQL_ROOT_PASSWORD=root_bot_buster
       # - MYSQL_DATABASE=playerdata
-    volumes:
-      - ./_mysql/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
     ports:
       - 3307:3306
     networks:
