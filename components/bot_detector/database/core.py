@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, MappedAsDataclass
 
 
 class Settings(BaseSettings):
@@ -15,8 +15,8 @@ class Settings(BaseSettings):
     DEBUG: bool = True
 
 
-class Base(DeclarativeBase):
-    pass
+class Base(MappedAsDataclass, DeclarativeBase):
+    """subclasses will be converted to dataclasses"""
 
 
 def get_session_factory(

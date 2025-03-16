@@ -5,7 +5,7 @@ from sqlalchemy import Boolean, DateTime, Integer, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 
-class Player(Base):
+class PlayerStruct(Base):
     __tablename__ = "Players"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

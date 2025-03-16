@@ -5,7 +5,7 @@ from asyncio import Queue
 import sqlalchemy as sqla
 from bot_detector.database import Settings as DBSettings
 from bot_detector.database import get_session_factory
-from bot_detector.database.models import dbPlayer
+from bot_detector.database.structs import dbPlayer
 from bot_detector.kafka_client import KafkaProducer
 from bot_detector.schema import Player
 from pydantic_settings import BaseSettings
