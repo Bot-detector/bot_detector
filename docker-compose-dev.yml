@@ -64,21 +64,18 @@ services:
 
   mysql:
     container_name: mysql
-    image: bd/mysql
+    image: bd/mysql # tags the image if build
     build:
       context: ./_mysql
     environment:
       - MYSQL_ROOT_PASSWORD=root_bot_buster
-    volumes:
-      - ./_mysql/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
+      # - MYSQL_DATABASE=playerdata
     ports:
-      - 3306:3306
-    expose:
-      - 3306
+      - 3307:3306
     networks:
       - botdetector-network
     healthcheck:
-      test: ['/usr/bin/mysql --user=root --password=root_bot_buster --execute "SHOW DATABASES;"']
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -proot_bot_buster"]
       interval: 10s
       retries: 3
       start_period: 30s

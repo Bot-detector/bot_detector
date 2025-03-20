@@ -14,6 +14,10 @@ class Player(BaseModel):
     confirmed_player: bool
     label_id: int
     label_jagex: int
+    ironman: bool | None = None
+    hardcore_ironman: bool | None = None
+    ultimate_ironman: bool | None = None
+    normalized_name: str | None = None
 
 
 class HighscoreData(BaseModel):
