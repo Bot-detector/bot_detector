@@ -1,13 +1,13 @@
 import asyncio
 import logging
 from asyncio import Queue
+from dataclasses import asdict
 
-import sqlalchemy as sqla
 from bot_detector.database import Settings as DBSettings
 from bot_detector.database import get_session_factory
-from bot_detector.database.models import dbPlayer
+from bot_detector.database.repositories import PlayerRepo
+from bot_detector.database.structs import PlayerStruct
 from bot_detector.kafka_client import KafkaProducer
-from bot_detector.schema import Player
 from pydantic_settings import BaseSettings
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -23,47 +23,15 @@ def create_producer(bootstrap_servers: str) -> KafkaProducer:
 
 
 async def put_players_in_queue(
-    players: list[Player],
+    players: list[PlayerStruct],
     queue: Queue,
 ):
     logger.info(f"Putting {len(players)} players in queue")
     for player in players:
-        if not isinstance(player, Player):
+        if not isinstance(player, PlayerStruct):
             logger.error(f"Invalid player: {player}")
             continue
-        await queue.put(player.model_dump(mode="json"))
-
-
-async def fetch_players(
-    async_session: async_sessionmaker[AsyncSession],
-    days: int = 7,
-    confirmed_ban: bool | None = None,
-    player_id: int | None = None,
-    limit: int = 10_000,
-) -> list[Player]:
-    logger.info(
-        f"Fetching players with days={days}, confirmed_ban={confirmed_ban}, player_id={player_id}, limit={limit}"
-    )
-    sql = sqla.select(dbPlayer)
-
-    if days:
-        sql = sql.where(
-            dbPlayer.updated_at < sqla.func.now() - sqla.text("interval :days day")
-        )
-
-    if player_id:
-        sql = sql.where(dbPlayer.id > player_id)
-
-    if confirmed_ban is not None:
-        sql = sql.where(dbPlayer.confirmed_ban == confirmed_ban)
-
-    if limit:
-        sql = sql.limit(limit)
-
-    async with async_session() as session:
-        result = await session.scalars(sql, params={"days": days})
-        players = result.all()
-    return [Player(**player.__dict__) for player in players]
+        await queue.put(asdict(player))
 
 
 async def determine_fetch_params(
@@ -71,7 +39,7 @@ async def determine_fetch_params(
     confirmed_ban: bool,
     player_id: int,
     limit: int,
-    players: list[Player] | None,
+    players: list[PlayerStruct] | None,
     max_days: int = 7,
 ):
     if players is None:
@@ -99,24 +67,26 @@ async def work(async_session: async_sessionmaker[AsyncSession], queue: Queue):
     confirmed_ban = False
     limit = 10
 
+    player_repo = PlayerRepo()
     while True:
-        players = await fetch_players(
-            async_session=async_session,
-            days=days,
-            confirmed_ban=confirmed_ban,
-            player_id=player_id,
-            limit=limit,
-        )
+        async with async_session() as session:
+            players = await player_repo.select_player(
+                async_session=session,
+                player_id=player_id,
+                confirmed_ban=confirmed_ban,
+                days=days,
+                limit=limit,
+            )
 
         await put_players_in_queue(queue=queue, players=players)
 
         days, confirmed_ban, player_id, limit = await determine_fetch_params(
-            days=days,
-            confirmed_ban=confirmed_ban,
-            player_id=player_id,
-            limit=limit,
             players=players,
+            player_id=player_id,
+            confirmed_ban=confirmed_ban,
+            days=days,
             max_days=7,
+            limit=limit,
         )
 
 

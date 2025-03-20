@@ -3,6 +3,8 @@ from asyncio import Queue
 
 import sqlalchemy
 from aiokafka import ConsumerRecord
+from bot_detector.database.repositories import PlayerRepo
+from bot_detector.database.structs import PlayerStruct
 from bot_detector.schema import HighscoreData, Player, ScraperData
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -56,26 +58,19 @@ async def batch_insert(
         }
         for d in hs_data
     ]
-    data_to_update = [
-        {
-            "id": d.id,
-            "updated_at": d.updated_at,
-            "possible_ban": d.possible_ban,
-            "confirmed_ban": d.confirmed_ban,
-            "confirmed_player": d.confirmed_player,
-            "label_id": d.label_id,
-            "label_jagex": d.label_jagex,
-        }
-        for d in player_data
-    ]
+    data_to_update = [PlayerStruct(**d.model_dump()) for d in player_data]
 
     # Step 3: Execute the insert statement
+    player_repo = PlayerRepo()
     async with async_session() as session:
         async with session.begin():
             if data_to_insert:
                 await session.execute(sql_insert_hs, data_to_insert)
+
             for d in data_to_update:
-                await session.execute(sql_update_player, d)
+                print(d.id, d.name, d.updated_at)
+                await player_repo.update_player(async_session=session, player_data=d)
+                # await session.execute(sql_update_player, d)
             await session.commit()
 
 

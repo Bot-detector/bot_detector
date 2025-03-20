@@ -8,6 +8,7 @@ from typing import Generator
 
 import sqlalchemy
 from database.database import Session
+from sqlalchemy.exc import OperationalError
 from structs import Player
 
 # Constants for data generation
@@ -77,8 +78,16 @@ async def execute_sql(sql: str, name: str, semaphore: Semaphore):
     print(f"Executing {name}")
     print(sql)
     async with semaphore:
-        async with Session.begin() as session:
-            await session.execute(sqlalchemy.text(sql))
+        while True:
+            try:
+                async with Session.begin() as session:
+                    await session.execute(sqlalchemy.text(sql))
+                break
+            except OperationalError as e:
+                sleep = random.random()
+                print(f"{sleep=}, {e=}")
+                await asyncio.sleep(sleep)
+                continue
 
 
 async def run_sql_file():
