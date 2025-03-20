@@ -4,7 +4,11 @@ from asyncio import Queue
 from datetime import datetime
 
 from aiohttp import ClientSession
-from bot_detector.kafka_client import KafkaConsumer, KafkaProducer
+from bot_detector.kafka import KafkaConsumer, KafkaProducer
+from bot_detector.kafka.repositories import (
+    RepoPlayersToScrapeConsumer,
+    RepoPlayersToScrapeProducer,
+)
 from bot_detector.proxy_manager import ProxyManager
 from bot_detector.schema import MetaData, Player, ScraperData, ScraperHiscoreData
 from osrs.asyncio import Hiscore, HSMode

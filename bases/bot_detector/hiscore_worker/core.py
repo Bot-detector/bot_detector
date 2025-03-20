@@ -2,7 +2,7 @@ import asyncio
 from asyncio import Queue
 
 from bot_detector import database as db
-from bot_detector.kafka_client import KafkaConsumer, KafkaProducer
+from bot_detector.kafka import KafkaConsumer, KafkaProducer
 from pydantic_settings import BaseSettings
 
 from . import worker

@@ -4,7 +4,7 @@ from asyncio import Queue
 from datetime import datetime
 
 from aiohttp import ClientSession
-from bot_detector.kafka_client import KafkaConsumer, KafkaProducer
+from bot_detector.kafka import KafkaConsumer, KafkaProducer
 from bot_detector.proxy_manager import ProxyManager
 from bot_detector.runemetrics_api import RuneMetrics
 from bot_detector.runemetrics_api.exceptions import UnexpectedRedirection
