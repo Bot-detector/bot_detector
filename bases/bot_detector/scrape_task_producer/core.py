@@ -9,7 +9,7 @@ from bot_detector.database.structs import PlayerStruct
 from bot_detector.kafka import Settings as KafkaSettings
 from bot_detector.kafka.interface import PlayersToScrapeProducerInterface
 from bot_detector.kafka.repositories import RepoPlayersToScrapeProducer
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 logger = logging.getLogger(__name__)
 
@@ -84,28 +84,32 @@ async def work(
         )
 
 
-async def main():
+async def main(
+    async_session: async_sessionmaker,
+    async_engine: AsyncEngine,
+    player_repo: playerInterface,
+    player_producer: PlayersToScrapeProducerInterface,
+):
+    await player_producer.start()
+
+    try:
+        await work(
+            async_session=async_session,
+            player_repo=player_repo,
+            player_producer=player_producer,
+        )
+    finally:
+        await async_engine.dispose()
+        await player_producer.stop()
+
+
+def run():
     async_session, async_engine = get_session_factory(SETTINGS=DBSettings())
     player_repo = PlayerRepo()
     player_producer = RepoPlayersToScrapeProducer(
         bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS
     )
-    await player_producer.start()
-
-    tasks = [
-        work(
-            async_session=async_session,
-            player_repo=player_repo,
-            player_producer=player_producer,
-        ),
-    ]
-    await asyncio.gather(*tasks)
-    await async_engine.dispose()
-    await player_producer.stop()
-
-
-def run():
-    asyncio.run(main())
+    asyncio.run(main(async_session, async_engine, player_repo, player_producer))
 
 
 if __name__ == "__main__":
