@@ -38,16 +38,17 @@ async def determine_fetch_params(
         logger.info("No more players to scrape, reducing days")
         return days - 1, confirmed_ban, 0, limit
 
-    if len(players) < limit and days == 1 and not confirmed_ban:
+    if len(players) < limit and days <= 1 and not confirmed_ban:
         logger.info("No more players to scrape, looking for confirmed bans")
         return max_days, True, 0, limit
 
-    if len(players) < limit and days == 1 and confirmed_ban:
+    if len(players) < limit and days <= 1 and confirmed_ban:
         logger.info("No more players to scrape, resetting")
         await asyncio.sleep(60)
         return max_days, False, 0, limit
 
-    return days, confirmed_ban, players[-1].id, limit
+    last_player_id = players[-1].id if players else 0
+    return days, confirmed_ban, last_player_id, limit
 
 
 async def work(

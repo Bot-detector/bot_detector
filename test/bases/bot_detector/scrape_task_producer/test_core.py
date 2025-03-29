@@ -1,8 +1,6 @@
 import asyncio
 import datetime
 import logging
-import os
-import subprocess
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -18,6 +16,7 @@ from bot_detector.scrape_task_producer.core import (
     produce_players,
     # put_players_in_queue,
 )
+
 
 # --- Dummy Database Session for Testing fetch_players ---
 class DummyResult:
@@ -100,10 +99,6 @@ async def test_determine_fetch_params():
 # Test that days decrement properly when no players are returned.
 @pytest.mark.asyncio
 async def test_infinite_day_decrement():
-    repo = AsyncMock()
-    repo.select_player.return_value = []
-    producer = AsyncMock()
-
     days, confirmed_ban, player_id, limit = await determine_fetch_params(
         players=[], player_id=0, confirmed_ban=False, days=5, limit=10
     )
