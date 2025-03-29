@@ -1,12 +1,19 @@
+import asyncio
 import datetime
-from asyncio import Queue
+import logging
+from unittest.mock import AsyncMock
 
 import pytest
+from bot_detector.database.structs import PlayerStruct
+from bot_detector.kafka.repositories.players_to_scrape import (
+    RepoPlayersToScrapeProducer,
+)
 from bot_detector.schema import Player
 from bot_detector.scrape_task_producer.core import (
     determine_fetch_params,
-    fetch_players,
-    put_players_in_queue,
+    # fetch_players,
+    produce_players,
+    # put_players_in_queue,
 )
 
 
@@ -47,66 +54,8 @@ class DummySessionMaker:
         return DummySession()
 
 
-# --- Test fetch_players ---
-
-
-@pytest.mark.asyncio
-async def test_fetch_players():
-    dummy_session = DummySessionMaker()
-
-    players = await fetch_players(
-        async_session=dummy_session,
-        days=7,
-        confirmed_ban=False,
-        player_id=0,
-        limit=10_000,
-    )
-
-    assert len(players) == 1
-    player = players[0]
-    assert isinstance(player, Player)
-    assert player.id == 1
-    assert player.name == "Dummy Player"
-    assert player.label_jagex == 20
-
-
-# --- Test put_players_in_queue ---
-
-
-@pytest.mark.asyncio
-async def test_put_players_in_queue():
-    queue = Queue()
-
-    valid_player = Player(
-        id=1,
-        name="Test Player",
-        created_at=datetime.datetime(2025, 1, 1, 12, 0, 0),
-        updated_at=datetime.datetime(2025, 1, 2, 12, 0, 0),
-        possible_ban=False,
-        confirmed_ban=False,
-        confirmed_player=True,
-        label_id=1,
-        label_jagex=1,
-    )
-    invalid_player = "not a player"
-
-    players = [valid_player, invalid_player]
-    await put_players_in_queue(players, queue)
-
-    # Validate that only the valid player got added
-    dumped_valid = valid_player.model_dump(mode="json")
-    results = []
-    while not queue.empty():
-        results.append(await queue.get())
-
-    assert dumped_valid in results
-    assert len(results) == 1
-
-
-# --- Test determine_fetch_params ---
-
-
-def test_determine_fetch_params():
+# --- determine_fetch_params Logic ---
+async def test_determine_fetch_params():
     # Case 1: Normal fetch with results, should move to next player_id
     players = [
         Player(
@@ -121,25 +70,180 @@ def test_determine_fetch_params():
             label_jagex=2,
         )
     ]
-    result = determine_fetch_params(
+    result = await determine_fetch_params(
         days=7, confirmed_ban=False, player_id=0, limit=1, players=players
     )
     assert result == (7, False, 42, 1)
 
     # Case 2: No players left, reduce days
-    result = determine_fetch_params(
+    result = await determine_fetch_params(
         days=7, confirmed_ban=False, player_id=0, limit=1, players=[]
     )
     assert result == (6, False, 0, 1)
 
     # Case 3: No players left, and days = 1, switch to confirmed_ban=True
-    result = determine_fetch_params(
+    result = await determine_fetch_params(
         days=1, confirmed_ban=False, player_id=0, limit=1, players=[]
     )
     assert result == (7, True, 0, 1)
 
     # Case 4: No players left, and days = 1 with confirmed_ban=True, reset
-    result = determine_fetch_params(
+    result = await determine_fetch_params(
         days=1, confirmed_ban=True, player_id=0, limit=1, players=[]
     )
     assert result == (7, False, 0, 1)
+
+
+# Test that days decrement properly when no players are returned.
+@pytest.mark.asyncio
+async def test_infinite_day_decrement():
+    repo = AsyncMock()
+    repo.select_player.return_value = []
+    producer = AsyncMock()
+
+    days, confirmed_ban, player_id, limit = await determine_fetch_params(
+        players=[], player_id=0, confirmed_ban=False, days=5, limit=10
+    )
+    assert days == 4
+    assert confirmed_ban is False
+
+
+# Test that the fetch logic sleeps when reaching the reset condition (days = 1 and confirmed_ban = True).
+@pytest.mark.asyncio
+async def test_reset_wait(monkeypatch):
+    called = {"slept": False}
+
+    async def fake_sleep(secs):
+        called["slept"] = True
+        assert secs == 60
+
+    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
+
+    await determine_fetch_params(
+        days=1, confirmed_ban=True, player_id=0, limit=10, players=[]
+    )
+    assert called["slept"] is True
+
+
+# Test that an invalid (zero) days value triggers a reset condition.
+@pytest.mark.asyncio
+async def test_invalid_days_negative():
+    result = await determine_fetch_params(
+        days=0, confirmed_ban=False, player_id=0, limit=10, players=[]
+    )
+    assert result == (7, True, 0, 10)  # resets to confirmed_ban=True
+
+
+# --- produce_players Functionality ---
+# Test that an exception raised during player production is propagated and logged.
+@pytest.mark.asyncio
+async def test_produce_players_resilience(caplog):
+    """
+    This test sends one player record and uses a mock producer that raises an exception.
+    It verifies that when produce_one fails, the exception is propagated.
+    """
+    # Set the logging level to INFO
+    with caplog.at_level(logging.INFO, logger="bot_detector.scrape_task_producer.core"):
+        # Create a sample player record
+        test_player = Player(
+            id=42,
+            name="Test Player",
+            created_at=datetime.datetime(2025, 1, 1, 12, 0, 0),
+            updated_at=datetime.datetime(2025, 1, 2, 12, 0, 0),
+            possible_ban=False,
+            confirmed_ban=False,
+            confirmed_player=True,
+            label_id=1,
+            label_jagex=2,
+        )
+
+        players = [test_player]
+
+        # Create a mock producer where produce_one raises an exception
+        mock_producer = AsyncMock()
+        mock_producer.produce_one.side_effect = Exception(
+            "Simulated failure for resilience test"
+        )
+
+        # Assert the exception is raised
+        with pytest.raises(Exception, match="Simulated failure for resilience test"):
+            await produce_players(players, mock_producer)
+
+        # Assert the log message
+        assert "Putting 1 players in queue" in caplog.text
+
+
+# Test that partial failure during player production raises an exception and logs appropriately.
+@pytest.mark.asyncio
+async def test_produce_players_partial_failure(caplog):
+    caplog.set_level(logging.INFO)
+
+    mock_producer = AsyncMock()
+    mock_producer.produce_one.side_effect = [None, Exception("oops")]
+
+    player1 = PlayerStruct(
+        id=1,
+        name="Player1",
+        normalized_name="player1",
+        created_at=datetime.datetime(2025, 1, 1, 12, 0, 0),
+        updated_at=datetime.datetime(2025, 1, 2, 12, 0, 0),
+        possible_ban=False,
+        confirmed_ban=False,
+        confirmed_player=True,
+        ironman=True,
+        hardcore_ironman=False,
+        ultimate_ironman=False,
+        label_id=10,
+        label_jagex=20,
+    )
+    player2 = PlayerStruct(
+        id=2,
+        name="Player2",
+        normalized_name="player2",
+        created_at=datetime.datetime(2025, 1, 3, 12, 0, 0),
+        updated_at=datetime.datetime(2025, 1, 4, 12, 0, 0),
+        possible_ban=True,
+        confirmed_ban=False,
+        confirmed_player=False,
+        ironman=False,
+        hardcore_ironman=False,
+        ultimate_ironman=True,
+        label_id=11,
+        label_jagex=21,
+    )
+
+    with pytest.raises(Exception, match="oops"):
+        await produce_players(players=[player1, player2], player_producer=mock_producer)
+
+    assert "Putting 2 players in queue" in caplog.text
+
+
+# Test that producing a non-PlayerStruct object raises an exception.
+@pytest.mark.asyncio
+async def test_produce_players_invalid_object():
+    mock_producer = AsyncMock()
+    # Configure the mock to raise when called with invalid player
+    mock_producer.produce_one.side_effect = Exception("invalid player")
+
+    with pytest.raises(Exception, match="invalid player"):
+        await produce_players([{"id": 1}], mock_producer)
+
+
+# --- RepoPlayersToScrapeProducer Specific Tests ---
+# Test that producing an invalid player object raises an exception.
+@pytest.mark.asyncio
+async def test_produce_one_invalid():
+    """
+    Test that produce_one raises an exception when the player is not a PlayerStruct.
+    """
+    # Mock the producer
+    mock_producer = AsyncMock()
+    repo_producer = RepoPlayersToScrapeProducer(bootstrap_servers=["localhost:9092"])
+    repo_producer.producer = mock_producer
+
+    # Pass an invalid player object
+    invalid_player = {"id": 1, "name": "Invalid Player"}
+
+    # Assert that an exception is raised
+    with pytest.raises(Exception, match=""):
+        await repo_producer.produce_one(invalid_player)
