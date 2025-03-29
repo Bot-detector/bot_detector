@@ -1,11 +1,14 @@
 import asyncio
 import datetime
 import logging
-from unittest.mock import AsyncMock
+import os
+import subprocess
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from bot_detector.database.structs import PlayerStruct
 from bot_detector.kafka.repositories.players_to_scrape import (
+    RepoPlayersToScrapeConsumer,
     RepoPlayersToScrapeProducer,
 )
 from bot_detector.schema import Player
@@ -15,7 +18,6 @@ from bot_detector.scrape_task_producer.core import (
     produce_players,
     # put_players_in_queue,
 )
-
 
 # --- Dummy Database Session for Testing fetch_players ---
 class DummyResult:
@@ -136,7 +138,46 @@ async def test_invalid_days_negative():
 
 
 # --- produce_players Functionality ---
-# Test that an exception raised during player production is propagated and logged.
+@pytest.mark.asyncio
+async def test_produce_one_sends_correct_value():
+    player = PlayerStruct(
+        id=1,
+        name="TestPlayer",
+        normalized_name="testplayer",
+        created_at=datetime.datetime.utcnow(),
+        updated_at=datetime.datetime.utcnow(),
+        possible_ban=False,
+        confirmed_ban=False,
+        confirmed_player=True,
+        ironman=False,
+        hardcore_ironman=False,
+        ultimate_ironman=False,
+        label_id=123,
+        label_jagex=456,
+    )
+
+    with patch(
+        "bot_detector.kafka.repositories.players_to_scrape.AIOKafkaProducer"
+    ) as MockProducer:
+        mock_instance = AsyncMock()
+        MockProducer.return_value = mock_instance
+
+        producer = RepoPlayersToScrapeProducer(bootstrap_servers=["mockserver:9092"])
+        await producer.start()
+
+        await producer.produce_one(player)
+
+        mock_instance.send.assert_called_once()
+        args, kwargs = mock_instance.send.call_args
+        assert kwargs["topic"] == "players.to_scrape"
+        assert isinstance(kwargs["value"], dict) or isinstance(
+            kwargs["value"], bytes
+        )  # depending on serializer
+
+        await producer.stop()
+        mock_instance.stop.assert_called_once()
+
+
 @pytest.mark.asyncio
 async def test_produce_players_resilience(caplog):
     """
@@ -231,7 +272,6 @@ async def test_produce_players_invalid_object():
 
 
 # --- RepoPlayersToScrapeProducer Specific Tests ---
-# Test that producing an invalid player object raises an exception.
 @pytest.mark.asyncio
 async def test_produce_one_invalid():
     """
@@ -248,3 +288,112 @@ async def test_produce_one_invalid():
     # Assert that an exception is raised
     with pytest.raises(Exception, match=""):
         await repo_producer.produce_one(invalid_player)
+
+
+@pytest.mark.asyncio
+async def test_producer_start_and_stop():
+    with patch(
+        "bot_detector.kafka.repositories.players_to_scrape.AIOKafkaProducer"
+    ) as MockProducer:
+        mock_instance = AsyncMock()
+        MockProducer.return_value = mock_instance
+
+        producer = RepoPlayersToScrapeProducer(bootstrap_servers=["mockserver:9092"])
+        await producer.start()
+        mock_instance.start.assert_called_once()
+
+        await producer.stop()
+        mock_instance.stop.assert_called_once()
+
+
+# --- RepoPlayersToScrapeConsumer Specific Tests ---
+@pytest.mark.asyncio
+async def test_consume_one_returns_player():
+    sample_data = {
+        "id": 42,
+        "name": "TestPlayer",
+        "normalized_name": "testplayer",
+        "created_at": datetime.datetime.utcnow(),
+        "updated_at": datetime.datetime.utcnow(),
+        "possible_ban": False,
+        "confirmed_ban": False,
+        "confirmed_player": True,
+        "ironman": False,
+        "hardcore_ironman": False,
+        "ultimate_ironman": False,
+        "label_id": 12,
+        "label_jagex": 34,
+    }
+
+    mock_msg = AsyncMock()
+    mock_msg.value = sample_data
+
+    with patch(
+        "bot_detector.kafka.repositories.players_to_scrape.AIOKafkaConsumer"
+    ) as MockConsumer:
+        mock_instance = AsyncMock()
+        mock_instance.getone.return_value = mock_msg
+        MockConsumer.return_value = mock_instance
+
+        consumer = RepoPlayersToScrapeConsumer(group_id="test-group")
+        await consumer.start()
+        player = await consumer.consume_one()
+
+        assert isinstance(player, PlayerStruct)
+        assert player.name == "TestPlayer"
+        await consumer.stop()
+
+
+@pytest.mark.asyncio
+async def test_consume_one_invalid_payload():
+    mock_msg = AsyncMock()
+    mock_msg.value = {"id": 42, "name": "Missing fields!"}
+
+    with patch(
+        "bot_detector.kafka.repositories.players_to_scrape.AIOKafkaConsumer"
+    ) as MockConsumer:
+        mock_instance = AsyncMock()
+        mock_instance.getone.return_value = mock_msg
+        MockConsumer.return_value = mock_instance
+
+        consumer = RepoPlayersToScrapeConsumer(group_id="test-group")
+        await consumer.start()
+        with pytest.raises(TypeError):
+            await consumer.consume_one()
+        await consumer.stop()
+
+
+@pytest.mark.asyncio
+async def test_produce_one_serialization_failure():
+    player = PlayerStruct(
+        id=1,
+        name="TestPlayer",
+        normalized_name="testplayer",
+        created_at=datetime.datetime.utcnow(),
+        updated_at=datetime.datetime.utcnow(),
+        possible_ban=False,
+        confirmed_ban=False,
+        confirmed_player=True,
+        ironman=False,
+        hardcore_ironman=False,
+        ultimate_ironman=False,
+        label_id=123,
+        label_jagex=456,
+    )
+    # Inject a non-serializable object
+    player.created_at = object()
+
+    with patch(
+        "bot_detector.kafka.repositories.players_to_scrape.AIOKafkaProducer"
+    ) as MockProducer:
+        mock_instance = AsyncMock()
+        mock_instance.send.side_effect = Exception("serialization failed")
+        MockProducer.return_value = mock_instance
+
+        producer = RepoPlayersToScrapeProducer(bootstrap_servers=["mockserver:9092"])
+        await producer.start()
+
+        with pytest.raises(Exception, match="serialization failed"):
+            await producer.produce_one(player)
+
+        await producer.stop()
