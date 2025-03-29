@@ -1,14 +1,10 @@
 import asyncio
 import datetime
 import logging
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 from bot_detector.database.structs import PlayerStruct
-from bot_detector.kafka.repositories.players_to_scrape import (
-    RepoPlayersToScrapeConsumer,
-    RepoPlayersToScrapeProducer,
-)
 from bot_detector.schema import Player
 from bot_detector.scrape_task_producer.core import (
     determine_fetch_params,
