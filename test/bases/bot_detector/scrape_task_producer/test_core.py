@@ -55,6 +55,7 @@ class DummySessionMaker:
 
 
 # --- determine_fetch_params Logic ---
+@pytest.mark.asyncio
 async def test_determine_fetch_params():
     # Case 1: Normal fetch with results, should move to next player_id
     players = [
