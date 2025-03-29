@@ -98,12 +98,45 @@ async def test_determine_fetch_params():
 
 # Test that days decrement properly when no players are returned.
 @pytest.mark.asyncio
-async def test_infinite_day_decrement():
+async def test_day_decrement():
     days, confirmed_ban, player_id, limit = await determine_fetch_params(
         players=[], player_id=0, confirmed_ban=False, days=5, limit=10
     )
-    assert days == 4
-    assert confirmed_ban is False
+    assert (days, confirmed_ban, player_id, limit) == (4, False, 0, 10)
+
+
+@pytest.mark.asyncio
+async def test_day_decrement_day_one_cb_false():
+    days, confirmed_ban, player_id, limit = await determine_fetch_params(
+        players=[], player_id=0, confirmed_ban=False, days=1, limit=10, max_days=7
+    )
+    assert (days, confirmed_ban, player_id, limit) == (7, True, 0, 10)
+
+
+@pytest.mark.asyncio
+async def test_day_decrement_day_zero_cb_false():
+    days, confirmed_ban, player_id, limit = await determine_fetch_params(
+        players=[], player_id=0, confirmed_ban=False, days=0, limit=10, max_days=7
+    )
+    assert (days, confirmed_ban, player_id, limit) == (7, True, 0, 10)
+
+
+@pytest.mark.asyncio
+async def test_day_decrement_day_one_cb_true():
+    days, confirmed_ban, player_id, limit = await determine_fetch_params(
+        players=[], player_id=0, confirmed_ban=True, days=1, limit=10, max_days=7
+    )
+    assert (days, confirmed_ban, player_id, limit) == (7, False, 0, 10)
+
+
+@pytest.mark.asyncio
+async def test_day_decrement_day_zero_cb_true():
+    days, confirmed_ban, player_id, limit = await determine_fetch_params(
+        players=[], player_id=0, confirmed_ban=True, days=0, limit=10, max_days=7
+    )
+    assert days == 7
+    err = f"Expected confirmed_ban to be False, got {confirmed_ban=}"
+    assert confirmed_ban is False, err
 
 
 # Test that the fetch logic sleeps when reaching the reset condition (days = 1 and confirmed_ban = True).
@@ -121,15 +154,6 @@ async def test_reset_wait(monkeypatch):
         days=1, confirmed_ban=True, player_id=0, limit=10, players=[]
     )
     assert called["slept"] is True
-
-
-# Test that an invalid (zero) days value triggers a reset condition.
-@pytest.mark.asyncio
-async def test_invalid_days_negative():
-    result = await determine_fetch_params(
-        days=0, confirmed_ban=False, player_id=0, limit=10, players=[]
-    )
-    assert result == (7, True, 0, 10)  # resets to confirmed_ban=True
 
 
 # --- produce_players Functionality ---
