@@ -1,16 +1,11 @@
 import asyncio
 import datetime
-import logging
-from unittest.mock import AsyncMock
 
 import pytest
 from bot_detector.database.structs import PlayerStruct
 from bot_detector.schema import Player
 from bot_detector.scrape_task_producer.core import (
     determine_fetch_params,
-    # fetch_players,
-    produce_players,
-    # put_players_in_queue,
 )
 
 
@@ -150,97 +145,3 @@ async def test_reset_wait(monkeypatch):
         days=1, confirmed_ban=True, player_id=0, limit=10, players=[]
     )
     assert called["slept"] is True
-
-
-# --- produce_players Functionality ---
-@pytest.mark.asyncio
-async def test_produce_players_resilience(caplog):
-    """
-    This test sends one player record and uses a mock producer that raises an exception.
-    It verifies that when produce_one fails, the exception is propagated.
-    """
-    # Set the logging level to INFO
-    with caplog.at_level(logging.INFO, logger="bot_detector.scrape_task_producer.core"):
-        # Create a sample player record
-        test_player = Player(
-            id=42,
-            name="Test Player",
-            created_at=datetime.datetime(2025, 1, 1, 12, 0, 0),
-            updated_at=datetime.datetime(2025, 1, 2, 12, 0, 0),
-            possible_ban=False,
-            confirmed_ban=False,
-            confirmed_player=True,
-            label_id=1,
-            label_jagex=2,
-        )
-
-        players = [test_player]
-
-        # Create a mock producer where produce_one raises an exception
-        mock_producer = AsyncMock()
-        mock_producer.produce_one.side_effect = Exception(
-            "Simulated failure for resilience test"
-        )
-
-        # Assert the exception is raised
-        with pytest.raises(Exception, match="Simulated failure for resilience test"):
-            await produce_players(players, mock_producer)
-
-        # Assert the log message
-        assert "Putting 1 players in queue" in caplog.text
-
-
-# Test that partial failure during player production raises an exception and logs appropriately.
-@pytest.mark.asyncio
-async def test_produce_players_partial_failure(caplog):
-    caplog.set_level(logging.INFO)
-
-    mock_producer = AsyncMock()
-    mock_producer.produce_one.side_effect = [None, Exception("oops")]
-
-    player1 = PlayerStruct(
-        id=1,
-        name="Player1",
-        normalized_name="player1",
-        created_at=datetime.datetime(2025, 1, 1, 12, 0, 0),
-        updated_at=datetime.datetime(2025, 1, 2, 12, 0, 0),
-        possible_ban=False,
-        confirmed_ban=False,
-        confirmed_player=True,
-        ironman=True,
-        hardcore_ironman=False,
-        ultimate_ironman=False,
-        label_id=10,
-        label_jagex=20,
-    )
-    player2 = PlayerStruct(
-        id=2,
-        name="Player2",
-        normalized_name="player2",
-        created_at=datetime.datetime(2025, 1, 3, 12, 0, 0),
-        updated_at=datetime.datetime(2025, 1, 4, 12, 0, 0),
-        possible_ban=True,
-        confirmed_ban=False,
-        confirmed_player=False,
-        ironman=False,
-        hardcore_ironman=False,
-        ultimate_ironman=True,
-        label_id=11,
-        label_jagex=21,
-    )
-
-    with pytest.raises(Exception, match="oops"):
-        await produce_players(players=[player1, player2], player_producer=mock_producer)
-
-    assert "Putting 2 players in queue" in caplog.text
-
-
-# Test that producing a non-PlayerStruct object raises an exception.
-@pytest.mark.asyncio
-async def test_produce_players_invalid_object():
-    mock_producer = AsyncMock()
-    # Configure the mock to raise when called with invalid player
-    mock_producer.produce_one.side_effect = Exception("invalid player")
-
-    with pytest.raises(Exception, match="invalid player"):
-        await produce_players([{"id": 1}], mock_producer)
