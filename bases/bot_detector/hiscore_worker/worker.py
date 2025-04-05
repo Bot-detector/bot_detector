@@ -3,9 +3,9 @@ from asyncio import Queue
 
 import sqlalchemy
 from aiokafka import ConsumerRecord
-from bot_detector.database.repositories import PlayerRepo
-from bot_detector.database.structs import PlayerStruct
-from bot_detector.schema import HighscoreData, Player, ScraperData
+from bot_detector.database.repositories import HighscoreDataDailyRepo, PlayerRepo
+from bot_detector.database.structs import HighscoreDataDailyStruct, PlayerStruct
+from bot_detector.structs import HighscoreData, Player, ScraperData
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 
@@ -14,63 +14,32 @@ async def batch_insert(
     player_data: list[Player],
     async_session: async_sessionmaker[AsyncSession],
 ):
-    # Step 1: Construct the statements
-    ## insert into highscore_data
-    sql_insert_hs = sqlalchemy.text("""
-        INSERT INTO highscore_data (player_id, scrape_ts, skills, activities) 
-        VALUES (:player_id, :scrape_ts, :skills, :activities) AS new
-        ON DUPLICATE KEY UPDATE
-            scrape_ts = CASE
-                WHEN highscore_data.scrape_ts < new.scrape_ts THEN new.scrape_ts
-                ELSE highscore_data.scrape_ts
-            END,
-            skills = CASE
-                WHEN highscore_data.scrape_ts < new.scrape_ts THEN new.skills
-                ELSE highscore_data.skills
-            END,
-            activities = CASE
-                WHEN highscore_data.scrape_ts < new.scrape_ts THEN new.activities
-                ELSE highscore_data.activities
-            END
-    """)
-
-    sql_update_player = sqlalchemy.text("""
-        UPDATE Players 
-        SET 
-            updated_at = :updated_at,
-            possible_ban = :possible_ban,
-            confirmed_ban = :confirmed_ban,
-            confirmed_player = :confirmed_player,
-            label_id = :label_id,
-            label_jagex = :label_jagex
-        WHERE 1=1
-            AND id = :id 
-            AND (updated_at < :updated_at OR updated_at IS NULL)
-    """)
-
-    # Step2: Transform the data into dictionaries for parameterized insertion
+    # Step 1: Validate & transform the data
     data_to_insert = [
-        {
-            "player_id": d.player_id,
-            "scrape_ts": d.scrape_ts,
-            "skills": json.dumps(d.skills),  # Serialize skills as JSON
-            "activities": json.dumps(d.activities),  # Serialize activities as JSON
-        }
+        HighscoreDataDailyStruct(
+            player_id=d.player_id,
+            scrape_date=d.scrape_ts.date(),
+            skills=d.skills,
+            activities=d.activities,
+            # scrape_year=d.scrape_ts.year,
+            # scrape_month=d.scrape_ts.month,
+            # scrape_week=d.scrape_ts.isocalendar().week,
+        )
         for d in hs_data
     ]
     data_to_update = [PlayerStruct(**d.model_dump()) for d in player_data]
 
     # Step 3: Execute the insert statement
     player_repo = PlayerRepo()
+    hs_repo = HighscoreDataDailyRepo()
+
     async with async_session() as session:
         async with session.begin():
-            if data_to_insert:
-                await session.execute(sql_insert_hs, data_to_insert)
+            for d in data_to_insert:
+                await hs_repo.insert_highscore(async_session=session, highscore_data=d)
 
             for d in data_to_update:
-                print(d.id, d.name, d.updated_at)
                 await player_repo.update_player(async_session=session, player_data=d)
-                # await session.execute(sql_update_player, d)
             await session.commit()
 
 

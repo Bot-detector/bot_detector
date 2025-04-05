@@ -5,11 +5,11 @@ from bot_detector.database import Settings as DBSettings
 from bot_detector.database import get_session_factory
 from bot_detector.database.interfaces import playerInterface
 from bot_detector.database.repositories import PlayerRepo
-from bot_detector.database.structs import PlayerStruct
 from bot_detector.kafka import Settings as KafkaSettings
-from bot_detector.kafka.interface import PlayersToScrapeProducerInterface
+from bot_detector.kafka.interface import ProducerInterface
 from bot_detector.kafka.repositories import RepoPlayersToScrapeProducer
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+from bot_detector.structs import MetaData, PlayerStruct, ToScrapeStruct
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,15 @@ async def produce_players(
     player_producer: RepoPlayersToScrapeProducer,
 ):
     logger.info(f"Putting {len(players)} players in queue")
-    for player in players:
+    player_structs = [
+        ToScrapeStruct(
+            metadata=MetaData(version=1, source="scrape_task_producer"),
+            player_data=player,
+        )
+        for player in players
+    ]
+
+    for player in player_structs:
         await player_producer.produce_one(player=player)
 
 
@@ -50,10 +58,10 @@ async def determine_fetch_params(
     return days, confirmed_ban, players[-1].id, limit
 
 
-async def work(
+async def process_players(
     async_session: async_sessionmaker[AsyncSession],
     player_repo: playerInterface,
-    player_producer: PlayersToScrapeProducerInterface,
+    player_producer: ProducerInterface,
 ):
     player_id = 0
     days = 7
@@ -84,16 +92,16 @@ async def work(
         )
 
 
-async def main(
-    async_session: async_sessionmaker,
-    async_engine: AsyncEngine,
-    player_repo: playerInterface,
-    player_producer: PlayersToScrapeProducerInterface,
-):
+async def main():
+    async_session, async_engine = get_session_factory(SETTINGS=DBSettings())
+    player_repo = PlayerRepo()
+    player_producer = RepoPlayersToScrapeProducer(
+        bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS
+    )
     await player_producer.start()
 
     try:
-        await work(
+        await process_players(
             async_session=async_session,
             player_repo=player_repo,
             player_producer=player_producer,
@@ -103,13 +111,12 @@ async def main(
         await player_producer.stop()
 
 
+async def run_async():
+    await main()
+
+
 def run():
-    async_session, async_engine = get_session_factory(SETTINGS=DBSettings())
-    player_repo = PlayerRepo()
-    player_producer = RepoPlayersToScrapeProducer(
-        bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS
-    )
-    asyncio.run(main(async_session, async_engine, player_repo, player_producer))
+    asyncio.run(run_async())
 
 
 if __name__ == "__main__":

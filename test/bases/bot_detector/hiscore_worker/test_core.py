@@ -4,7 +4,7 @@ import pytest
 from bot_detector.hiscore_worker.worker import (
     extract_data_from_batch,
 )
-from bot_detector.schema import (
+from bot_detector.structs import (
     MetaData,
     Player,
     ScraperData,

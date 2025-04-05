@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from bot_detector.database.structs import PlayerStruct
+from bot_detector.structs import PlayerStruct
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 
@@ -18,7 +18,7 @@ class playerInterface(ABC):
         confirmed_ban: bool | None = None,
         player_id: int | None = None,
         limit: int = 10_000,
-    ):
+    ) -> list[PlayerStruct]:
         """Select a player from the database by player_id."""
         pass
 

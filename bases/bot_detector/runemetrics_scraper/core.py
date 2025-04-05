@@ -8,7 +8,7 @@ from bot_detector.kafka import KafkaConsumer, KafkaProducer
 from bot_detector.proxy_manager import ProxyManager
 from bot_detector.runemetrics_api import RuneMetrics
 from bot_detector.runemetrics_api.exceptions import UnexpectedRedirection
-from bot_detector.schema import MetaData, Player, ScraperData
+from bot_detector.structs import MetaData, Player, ScraperData
 from osrs.utils import RateLimiter
 from pydantic import ValidationError
 from pydantic_settings import BaseSettings

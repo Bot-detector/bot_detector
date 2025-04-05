@@ -1,11 +1,11 @@
 import random
-from datetime import datetime, timedelta
-from typing import Generator
+from datetime import date, datetime, timedelta
+from typing import Generator, Optional
 
 from pydantic import BaseModel
 
 
-class Player(BaseModel):
+class PlayerStruct(BaseModel):
     id: int
     name: str
     created_at: datetime
@@ -18,8 +18,10 @@ class Player(BaseModel):
 
 
 class ScraperHiscoreData(BaseModel):
-    skills: dict[str, int]
-    activities: dict[str, int]
+    player_id: int
+    scrape_date: date
+    skills: Optional[dict[str, int]] = None
+    activities: Optional[dict[str, int]] = None
 
 
 class MetaData(BaseModel):
@@ -27,10 +29,15 @@ class MetaData(BaseModel):
     source: str
 
 
-class ScraperData(BaseModel):
+class ScrapedStruct(BaseModel):
     metadata: MetaData
-    player_data: Player
+    player_data: PlayerStruct
     hiscore_data: ScraperHiscoreData | None
+
+
+class ToScrapeStruct(BaseModel):
+    metadata: MetaData
+    player_data: PlayerStruct
 
 
 # Constants for data generation
@@ -74,10 +81,10 @@ MAX_SKILL_XP = 13_000_000
 MAX_ACTIVITY_COUNT = 65_000
 
 
-def create_player() -> Generator[Player, None, None]:
+def create_player() -> Generator[PlayerStruct, None, None]:
     """Generates Player objects with random creation timestamps."""
     for idx, name in enumerate(NAMES, start=1):
-        yield Player(
+        yield PlayerStruct(
             id=idx,
             name=name,
             created_at=datetime.fromtimestamp(
@@ -93,8 +100,8 @@ def create_player() -> Generator[Player, None, None]:
 
 
 def create_scraped_data(
-    player: Player, n_records: int
-) -> Generator[ScraperData, None, None]:
+    player: PlayerStruct, n_records: int
+) -> Generator[ScrapedStruct, None, None]:
     """
     Generates scraped hiscore data for a given player.
     Produces `n_records` with random updates to skills and activities.
@@ -109,10 +116,12 @@ def create_scraped_data(
         player.updated_at = (player.updated_at or player.created_at) + timedelta(days=1)
 
         # Yield the ScraperData object
-        yield ScraperData(
+        yield ScrapedStruct(
             metadata=MetaData(version=0, source="init"),
             player_data=player,
             hiscore_data=ScraperHiscoreData(
+                player_id=player.id,
+                scrape_date=player.updated_at.date(),
                 skills=skills,
                 activities=activities,
             ),

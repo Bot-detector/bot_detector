@@ -12,5 +12,24 @@
             "source.organizeImports": "explicit"
         }
     },
-    "isort.args": ["--profile", "black"]
+    "isort.args": [
+        "--profile",
+        "black"
+    ],
+    "sqltools.connections": [
+        {
+            "mysqlOptions": {
+                "authProtocol": "default",
+                "enableSsl": "Disabled"
+            },
+            "previewLimit": 50,
+            "server": "localhost",
+            "port": 3307,
+            "driver": "MySQL",
+            "name": "mysql_local",
+            "database": "playerdata",
+            "username": "root",
+            "password": "root_bot_buster"
+        }
+    ]
 }

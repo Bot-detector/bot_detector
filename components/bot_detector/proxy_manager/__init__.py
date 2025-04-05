@@ -1,4 +1,3 @@
-from bot_detector.proxy_manager import core
-from bot_detector.proxy_manager.core import ProxyManager
+from .core import ProxyManager, Settings
 
-__all__ = ["core",  "ProxyManager"]
+__all__ = ["ProxyManager", "Settings"]

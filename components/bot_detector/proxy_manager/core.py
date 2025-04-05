@@ -3,8 +3,13 @@ import logging
 
 from aiohttp import ClientSession
 from pydantic import BaseModel
+from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
+
+
+class Settings(BaseSettings):
+    PROXY_API_KEY: str
 
 
 class Ports(BaseModel):

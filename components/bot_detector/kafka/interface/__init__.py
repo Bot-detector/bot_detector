@@ -1,3 +1,3 @@
-from .player import PlayersToScrapeConsumerInterface, PlayersToScrapeProducerInterface
+from .player import ConsumerInterface, ProducerInterface
 
-__all__ = ["PlayersToScrapeConsumerInterface", "PlayersToScrapeProducerInterface"]
+__all__ = ["ConsumerInterface", "ProducerInterface"]

@@ -4,13 +4,13 @@ from bot_detector.kafka.interface import (
     ConsumerInterface,
     ProducerInterface,
 )
-from bot_detector.structs import ToScrapeStruct
+from bot_detector.structs import NotFoundStruct
 
 
-class RepoPlayersToScrapeConsumer(ConsumerInterface):
+class RepoPlayersNotFoundConsumer(ConsumerInterface):
     def __init__(self, group_id: str, bootstrap_servers: list[str]):
         self.consumer = AIOKafkaConsumer(
-            "players.to_scrape",
+            "players.not_found",
             group_id=group_id,
             value_deserializer=lambda x: orjson.loads(x),
             auto_offset_reset="earliest",
@@ -27,13 +27,13 @@ class RepoPlayersToScrapeConsumer(ConsumerInterface):
     async def get_consumer(self):
         return self.consumer
 
-    async def consume_one(self) -> ToScrapeStruct:
+    async def consume_one(self) -> NotFoundStruct:
         msg = await self.consumer.getone()
-        player = ToScrapeStruct(**msg.value)
+        player = NotFoundStruct(**msg.value)
         return player
 
 
-class RepoPlayersToScrapeProducer(ProducerInterface):
+class RepoPlayersNotFoundProducer(ProducerInterface):
     def __init__(self, bootstrap_servers: list[str]):
         self.producer = AIOKafkaProducer(
             bootstrap_servers=bootstrap_servers,
@@ -51,11 +51,11 @@ class RepoPlayersToScrapeProducer(ProducerInterface):
     async def get_producer(self):
         return self.producer
 
-    async def produce_one(self, player: ToScrapeStruct):
-        if not isinstance(player, ToScrapeStruct):
+    async def produce_one(self, player: NotFoundStruct):
+        if not isinstance(player, NotFoundStruct):
             raise Exception()
 
         await self.producer.send(
-            topic="players.to_scrape",
+            topic="players.not_found",
             value=player.model_dump(),
         )

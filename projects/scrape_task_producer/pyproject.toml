@@ -14,6 +14,7 @@ dependencies = [
     "pydantic>=2.10.4",
     "sqlalchemy>=2.0.37",
     "aiokafkaengine>=0.1.0",
+    "orjson>=3.10.16",
 ]
 
 [project.scripts]
@@ -28,6 +29,6 @@ packages = ["bot_detector"]
 [tool.polylith.bricks]
 "../../bases/bot_detector/scrape_task_producer" = "bot_detector/scrape_task_producer"
 "../../components/bot_detector/database" = "bot_detector/database"
-"../../components/bot_detector/kafka_client" = "bot_detector/kafka_client"
-"../../components/bot_detector/schema" = "bot_detector/schema"
+"../../components/bot_detector/kafka" = "bot_detector/kafka"
+"../../components/bot_detector/structs" = "bot_detector/structs"
 "../../components/bot_detector/logfmt" = "bot_detector/logfmt"
