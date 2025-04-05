@@ -3,7 +3,7 @@ import logging
 from datetime import date, datetime
 from typing import Any
 
-from aiohttp import ClientSession
+from aiohttp import ClientResponseError, ClientSession, ConnectionTimeoutError
 from bot_detector.kafka import Settings as KafkaSettings
 from bot_detector.kafka.repositories import (
     RepoPlayerScrapedProducer,
@@ -41,16 +41,10 @@ async def get_proxy(
 
 async def scrape_player(
     player: PlayerStruct,
-    proxy: str,
     session: ClientSession,
+    hiscore_instance: Hiscore,
 ) -> tuple[PlayerStats | None, str | None]:
     player_stats, error = None, None
-
-    hiscore_instance = Hiscore(
-        proxy=proxy,
-        rate_limiter=RateLimiter(calls_per_interval=100, interval=60),
-    )
-
     try:
         player_stats = await hiscore_instance.get(
             mode=HSMode.OLDSCHOOL,
@@ -59,10 +53,14 @@ async def scrape_player(
         )
         return player_stats, error
     except PlayerDoesNotExist:
-        logger.error(f"Player: {player.name} does not exist.")
-        return None, error
+        logger.debug(f"{player.name=} does not exist.")
+        return None, None
     except UnexpectedRedirection:
-        error = f"Unexpected redirection for player {player.name}."
+        error = f"Unexpected redirection for {player.name=}."
+        logger.error(error)
+        return None, error
+    except (ClientResponseError, ConnectionTimeoutError) as e:
+        error = f"Client response error: {e}"
         logger.error(error)
         return None, error
 
@@ -98,6 +96,7 @@ async def transform_player_stats(
 async def work(
     worker_id: int,
     proxy_manager: ProxyManager,
+    rate_limiter: RateLimiter,
     player_ts_consumer: RepoPlayersToScrapeConsumer,
     player_ts_producer: RepoPlayersToScrapeProducer,
     player_nf_producer: RepoPlayersNotFoundProducer,
@@ -129,20 +128,27 @@ async def work(
                 await asyncio.sleep(10)
                 continue
 
+            hiscore_instance = Hiscore(
+                proxy=proxy,
+                rate_limiter=rate_limiter,
+            )
+
             player_stats, error = await scrape_player(
-                player=player_data, proxy=proxy, session=session
+                player=player_data,
+                session=session,
+                hiscore_instance=hiscore_instance,
             )
 
             # handle exceptions
             if error:
-                logger.error(f"[{worker_id}]: Error scraping {player_data.name}.")
+                logger.error(f"[{worker_id}][{player_data.name}]: {error=}")
                 await player_ts_producer.produce_one(player=player)
                 await asyncio.sleep(10)
                 continue
 
             # if player not found, than send to not found topic
             if player_stats is None:
-                logger.info(f"[{worker_id}]: Player {player_data.name} not found.")
+                logger.info(f"[{worker_id}][{player_data.name}]: not found.")
                 await player_nf_producer.produce_one(
                     player=NotFoundStruct(
                         metadata=MetaData(version=1, source="hiscore_scraper"),
@@ -157,18 +163,22 @@ async def work(
             )
 
             if error:
-                logger.error(f"[{worker_id}]: Error transforming {player_data.name}.")
+                logger.error(f"[{worker_id}][{player_data.name}]: Error transforming.")
                 await player_ts_producer.produce_one(player=player)
                 continue
 
             await player_sc_producer.produce_one(scraped_data=scraped_data)
-            logger.info(f"[{worker_id}]: {player_data.name} scraped successfully.")
-            # print(f"[{worker_id}]: {player_data.name} scraped successfully.")
+            logger.info(f"[{worker_id}][{player_data.name}]: scraped successfully.")
 
 
 async def main():
     proxy_manager = ProxyManager(api_key=ProxySettings().PROXY_API_KEY)
     proxies = await proxy_manager.fetch_proxies()
+
+    rate_limiter = RateLimiter(
+        calls_per_interval=ProxySettings().MAX_CALLS,
+        interval=ProxySettings().INTERVAL,
+    )
 
     # initialize kafka producers and consumers
     b_server = KafkaSettings().KAFKA_BOOTSTRAP_SERVERS
@@ -191,6 +201,7 @@ async def main():
         work(
             worker_id=worker_id,
             proxy_manager=proxy_manager,
+            rate_limiter=rate_limiter,
             player_ts_consumer=player_ts_consumer,
             player_ts_producer=player_ts_producer,
             player_nf_producer=player_nf_producer,
