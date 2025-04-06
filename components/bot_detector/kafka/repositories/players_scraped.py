@@ -4,13 +4,13 @@ from bot_detector.kafka.interface import (
     ConsumerInterface,
     ProducerInterface,
 )
-from bot_detector.structs import ToScrapeStruct
+from bot_detector.structs import ScrapedStruct
 
 
-class RepoPlayersToScrapeConsumer(ConsumerInterface):
+class RepoPlayerScrapedConsumer(ConsumerInterface):
     def __init__(self, group_id: str, bootstrap_servers: list[str]):
         self.consumer = AIOKafkaConsumer(
-            "players.to_scrape",
+            "players.scraped",
             group_id=group_id,
             value_deserializer=lambda x: orjson.loads(x),
             auto_offset_reset="earliest",
@@ -19,7 +19,7 @@ class RepoPlayersToScrapeConsumer(ConsumerInterface):
 
     async def start(self):
         await self.consumer.start()
-        return self.consumer
+        return self
 
     async def stop(self):
         await self.consumer.stop()
@@ -27,13 +27,13 @@ class RepoPlayersToScrapeConsumer(ConsumerInterface):
     async def get_consumer(self):
         return self.consumer
 
-    async def consume_one(self) -> ToScrapeStruct:
+    async def consume_one(self) -> ScrapedStruct:
         msg = await self.consumer.getone()
-        player = ToScrapeStruct(**msg.value)
+        player = ScrapedStruct(**msg.value)
         return player
 
 
-class RepoPlayersToScrapeProducer(ProducerInterface):
+class RepoPlayerScrapedProducer(ProducerInterface):
     def __init__(self, bootstrap_servers: list[str]):
         self.producer = AIOKafkaProducer(
             bootstrap_servers=bootstrap_servers,
@@ -43,7 +43,7 @@ class RepoPlayersToScrapeProducer(ProducerInterface):
 
     async def start(self):
         await self.producer.start()
-        return self
+        return self.producer
 
     async def stop(self):
         await self.producer.stop()
@@ -51,11 +51,11 @@ class RepoPlayersToScrapeProducer(ProducerInterface):
     async def get_producer(self):
         return self.producer
 
-    async def produce_one(self, player: ToScrapeStruct):
-        if not isinstance(player, ToScrapeStruct):
+    async def produce_one(self, scraped_data: ScrapedStruct):
+        if not isinstance(scraped_data, ScrapedStruct):
             raise Exception()
 
         await self.producer.send(
-            topic="players.to_scrape",
-            value=player.model_dump(),
+            topic="players.scraped",
+            value=scraped_data.model_dump(),
         )

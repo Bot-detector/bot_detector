@@ -26,9 +26,13 @@ def insert_data(producer: KafkaProducer):
     player_generator = kafka_data.create_player()
     for player in player_generator:
         print(player.name)
+        player_to_scrape = kafka_data.ToScrapeStruct(
+            metadata=kafka_data.MetaData(version=0, source="init"),
+            player_data=player,
+        )
         producer.send(
             topic="players.to_scrape",
-            value=player.model_dump(mode="json"),
+            value=player_to_scrape.model_dump(mode="json"),
         )
 
         scrape_gen = kafka_data.create_scraped_data(player, n_records=30)

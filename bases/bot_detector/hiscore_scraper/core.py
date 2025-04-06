@@ -1,188 +1,225 @@
 import asyncio
 import logging
-from asyncio import Queue
-from datetime import datetime
+from datetime import date, datetime
+from typing import Any
 
-from aiohttp import ClientSession
-from bot_detector.kafka import KafkaConsumer, KafkaProducer
+from aiohttp import ClientResponseError, ClientSession, ConnectionTimeoutError
+from bot_detector.kafka import Settings as KafkaSettings
 from bot_detector.kafka.repositories import (
+    RepoPlayerScrapedProducer,
+    RepoPlayersNotFoundProducer,
     RepoPlayersToScrapeConsumer,
     RepoPlayersToScrapeProducer,
 )
 from bot_detector.proxy_manager import ProxyManager
-from bot_detector.schema import MetaData, Player, ScraperData, ScraperHiscoreData
+from bot_detector.proxy_manager import Settings as ProxySettings
+from bot_detector.structs import (
+    HighscoreBaseStruct,
+    MetaData,
+    PlayerStruct,
+)
+from bot_detector.structs.kafka import NotFoundStruct, ScrapedStruct
 from osrs.asyncio import Hiscore, HSMode
 from osrs.asyncio.osrs.hiscores import PlayerStats
 from osrs.exceptions import PlayerDoesNotExist, UnexpectedRedirection
 from osrs.utils import RateLimiter
-from pydantic_settings import BaseSettings
+from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
 
 
-class Settings(BaseSettings):
-    PROXY_API_KEY: str
-    KAFKA_BOOTSTRAP_SERVERS: str = "localhost:9094"
+async def get_proxy(
+    proxy_manager: ProxyManager,
+    worker_id: int,
+) -> str:
+    proxy, error = await proxy_manager.get_proxy(worker_id)
+    if error:
+        logger.error(f"Worker {worker_id}: {error}")
+        return None
+    return proxy
 
 
-class Worker:
-    def __init__(
-        self,
-        worker_id: int,
-        proxy_manager: ProxyManager,
-        to_scrape_queue: Queue,
-        scraped_queue: Queue,
-        not_found_queue: Queue,
-        error_queue: Queue,
-    ):
-        """
-        Initialize the worker.
+async def scrape_player(
+    player: PlayerStruct,
+    session: ClientSession,
+    hiscore_instance: Hiscore,
+) -> tuple[PlayerStats | None, str | None]:
+    player_stats, error = None, None
+    try:
+        player_stats = await hiscore_instance.get(
+            mode=HSMode.OLDSCHOOL,
+            player=player.name,
+            session=session,
+        )
+        return player_stats, error
+    except PlayerDoesNotExist:
+        logger.debug(f"{player.name=} does not exist.")
+        return None, None
+    except UnexpectedRedirection:
+        error = f"Unexpected redirection for {player.name=}."
+        logger.error(error)
+        return None, error
+    except (ClientResponseError, ConnectionTimeoutError) as e:
+        error = f"Client response error: {e}"
+        logger.error(error)
+        return None, error
 
-        Args:
-            worker_id (int): Unique identifier for the worker.
-            proxy_manager (ProxyManager): Instance of ProxyManager to retrieve proxies.
-        """
-        self.worker_id = worker_id
-        self.proxy_manager = proxy_manager
-        # 100 calls per minute
-        self.limiter = RateLimiter(calls_per_interval=100, interval=60)
-        # queue's
-        self.to_scrape_queue = to_scrape_queue
-        self.scraped_queue = scraped_queue
-        self.not_found_queue = not_found_queue
-        self.error_queue = error_queue
 
-    async def run(self):
-        """Main worker loop that continuously performs tasks using a proxy."""
-        async with ClientSession() as session:
-            while True:
-                proxy, error = await self.proxy_manager.get_proxy(self.worker_id)
-                proxy: str  # http://username:password@ip:port
-                safe_proxy = f"http://{proxy.split('@')[1]}"
-                # lets have this send us a bunch of errors so we certainly don't miss it
-                if error:
-                    logger.error(f"Worker {self.worker_id}: {error}")
-                    await asyncio.sleep(10)
-                    continue
+async def transform_player_stats(
+    player_stats: PlayerStats,
+    player: PlayerStruct,
+) -> tuple[ScrapedStruct | None, Any | None]:
+    player.updated_at = datetime.now()
 
-                if proxy is None:
-                    logger.error(f"Worker {self.worker_id}: No proxy available.")
-                    await asyncio.sleep(10)
-                    continue
+    skills = {s.name: s.xp for s in player_stats.skills if s.xp > 0}
+    activities = {a.name: a.score for a in player_stats.activities if a.score > 0}
 
-                try:
-                    logger.info(f"Worker {self.worker_id}: Using proxy {safe_proxy}")
-                    await self.perform_task(proxy=proxy, session=session)
-                except Exception as e:
-                    logger.error(
-                        f"Worker {self.worker_id}: Error using proxy {safe_proxy}: {e}"
-                    )
-                    await asyncio.sleep(10)
-                    continue
-
-    def transform_player_stats(
-        self,
-        player_stats: PlayerStats,
-        player: Player,
-    ) -> ScraperData:
-        player.updated_at = datetime.now()
-
-        skills = {s.name: s.xp for s in player_stats.skills if s.xp > 0}
-        activities = {a.name: a.score for a in player_stats.activities if a.score > 0}
-
-        hiscore_data = ScraperData(
+    hiscore_data, error = None, None
+    try:
+        hiscore_data = ScrapedStruct(
             metadata=MetaData(version=1, source="hiscore_scraper"),
             player_data=player,
-            hiscore_data=ScraperHiscoreData(
+            highscore_data=HighscoreBaseStruct(
+                player_id=player.id,
+                scrape_date=date.today(),
                 skills=skills,
                 activities=activities,
             ),
         )
-        return hiscore_data
+    except ValidationError as e:
+        error = e.json()
+        logger.error(error)
+        return None, error
+    return hiscore_data, error
 
-    async def perform_task(self, proxy: str, session: ClientSession):
-        """Perform a specific task using the provided proxy."""
-        logger.debug(f"Worker {self.worker_id}: Performing task with proxy {proxy}")
 
-        # get name from kafka
-        batch = await self.to_scrape_queue.get()
+async def work(
+    worker_id: int,
+    proxy_manager: ProxyManager,
+    rate_limiter: RateLimiter,
+    player_ts_consumer: RepoPlayersToScrapeConsumer,
+    player_ts_producer: RepoPlayersToScrapeProducer,
+    player_nf_producer: RepoPlayersNotFoundProducer,
+    player_sc_producer: RepoPlayerScrapedProducer,
+):
+    async with ClientSession() as session:
+        while True:
+            # get proxy
+            proxy = await get_proxy(proxy_manager, worker_id)
 
-        for msg in batch:
-            player = Player(**msg.value)
-            # get data from osrs hiscore
+            # handle exceptions
+            if proxy is None:
+                logger.error(f"[{worker_id}]: No proxy available.")
+                await asyncio.sleep(10)
+                continue
+
+            # get player from kafka
             try:
-                hiscore_instance = Hiscore(proxy=proxy, rate_limiter=self.limiter)
-                player_stats = await hiscore_instance.get(
-                    mode=HSMode.OLDSCHOOL,
-                    player=player.name,
-                    session=session,
-                )
-            except PlayerDoesNotExist:
-                # push data to kafka players.not_found
-                await self.not_found_queue.put(item=player.model_dump(mode="json"))
-                return
-            except UnexpectedRedirection:
-                # push data to kafka: players.to_scrape
-                self.error_queue.put(item=player.model_dump(mode="json"))
-                return
+                player = await player_ts_consumer.consume_one()
+            except ValidationError as e:
+                logger.error(e.json())
+                continue
 
-            hiscore_data = self.transform_player_stats(
-                player_stats=player_stats,
-                player=player,
+            # handle exceptions
+            if player is None:
+                logger.error(f"[{worker_id}]: No player available.")
+                await asyncio.sleep(10)
+                continue
+
+            player_data = player.player_data
+
+            hiscore_instance = Hiscore(
+                proxy=proxy,
+                rate_limiter=rate_limiter,
             )
-            # push data players.scraped
-            await self.scraped_queue.put(item=hiscore_data.model_dump(mode="json"))
+
+            player_stats, error = await scrape_player(
+                player=player_data,
+                session=session,
+                hiscore_instance=hiscore_instance,
+            )
+
+            # handle exceptions
+            if error:
+                logger.error(f"[{worker_id}][{player_data.name}]: {error=}")
+                await player_ts_producer.produce_one(player=player)
+                await asyncio.sleep(10)
+                continue
+
+            # if player not found, than send to not found topic
+            if player_stats is None:
+                logger.info(f"[{worker_id}][{player_data.name}]: not found.")
+                await player_nf_producer.produce_one(
+                    player=NotFoundStruct(
+                        metadata=MetaData(version=1, source="hiscore_scraper"),
+                        player_data=player_data,
+                    )
+                )
+                continue
+
+            # transform player stats to hiscore data
+            scraped_data, error = await transform_player_stats(
+                player_stats=player_stats, player=player_data
+            )
+
+            if error:
+                logger.error(f"[{worker_id}][{player_data.name}]: Error transforming.")
+                await player_ts_producer.produce_one(player=player)
+                continue
+
+            await player_sc_producer.produce_one(scraped_data=scraped_data)
+            logger.info(f"[{worker_id}][{player_data.name}]: scraped successfully.")
 
 
 async def main():
-    global SETTINGS
-    SETTINGS = Settings()
-    proxy_manager = ProxyManager(api_key=SETTINGS.PROXY_API_KEY)
+    proxy_manager = ProxyManager(api_key=ProxySettings().PROXY_API_KEY)
     proxies = await proxy_manager.fetch_proxies()
 
-    to_scrape_queue = Queue()
-    error_queue = Queue()
-    scraped_queue = Queue()
-    not_found_queue = Queue()
-
-    # Kafka Consumers
-    consumer = KafkaConsumer(
-        bootstrap_servers=SETTINGS.KAFKA_BOOTSTRAP_SERVERS,
-        group_id="scraper",
+    rate_limiter = RateLimiter(
+        calls_per_interval=ProxySettings().MAX_CALLS,
+        interval=ProxySettings().INTERVAL,
     )
 
-    # Kafka Producers
-    producer = KafkaProducer(bootstrap_servers=SETTINGS.KAFKA_BOOTSTRAP_SERVERS)
+    # initialize kafka producers and consumers
+    b_server = KafkaSettings().KAFKA_BOOTSTRAP_SERVERS
+    ## consumer
+    player_ts_consumer = RepoPlayersToScrapeConsumer(
+        bootstrap_servers=b_server, group_id="scraper"
+    )
+    ## producer
+    player_ts_producer = RepoPlayersToScrapeProducer(bootstrap_servers=b_server)
+    player_nf_producer = RepoPlayersNotFoundProducer(bootstrap_servers=b_server)
+    player_sc_producer = RepoPlayerScrapedProducer(bootstrap_servers=b_server)
 
-    kafka_tasks = [
-        await consumer.consume(
-            topic="players.to_scrape",
-            queue=to_scrape_queue,
-            batch_size=1,
-        ),
-        await producer.produce(topic="players.to_scrape", queue=error_queue),
-        await producer.produce(topic="players.scraped", queue=scraped_queue),
-        await producer.produce(topic="players.not_found", queue=not_found_queue),
-    ]
-
+    # start kafka producers and consumers
+    await player_ts_consumer.start()
+    await player_ts_producer.start()
+    await player_nf_producer.start()
+    await player_sc_producer.start()
+    # start workers
     workers = [
-        Worker(
+        work(
             worker_id=worker_id,
             proxy_manager=proxy_manager,
-            to_scrape_queue=to_scrape_queue,
-            scraped_queue=scraped_queue,
-            not_found_queue=not_found_queue,
-            error_queue=error_queue,
+            rate_limiter=rate_limiter,
+            player_ts_consumer=player_ts_consumer,
+            player_ts_producer=player_ts_producer,
+            player_nf_producer=player_nf_producer,
+            player_sc_producer=player_sc_producer,
         )
         for worker_id in range(len(proxies))
     ]
     logger.info(f"Starting {len(workers)} workers.")
 
-    await asyncio.gather(*[w.run() for w in workers], *kafka_tasks)
+    await asyncio.gather(*[w for w in workers])
+
+
+async def run_async():
+    await main()
 
 
 def run():
-    asyncio.run(main())
+    asyncio.run(run_async())
 
 
 if __name__ == "__main__":

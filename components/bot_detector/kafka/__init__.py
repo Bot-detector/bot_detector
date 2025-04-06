@@ -5,7 +5,7 @@ from .producer import KafkaProducer
 
 
 class Settings(BaseSettings):
-    KAFKA_BOOTSTRAP_SERVERS: str = "localhost:9094"
+    KAFKA_BOOTSTRAP_SERVERS: str
 
 
 __all__ = ["KafkaConsumer", "KafkaProducer", "Settings"]

@@ -2,12 +2,12 @@ import datetime
 from asyncio import Queue
 
 import pytest
-from bot_detector.schema import Player
 from bot_detector.scrape_task_producer.core import (
     determine_fetch_params,
     fetch_players,
     put_players_in_queue,
 )
+from bot_detector.structs import Player
 
 
 # --- Dummy Database Session for Testing fetch_players ---

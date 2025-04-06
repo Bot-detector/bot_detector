@@ -1,9 +1,7 @@
 from abc import ABC, abstractmethod
 
-from bot_detector.database.structs import PlayerStruct
 
-
-class PlayersToScrapeConsumerInterface(ABC):
+class ConsumerInterface(ABC):
     @abstractmethod
     def __init__(self, group_id: str):
         pass
@@ -21,11 +19,11 @@ class PlayersToScrapeConsumerInterface(ABC):
         pass
 
     @abstractmethod
-    async def consume_one(self) -> PlayerStruct:
+    async def consume_one(self):
         pass
 
 
-class PlayersToScrapeProducerInterface(ABC):
+class ProducerInterface(ABC):
     @abstractmethod
     def __init__(self, bootstrap_servers: list[str]):
         pass

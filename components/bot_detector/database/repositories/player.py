@@ -3,7 +3,8 @@ from dataclasses import asdict
 
 import sqlalchemy as sqla
 from bot_detector.database.interfaces import playerInterface
-from bot_detector.database.structs import PlayerStruct
+from bot_detector.database.structs import PlayersTableStruct
+from bot_detector.structs import PlayerStruct
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 # get player by id
 # get players based on, days since updated, confirmed_Ban, greater than player id with a limit
 class PlayerRepo(playerInterface):
-    def insert_player(self, player_data: PlayerStruct):
+    def insert_player(self, player_data: PlayerStruct) -> None:
         """Insert a new player into the database."""
         raise NotImplementedError("insert_player method not implemented")
 
@@ -28,30 +29,32 @@ class PlayerRepo(playerInterface):
     ) -> list[PlayerStruct]:
         logger.info(f"{player_id=}, {confirmed_ban=}, {days=}, {limit=}")
 
-        sql = sqla.select(PlayerStruct)
+        sql = sqla.select(PlayersTableStruct)
 
         if days:
             sql = sql.where(
                 sqla.or_(
-                    PlayerStruct.updated_at is None,
-                    PlayerStruct.updated_at
+                    PlayersTableStruct.updated_at is None,
+                    PlayersTableStruct.updated_at
                     < sqla.func.now() - sqla.text("interval :days day"),
                 )
             )
 
         if player_id:
-            sql = sql.where(PlayerStruct.id > player_id)
+            sql = sql.where(PlayersTableStruct.id > player_id)
 
         if confirmed_ban is not None:
-            sql = sql.where(PlayerStruct.confirmed_ban == confirmed_ban)
+            sql = sql.where(PlayersTableStruct.confirmed_ban == confirmed_ban)
 
         if limit:
             sql = sql.limit(limit)
-        sql = sql.order_by(sqla.asc(PlayerStruct.id))
+        sql = sql.order_by(sqla.asc(PlayersTableStruct.id))
 
         result = await async_session.scalars(sql, params={"days": days})
         players = result.all()
-        return players
+        players_dict = [asdict(player) for player in players]
+        players_struct = [PlayerStruct(**player_dict) for player_dict in players_dict]
+        return players_struct
 
     async def update_player(
         self,
@@ -59,10 +62,10 @@ class PlayerRepo(playerInterface):
         player_data: PlayerStruct,
     ) -> None:
         """Update an existing player in the database."""
-        sql = sqla.update(PlayerStruct)
-        sql = sql.where(PlayerStruct.id == player_data.id)
-        sql = sql.where(PlayerStruct.updated_at < player_data.updated_at)
-        sql = sql.values(asdict(player_data))
+        sql = sqla.update(PlayersTableStruct)
+        sql = sql.where(PlayersTableStruct.id == player_data.id)
+        sql = sql.where(PlayersTableStruct.updated_at < player_data.updated_at)
+        sql = sql.values(player_data.model_dump())
 
         await async_session.execute(sql)
 

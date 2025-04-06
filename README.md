@@ -8,17 +8,15 @@
 ## General Setup
 
 1. create an .env file from the .env.example contents
-
-    ```
-    PROXY_API_KEY=""
-    KAFKA_BOOTSTRAP_SERVERS="kafka:9092"
-    ```
-
 2. Build and start the Docker container:
+    this will restart the docker compose file and create the entire project including mysql-database & kafka-queue
     ```sh
-    docker compose up --build
+    make docker-restart
     ```
-
+    or if you want to exec into a debug container and run the code
+    ```sh
+    make docker-dev-restart
+    ```
 ## Other Setup
 ### Web Scraper
 
@@ -28,11 +26,9 @@
 
     ```env
     PROXY_API_KEY="<api key>"
-    KAFKA_BOOTSTRAP_SERVERS="kafka:9092"
     ```
 
 # The Polylith Architecture
-
 ## Overview
 The Polylith architecture is a modular approach to organizing codebases, aimed at improving maintainability, reducing duplication, and providing better oversight of projects. It is particularly well-suited for managing large, complex applications.
 
@@ -64,18 +60,3 @@ A project is the entry point for your application, built using the base and comp
 ```sh
 uv run poly create project --name <project_name>
 ```
-
-# get new_highscore_data
-# select highscore_data_latest
-# calculate highscore_data_delta
-# insert highscore_data_delta
-# insert highscore_data
-
-
-
-# insert highscore_data
-	# trigger after insert
-		# insert highscore_data_latest on duplicate_key update
-			# trigger after insert
-				# calculate delta
-				# insert delta
