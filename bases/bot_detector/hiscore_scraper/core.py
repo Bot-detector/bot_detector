@@ -120,13 +120,13 @@ async def work(
                 logger.error(e.json())
                 continue
 
-            player_data = player.player_data
-
             # handle exceptions
             if player is None:
                 logger.error(f"[{worker_id}]: No player available.")
                 await asyncio.sleep(10)
                 continue
+
+            player_data = player.player_data
 
             hiscore_instance = Hiscore(
                 proxy=proxy,

@@ -7,4 +7,4 @@ from pydantic import BaseModel
 class ScrapedStruct(BaseModel):
     metadata: MetaData
     player_data: PlayerStruct
-    highscore_data: HighscoreBaseStruct
+    highscore_data: HighscoreBaseStruct | None

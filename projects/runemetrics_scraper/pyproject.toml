@@ -29,5 +29,5 @@ packages = ["bot_detector"]
 "../../components/bot_detector/runemetrics_api" = "bot_detector/runemetrics_api"
 "../../components/bot_detector/proxy_manager" = "bot_detector/proxy_manager"
 "../../components/bot_detector/kafka" = "bot_detector/kafka"
-"../../components/bot_detector/schema" = "bot_detector/schema"
+"../../components/bot_detector/structs" = "bot_detector/structs"
 "../../components/bot_detector/logfmt" = "bot_detector/logfmt"
