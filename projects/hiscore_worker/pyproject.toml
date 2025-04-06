@@ -30,5 +30,5 @@ packages = ["bot_detector"]
 "../../bases/bot_detector/hiscore_worker" = "bot_detector/hiscore_worker"
 "../../components/bot_detector/database" = "bot_detector/database"
 "../../components/bot_detector/kafka" = "bot_detector/kafka"
-"../../components/bot_detector/schema" = "bot_detector/schema"
+"../../components/bot_detector/structs" = "bot_detector/structs"
 "../../components/bot_detector/logfmt" = "bot_detector/logfmt"

@@ -3,7 +3,7 @@ import logging
 import sqlalchemy as sqla
 from bot_detector.database.interfaces import HighscoreDataDailyInterface
 from bot_detector.database.structs import HighscoreDataDailyTableStruct
-from bot_detector.structs import HighscoreDataDailyStruct
+from bot_detector.structs import HighscoreBaseStruct
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -14,7 +14,7 @@ class HighscoreDataDailyRepo(HighscoreDataDailyInterface):
     async def insert_highscore(
         self,
         async_session: AsyncSession,
-        highscore_data: HighscoreDataDailyStruct,
+        highscore_data: HighscoreBaseStruct,
     ):
         """Insert a new highscore record into the database."""
         sql = sqla.insert(HighscoreDataDailyTableStruct)

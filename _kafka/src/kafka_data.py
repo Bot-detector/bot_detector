@@ -32,7 +32,7 @@ class MetaData(BaseModel):
 class ScrapedStruct(BaseModel):
     metadata: MetaData
     player_data: PlayerStruct
-    hiscore_data: ScraperHiscoreData | None
+    highscore_data: ScraperHiscoreData | None
 
 
 class ToScrapeStruct(BaseModel):
@@ -119,7 +119,7 @@ def create_scraped_data(
         yield ScrapedStruct(
             metadata=MetaData(version=0, source="init"),
             player_data=player,
-            hiscore_data=ScraperHiscoreData(
+            highscore_data=ScraperHiscoreData(
                 player_id=player.id,
                 scrape_date=player.updated_at.date(),
                 skills=skills,

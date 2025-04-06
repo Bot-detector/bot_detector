@@ -49,12 +49,9 @@ CREATE TABLE player_attributes_history (
 CREATE TABLE highscore_data_daily (
   player_id INT UNSIGNED NOT NULL,
   scrape_date DATE NOT NULL,
-  scrape_year SMALLINT UNSIGNED NOT NULL,
-  -- Changed from generated column to regular column
-  scrape_month TINYINT UNSIGNED NOT NULL,
-  -- Changed from generated column to regular column
-  scrape_week TINYINT UNSIGNED NOT NULL,
-  -- Changed from generated column to regular column
+  scrape_year SMALLINT UNSIGNED AS (YEAR(scrape_date)) STORED NOT NULL,
+  scrape_month TINYINT UNSIGNED AS (MONTH(scrape_date)) STORED NOT NULL,
+  scrape_week TINYINT UNSIGNED AS (WEEK(scrape_date, 3)) STORED NOT NULL,
   skills JSON DEFAULT NULL,
   activities JSON DEFAULT NULL,
   PRIMARY KEY (player_id, scrape_date)
@@ -63,9 +60,9 @@ CREATE TABLE highscore_data_daily (
 CREATE TABLE highscore_data_weekly (
   player_id INT UNSIGNED NOT NULL,
   scrape_date DATE NOT NULL,
-  scrape_year SMALLINT UNSIGNED NOT NULL,
-  scrape_month TINYINT UNSIGNED NOT NULL,
-  scrape_week TINYINT UNSIGNED NOT NULL,
+  scrape_year SMALLINT UNSIGNED AS (YEAR(scrape_date)) STORED NOT NULL,
+  scrape_month TINYINT UNSIGNED AS (MONTH(scrape_date)) STORED NOT NULL,
+  scrape_week TINYINT UNSIGNED AS (WEEK(scrape_date, 3)) STORED NOT NULL,
   skills JSON DEFAULT NULL,
   activities JSON DEFAULT NULL,
   PRIMARY KEY (player_id, scrape_year, scrape_week)
@@ -74,9 +71,9 @@ CREATE TABLE highscore_data_weekly (
 CREATE TABLE highscore_data_monthly (
   player_id INT UNSIGNED NOT NULL,
   scrape_date DATE NOT NULL,
-  scrape_year SMALLINT UNSIGNED NOT NULL,
-  scrape_month TINYINT UNSIGNED NOT NULL,
-  scrape_week TINYINT UNSIGNED NOT NULL,
+  scrape_year SMALLINT UNSIGNED AS (YEAR(scrape_date)) STORED NOT NULL,
+  scrape_month TINYINT UNSIGNED AS (MONTH(scrape_date)) STORED NOT NULL,
+  scrape_week TINYINT UNSIGNED AS (WEEK(scrape_date, 3)) STORED NOT NULL,
   skills JSON DEFAULT NULL,
   activities JSON DEFAULT NULL,
   PRIMARY KEY (player_id, scrape_year, scrape_month)
