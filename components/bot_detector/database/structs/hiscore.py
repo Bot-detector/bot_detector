@@ -18,6 +18,7 @@ class HighscoreDataDailyTableStruct(Base):
 
     player_id: Mapped[int] = mapped_column(Integer, nullable=False)
     scrape_date: Mapped[date] = mapped_column(Date, nullable=False)
+    time_to_live: Mapped[date] = mapped_column(Date, nullable=False)
     scrape_year: Mapped[int] = mapped_column(
         SmallInteger, Computed("YEAR(scrape_date)"), nullable=False
     )
@@ -38,6 +39,7 @@ class HighscoreDataWeeklyTableStruct(Base):
 
     player_id: Mapped[int] = mapped_column(Integer, nullable=False)
     scrape_date: Mapped[date] = mapped_column(Date, nullable=False)
+    time_to_live: Mapped[date] = mapped_column(Date, nullable=False)
     scrape_year: Mapped[int] = mapped_column(
         SmallInteger, Computed("YEAR(scrape_date)"), nullable=False
     )
@@ -58,6 +60,7 @@ class HighscoreDataMonthlyTableStruct(Base):
 
     player_id: Mapped[int] = mapped_column(Integer, nullable=False)
     scrape_date: Mapped[date] = mapped_column(Date, nullable=False)
+    time_to_live: Mapped[date] = mapped_column(Date, nullable=False)
     scrape_year: Mapped[int] = mapped_column(
         SmallInteger, Computed("YEAR(scrape_date)"), nullable=False
     )

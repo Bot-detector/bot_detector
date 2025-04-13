@@ -37,10 +37,11 @@ CREATE TABLE player_attributes (
 
 CREATE TABLE player_attributes_history (
   player_id INT UNSIGNED NOT NULL,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   possible_ban BOOLEAN,
   confirmed_ban BOOLEAN,
   confirmed_player BOOLEAN,
+  time_to_live TIMESTAMP,
   label_id INTEGER,
   label_jagex INTEGER,
   PRIMARY KEY (player_id, updated_at) 
@@ -49,6 +50,7 @@ CREATE TABLE player_attributes_history (
 CREATE TABLE highscore_data_daily (
   player_id INT UNSIGNED NOT NULL,
   scrape_date DATE NOT NULL,
+  time_to_live DATE NOT NULL,
   scrape_year SMALLINT UNSIGNED AS (YEAR(scrape_date)) STORED NOT NULL,
   scrape_month TINYINT UNSIGNED AS (MONTH(scrape_date)) STORED NOT NULL,
   scrape_week TINYINT UNSIGNED AS (WEEK(scrape_date, 3)) STORED NOT NULL,
@@ -60,6 +62,7 @@ CREATE TABLE highscore_data_daily (
 CREATE TABLE highscore_data_weekly (
   player_id INT UNSIGNED NOT NULL,
   scrape_date DATE NOT NULL,
+  time_to_live DATE NOT NULL,
   scrape_year SMALLINT UNSIGNED AS (YEAR(scrape_date)) STORED NOT NULL,
   scrape_month TINYINT UNSIGNED AS (MONTH(scrape_date)) STORED NOT NULL,
   scrape_week TINYINT UNSIGNED AS (WEEK(scrape_date, 3)) STORED NOT NULL,
@@ -71,6 +74,7 @@ CREATE TABLE highscore_data_weekly (
 CREATE TABLE highscore_data_monthly (
   player_id INT UNSIGNED NOT NULL,
   scrape_date DATE NOT NULL,
+  time_to_live DATE NOT NULL,
   scrape_year SMALLINT UNSIGNED AS (YEAR(scrape_date)) STORED NOT NULL,
   scrape_month TINYINT UNSIGNED AS (MONTH(scrape_date)) STORED NOT NULL,
   scrape_week TINYINT UNSIGNED AS (WEEK(scrape_date, 3)) STORED NOT NULL,

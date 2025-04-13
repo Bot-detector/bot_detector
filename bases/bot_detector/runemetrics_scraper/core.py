@@ -48,7 +48,11 @@ async def scrape_player(
         error = f"Unexpected redirection for {player.name=}."
         logger.error(error)
         return None, error
-    except (aiohttp.ClientResponseError, aiohttp.ConnectionTimeoutError) as e:
+    except (
+        aiohttp.ClientResponseError,
+        aiohttp.ConnectionTimeoutError,
+        aiohttp.ClientConnectorError,
+    ) as e:
         error = f"Client response error: {e}"
         logger.error(error)
         return None, error

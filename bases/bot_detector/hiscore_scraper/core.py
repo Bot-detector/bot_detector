@@ -1,9 +1,10 @@
 import asyncio
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
-from aiohttp import ClientResponseError, ClientSession, ConnectionTimeoutError
+import aiohttp
+from aiohttp import ClientSession
 from bot_detector.kafka import Settings as KafkaSettings
 from bot_detector.kafka.repositories import (
     RepoPlayerScrapedProducer,
@@ -59,7 +60,11 @@ async def scrape_player(
         error = f"Unexpected redirection for {player.name=}."
         logger.error(error)
         return None, error
-    except (ClientResponseError, ConnectionTimeoutError) as e:
+    except (
+        aiohttp.ClientResponseError,
+        aiohttp.ConnectionTimeoutError,
+        aiohttp.ClientConnectorError,
+    ) as e:
         error = f"Client response error: {e}"
         logger.error(error)
         return None, error
@@ -84,6 +89,7 @@ async def transform_player_stats(
                 scrape_date=date.today(),
                 skills=skills,
                 activities=activities,
+                time_to_live=date.today() + timedelta(days=30),
             ),
         )
     except ValidationError as e:

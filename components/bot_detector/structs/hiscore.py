@@ -7,6 +7,7 @@ from pydantic import BaseModel
 class HighscoreBaseStruct(BaseModel):
     player_id: int
     scrape_date: date
+    time_to_live: date
     skills: Optional[dict[str, int]] = None
     activities: Optional[dict[str, int]] = None
 
