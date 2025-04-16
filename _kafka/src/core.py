@@ -7,10 +7,7 @@ import kafka_topics
 from kafka import KafkaProducer
 
 
-def create_kafka_producer():
-    # Get the Kafka broker address from the environment variable
-    kafka_broker = os.environ.get("KAFKA_BROKER", "localhost:9094")
-
+def create_kafka_producer(kafka_broker: str | list):
     # Create the Kafka producer
     producer = KafkaProducer(
         bootstrap_servers=kafka_broker,
@@ -37,9 +34,7 @@ def insert_data(producer: KafkaProducer):
 
         scrape_gen = kafka_data.create_scraped_data(player, n_records=30)
         scraped_data = list()
-        for d in scrape_gen:
-            print("\t", d.player_data.updated_at)
-            scraped_data.append(d.model_copy(deep=True))
+        scraped_data = [d.model_copy(deep=True) for d in scrape_gen]
         random.shuffle(scraped_data)
 
         for scrape_data in scraped_data:
@@ -47,12 +42,17 @@ def insert_data(producer: KafkaProducer):
                 topic="players.scraped",
                 value=scrape_data.model_dump(mode="json"),
             )
+            print("\t", scrape_data.player_data.updated_at)
 
 
 def main():
     random.seed(43)
-    kafka_topics.create_topics()
-    producer = create_kafka_producer()
+
+    # Get the Kafka broker address from the environment variable
+    kafka_broker = os.environ.get("KAFKA_BROKER", "localhost:9094")
+    kafka_topics.create_topics(kafka_broker=kafka_broker)
+
+    producer = create_kafka_producer(kafka_broker=kafka_broker)
     insert_data(producer=producer)
 
 

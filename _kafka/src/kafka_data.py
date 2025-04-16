@@ -20,6 +20,7 @@ class PlayerStruct(BaseModel):
 class ScraperHiscoreData(BaseModel):
     player_id: int
     scrape_date: date
+    time_to_live: date
     skills: Optional[dict[str, int]] = None
     activities: Optional[dict[str, int]] = None
 
@@ -122,6 +123,7 @@ def create_scraped_data(
             highscore_data=ScraperHiscoreData(
                 player_id=player.id,
                 scrape_date=player.updated_at.date(),
+                time_to_live=player.updated_at.date() + timedelta(days=30),
                 skills=skills,
                 activities=activities,
             ),

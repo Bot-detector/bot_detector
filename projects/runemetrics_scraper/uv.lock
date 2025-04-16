@@ -1,4 +1,5 @@
 version = 1
+revision = 1
 requires-python = ">=3.10"
 
 [[package]]
@@ -470,16 +471,16 @@ wheels = [
 
 [[package]]
 name = "osrs"
-version = "0.0.14"
+version = "0.0.15"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
     { name = "pydantic" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b5/0f/ef387da4bad6831a3f2621a678add070db97bd4b564c7fe8ad9f9db7b006/osrs-0.0.14.tar.gz", hash = "sha256:360f10aa6565f15497b25586c2edcd8fc8b81fe8cc2d3ad9ea316983c1c3c37b", size = 10626 }
+sdist = { url = "https://files.pythonhosted.org/packages/ec/16/c84ee4d043a70dd8b9539fb118839a31a66da65cb71995d90238a000bb32/osrs-0.0.15.tar.gz", hash = "sha256:576779c5fcd851a538def9b855d91c1398b209f81c585c8826d55bf5c4dc72be", size = 10813 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/87/30/3c97a69ee66e67313f410df6626bf929344e46a150437c0cca6ab060b657/osrs-0.0.14-py3-none-any.whl", hash = "sha256:f66aa99cc08203208f493ece768f7105ab777f671f580f77121c34a529794b55", size = 10941 },
+    { url = "https://files.pythonhosted.org/packages/4f/9b/fdae3d86dfc08aceef09ba2ec9200be791bc5e234915e221f4e5d1c7a671/osrs-0.0.15-py3-none-any.whl", hash = "sha256:852c587bae946e370bef7158cc9e14fa672fd14642cfcdabe746d751163f61f4", size = 11065 },
 ]
 
 [[package]]
@@ -706,7 +707,7 @@ dependencies = [
 requires-dist = [
     { name = "aiokafkaengine", specifier = ">=0.1.0" },
     { name = "orjson", specifier = ">=3.10.16" },
-    { name = "osrs", specifier = ">=0.0.14" },
+    { name = "osrs", specifier = ">=0.0.15" },
     { name = "pydantic", specifier = ">=2.10.4" },
     { name = "pydantic-settings", specifier = ">=2.7.0" },
 ]

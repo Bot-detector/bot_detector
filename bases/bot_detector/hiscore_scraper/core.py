@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 from datetime import date, datetime, timedelta
 from typing import Any
 
@@ -44,22 +45,23 @@ async def scrape_player(
     player: PlayerStruct,
     session: ClientSession,
     hiscore_instance: Hiscore,
-) -> tuple[PlayerStats | None, str | None]:
-    player_stats, error = None, None
+) -> tuple[PlayerStats | None, float | None, str | None]:
+    player_stats, error, latency = None, None, None
     try:
-        player_stats = await hiscore_instance.get(
+        player_stats, latency = await hiscore_instance.get(
             mode=HSMode.OLDSCHOOL,
             player=player.name,
             session=session,
+            return_latency=True,
         )
-        return player_stats, error
+        return player_stats, latency, error
     except PlayerDoesNotExist:
         logger.debug(f"{player.name=} does not exist.")
-        return None, None
+        return None, None, None
     except UnexpectedRedirection:
         error = f"Unexpected redirection for {player.name=}."
         logger.error(error)
-        return None, error
+        return None, None, error
     except (
         aiohttp.ClientResponseError,
         aiohttp.ConnectionTimeoutError,
@@ -67,7 +69,7 @@ async def scrape_player(
     ) as e:
         error = f"Client response error: {e}"
         logger.error(error)
-        return None, error
+        return None, None, error
 
 
 async def transform_player_stats(
@@ -121,7 +123,10 @@ async def work(
 
             # get player from kafka
             try:
+                start_time = time.perf_counter()
                 player = await player_ts_consumer.consume_one()
+                total_time = time.perf_counter() - start_time
+                logger.debug(f"[{worker_id}]: consume one {total_time:.4f}")
             except ValidationError as e:
                 logger.error(e.json())
                 continue
@@ -139,11 +144,14 @@ async def work(
                 rate_limiter=rate_limiter,
             )
 
-            player_stats, error = await scrape_player(
+            player_stats, latency, error = await scrape_player(
                 player=player_data,
                 session=session,
                 hiscore_instance=hiscore_instance,
             )
+
+            if latency:
+                logger.debug(f"[{worker_id}]: scrape one {latency:.4f}")
 
             # handle exceptions
             if error:
@@ -154,7 +162,7 @@ async def work(
 
             # if player not found, than send to not found topic
             if player_stats is None:
-                logger.info(f"[{worker_id}][{player_data.name}]: not found.")
+                logger.debug(f"[{worker_id}][{player_data.name}]: not found.")
                 await player_nf_producer.produce_one(
                     player=NotFoundStruct(
                         metadata=MetaData(version=1, source="hiscore_scraper"),
@@ -174,17 +182,12 @@ async def work(
                 continue
 
             await player_sc_producer.produce_one(scraped_data=scraped_data)
-            logger.info(f"[{worker_id}][{player_data.name}]: scraped successfully.")
+            logger.debug(f"[{worker_id}][{player_data.name}]: scraped successfully.")
 
 
 async def main():
     proxy_manager = ProxyManager(api_key=ProxySettings().PROXY_API_KEY)
     proxies = await proxy_manager.fetch_proxies()
-
-    rate_limiter = RateLimiter(
-        calls_per_interval=ProxySettings().MAX_CALLS,
-        interval=ProxySettings().INTERVAL,
-    )
 
     # initialize kafka producers and consumers
     b_server = KafkaSettings().KAFKA_BOOTSTRAP_SERVERS
@@ -207,7 +210,10 @@ async def main():
         work(
             worker_id=worker_id,
             proxy_manager=proxy_manager,
-            rate_limiter=rate_limiter,
+            rate_limiter=RateLimiter(
+                calls_per_interval=ProxySettings().MAX_CALLS,
+                interval=ProxySettings().INTERVAL,
+            ),
             player_ts_consumer=player_ts_consumer,
             player_ts_producer=player_ts_producer,
             player_nf_producer=player_nf_producer,

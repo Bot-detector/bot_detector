@@ -21,3 +21,4 @@ class HighscoreDataDailyRepo(HighscoreDataDailyInterface):
         sql = sql.values([highscore_data.model_dump()])
         sql = sql.prefix_with("IGNORE")
         await async_session.execute(sql)
+    

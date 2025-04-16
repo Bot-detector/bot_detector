@@ -155,7 +155,7 @@ async def work(
 
             # push data to kafka
             await player_sc_producer.produce_one(scraped_data=scraped_data)
-            logger.info(
+            logger.debug(
                 f"[{worker_id}][{player_data.name}]: {player_data.label_jagex=}"
             )
 
@@ -163,11 +163,6 @@ async def work(
 async def main():
     proxy_manager = ProxyManager(api_key=ProxySettings().PROXY_API_KEY)
     proxies = await proxy_manager.fetch_proxies()
-
-    rate_limiter = RateLimiter(
-        calls_per_interval=ProxySettings().MAX_CALLS,
-        interval=ProxySettings().INTERVAL,
-    )
 
     # initialize kafka producers and consumers
     b_server = KafkaSettings().KAFKA_BOOTSTRAP_SERVERS
@@ -192,7 +187,10 @@ async def main():
             work(
                 worker_id=worker_id,
                 proxy_manager=proxy_manager,
-                rate_limiter=rate_limiter,
+                rate_limiter=RateLimiter(
+                    calls_per_interval=ProxySettings().MAX_CALLS,
+                    interval=ProxySettings().INTERVAL,
+                ),
                 player_nf_consumer=player_nf_consumer,
                 player_nf_producer=player_nf_producer,
                 player_sc_producer=player_sc_producer,

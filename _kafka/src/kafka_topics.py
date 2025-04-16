@@ -1,12 +1,7 @@
-import os
-
 from kafka.admin import KafkaAdminClient, NewTopic
 
 
-def create_topics():
-    # Get the Kafka broker address from the environment variable
-    kafka_broker = os.environ.get("KAFKA_BROKER", "localhost:9094")
-
+def create_topics(kafka_broker: str | list):
     # Create Kafka topics
     admin_client = KafkaAdminClient(bootstrap_servers=kafka_broker)
 
