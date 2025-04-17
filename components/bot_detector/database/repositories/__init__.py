@@ -1,8 +1,13 @@
 from .hiscore import (
     HighscoreDataDailyRepo,
-    # HighscoreDataMonthlyRepo,
-    # HighscoreDataWeeklyRepo,
+    HighscoreDataMonthlyRepo,
+    HighscoreDataWeeklyRepo,
 )
 from .player import PlayerRepo
 
-__all__ = ["PlayerRepo", "HighscoreDataDailyRepo"]
+__all__ = [
+    "PlayerRepo",
+    "HighscoreDataDailyRepo",
+    "HighscoreDataWeeklyRepo",
+    "HighscoreDataMonthlyRepo",
+]

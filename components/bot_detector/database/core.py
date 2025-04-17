@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str
     POOL_TIMEOUT: int = 25
     POOL_RECYCLE: int = 25
-    DEBUG: bool = True
+    DB_DEBUG: bool = False
 
 
 class Base(MappedAsDataclass, DeclarativeBase):
@@ -29,7 +29,7 @@ def get_session_factory(
         max_overflow=90,
         pool_timeout=SETTINGS.POOL_TIMEOUT,
         pool_recycle=SETTINGS.POOL_RECYCLE,
-        echo=SETTINGS.DEBUG,
+        echo=SETTINGS.DB_DEBUG,
     )
     async_session = async_sessionmaker(
         bind=async_engine,

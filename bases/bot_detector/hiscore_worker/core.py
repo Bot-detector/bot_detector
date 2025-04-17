@@ -1,15 +1,22 @@
 import asyncio
 import logging
+from datetime import timedelta
+from typing import Literal
 
 from bot_detector import database as db
 from bot_detector.database import Settings as DBSettings
-from bot_detector.database.repositories import HighscoreDataDailyRepo, PlayerRepo
+from bot_detector.database.repositories import (
+    HighscoreDataDailyRepo,
+    HighscoreDataMonthlyRepo,
+    HighscoreDataWeeklyRepo,
+    PlayerRepo,
+)
 from bot_detector.kafka import Settings as KafkaSettings
 from bot_detector.kafka.repositories import (
     RepoPlayerScrapedConsumer,
     RepoPlayerScrapedProducer,
 )
-from bot_detector.structs import HighscoreDataDailyStruct, ScrapedStruct
+from bot_detector.structs import HighscoreBaseStruct, ScrapedStruct
 from pydantic import ValidationError
 from pydantic_settings import BaseSettings
 from sqlalchemy.exc import IntegrityError, TimeoutError
@@ -22,17 +29,35 @@ class Settings(BaseSettings):
     N_WORKERS: int = 1
 
 
+def set_ttl(
+    data: HighscoreBaseStruct, table: Literal["daily", "weekly", "monthly"]
+) -> HighscoreBaseStruct:
+    """objective is to more or less keep 30 records"""
+    _data = data.model_copy()
+
+    match table:
+        case "daily":
+            _data.time_to_live = _data.scrape_date + timedelta(days=30)
+        case "weekly":
+            weeks = 26  # 6 months
+            _data.time_to_live = _data.scrape_date + timedelta(days=weeks * 7)
+        case "monthly":
+            months = 24
+            _data.time_to_live = _data.scrape_date + timedelta(days=months * 30)
+    return _data
+
+
 async def process_data(
     session_factory: async_sessionmaker[AsyncSession],
     scraped_data: ScrapedStruct,
+    player_repo: PlayerRepo,
+    hs_repo_daily: HighscoreDataDailyRepo,
+    hs_repo_weekly: HighscoreDataWeeklyRepo,
+    hs_repo_monthly: HighscoreDataMonthlyRepo,
 ):
-    # initialize repositories
-    player_repo = PlayerRepo()
-    highscore_repo = HighscoreDataDailyRepo()
-
     # extract player and highscore data
     player_data = scraped_data.player_data
-    highscore_data = scraped_data.highscore_data
+    hs_data = scraped_data.highscore_data
 
     async with session_factory() as session:
         async with session.begin():
@@ -40,9 +65,21 @@ async def process_data(
                 async_session=session, player_data=player_data
             )
 
-            if highscore_data is not None:
-                await highscore_repo.insert_highscore(
-                    async_session=session, highscore_data=highscore_data
+            if hs_data is not None:
+                hs_daily = set_ttl(data=hs_data, table="daily")
+                hs_weekly = set_ttl(data=hs_data, table="weekly")
+                hs_monthly = set_ttl(data=hs_data, table="monthly")
+
+                # extreme4all: this is a lazy way to insert into the other tables,
+                # it does mean alot of insert.on_duplicate_key_update()
+                await hs_repo_daily.insert_highscore(
+                    async_session=session, highscore_data=hs_daily
+                )
+                await hs_repo_weekly.insert_highscore(
+                    async_session=session, highscore_data=hs_weekly
+                )
+                await hs_repo_monthly.insert_highscore(
+                    async_session=session, highscore_data=hs_monthly
                 )
             await session.commit()
 
@@ -71,7 +108,12 @@ async def work(
         # insert data into the database
         try:
             await process_data(
-                session_factory=session_factory, scraped_data=scraped_data
+                session_factory=session_factory,
+                scraped_data=scraped_data,
+                player_repo=PlayerRepo(),
+                hs_repo_daily=HighscoreDataDailyRepo(),
+                hs_repo_weekly=HighscoreDataWeeklyRepo(),
+                hs_repo_monthly=HighscoreDataMonthlyRepo(),
             )
         except IntegrityError as e:
             logger.warning(f"[{worker_id}]: {e=}")
@@ -114,6 +156,7 @@ async def main():
         for worker_id in range(Settings().N_WORKERS)
     ]
     await asyncio.gather(*workers)
+    await async_engine.dispose()
 
 
 async def run_async():

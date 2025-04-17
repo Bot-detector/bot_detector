@@ -1,6 +1,12 @@
 import json
 import logging
 
+from pydantic_settings import BaseSettings
+
+
+class Settings(BaseSettings):
+    DEBUG: bool = False
+
 
 # Configure JSON logging
 class JsonFormatter(logging.Formatter):
@@ -32,8 +38,11 @@ class IgnoreSQLWarnings(logging.Filter):
 handler = logging.StreamHandler()
 handler.setFormatter(JsonFormatter())
 
+
 logging.basicConfig(level=logging.INFO, handlers=[handler])
 
+level = logging.DEBUG if Settings().DEBUG else logging.INFO
+logging.getLogger("bot_detector").setLevel(level=level)
 
 # set imported loggers to warning
 logging.getLogger("asyncmy").addFilter(IgnoreSQLWarnings())
