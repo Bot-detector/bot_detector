@@ -1,4 +1,5 @@
 USE playerdata;
+
 CREATE TABLE Players (
   id INT PRIMARY KEY AUTO_INCREMENT,
   name VARCHAR(50),
@@ -16,37 +17,40 @@ CREATE TABLE Players (
   UNIQUE KEY `Unique_name` (`name`)
 );
 
-CREATE TABLE player (
-  player_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  player_name VARCHAR(50) NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (player_id),
-  UNIQUE KEY `Unique_name` (`player_name`)
-);
+-- these tables are for future use
+-- CREATE TABLE player (
+--   player_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+--   player_name VARCHAR(50) NOT NULL,
+--   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+--   PRIMARY KEY (player_id),
+--   UNIQUE KEY Unique_name (player_name)
+-- );
 
-CREATE TABLE player_attributes (
-  player_id INT UNSIGNED NOT NULL,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  possible_ban BOOLEAN,
-  confirmed_ban BOOLEAN,
-  confirmed_player BOOLEAN,
-  label_id INTEGER,
-  label_jagex INTEGER,
-  PRIMARY KEY (player_id)
-);
+-- CREATE TABLE player_attributes (
+--   player_id INT UNSIGNED NOT NULL,
+--   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+--   possible_ban BOOLEAN,
+--   confirmed_ban BOOLEAN,
+--   confirmed_player BOOLEAN,
+--   label_id INTEGER,
+--   label_jagex INTEGER,
+--   PRIMARY KEY (player_id)
+--   FOREIGN KEY (player_id) REFERENCES player(player_id)
+-- );
 
-CREATE TABLE player_attributes_history (
-  player_id INT UNSIGNED NOT NULL,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  possible_ban BOOLEAN,
-  confirmed_ban BOOLEAN,
-  confirmed_player BOOLEAN,
-  time_to_live TIMESTAMP,
-  label_id INTEGER,
-  label_jagex INTEGER,
-  PRIMARY KEY (player_id, updated_at) 
-) PARTITION BY HASH (player_id) PARTITIONS 10;
+-- CREATE TABLE player_attributes_history (
+--   player_id INT UNSIGNED NOT NULL,
+--   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+--   possible_ban BOOLEAN,
+--   confirmed_ban BOOLEAN,
+--   confirmed_player BOOLEAN,
+--   time_to_live TIMESTAMP,
+--   label_id INTEGER,
+--   label_jagex INTEGER,
+--   PRIMARY KEY (player_id, updated_at) 
+-- ) PARTITION BY HASH (player_id) PARTITIONS 10;
 
+-- Foreign keys are not yet supported in conjunction with partitioning
 CREATE TABLE highscore_data_daily (
   player_id INT UNSIGNED NOT NULL,
   scrape_date DATE NOT NULL,
