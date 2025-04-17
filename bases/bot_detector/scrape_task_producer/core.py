@@ -6,12 +6,20 @@ from bot_detector.database import get_session_factory
 from bot_detector.database.interfaces import playerInterface
 from bot_detector.database.repositories import PlayerRepo
 from bot_detector.kafka import Settings as KafkaSettings
-from bot_detector.kafka.interface import ProducerInterface
-from bot_detector.kafka.repositories import RepoPlayersToScrapeProducer
+from bot_detector.kafka.interface import ConsumerInterface, ProducerInterface
+from bot_detector.kafka.repositories import (
+    RepoPlayersToScrapeConsumer,
+    RepoPlayersToScrapeProducer,
+)
 from bot_detector.structs import MetaData, PlayerStruct, ToScrapeStruct
+from pydantic_settings import BaseSettings
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 logger = logging.getLogger(__name__)
+
+
+class Settings(BaseSettings):
+    LIMIT: int = 10_000
 
 
 async def produce_players(
@@ -62,15 +70,23 @@ async def process_players(
     async_session: async_sessionmaker[AsyncSession],
     player_repo: playerInterface,
     player_producer: ProducerInterface,
+    player_consumer: ConsumerInterface,
+    limit: int = 10,
 ):
     player_id = 0
     days = 7
     confirmed_ban = False
-    limit = 10
 
     while True:
+        lag = await player_consumer.get_lag()
+
+        if lag >= 100_000:
+            logger.info(f"{lag=} to high, sleeping(10)")
+            await asyncio.sleep(10)
+            continue
+
         logger.info(f"{player_id=}, {confirmed_ban=}, {days=}, {limit=}")
-        # print(f"{player_id=}, {confirmed_ban=}, {days=}, {limit=}")
+
         async with async_session() as session:
             players = await player_repo.select_player(
                 async_session=session,
@@ -94,21 +110,28 @@ async def process_players(
 
 async def main():
     async_session, async_engine = get_session_factory(SETTINGS=DBSettings())
-    player_repo = PlayerRepo()
-    player_producer = RepoPlayersToScrapeProducer(
-        bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS
+
+    bootstrap_servers = KafkaSettings().KAFKA_BOOTSTRAP_SERVERS
+    player_producer = RepoPlayersToScrapeProducer(bootstrap_servers=bootstrap_servers)
+    player_consumer = RepoPlayersToScrapeConsumer(
+        bootstrap_servers=bootstrap_servers, group_id="scraper"
     )
+
     await player_producer.start()
+    await player_consumer.start()
 
     try:
         await process_players(
             async_session=async_session,
-            player_repo=player_repo,
+            player_repo=PlayerRepo(),
             player_producer=player_producer,
+            player_consumer=player_consumer,
+            limit=Settings().LIMIT,
         )
     finally:
         await async_engine.dispose()
         await player_producer.stop()
+        await player_consumer.stop()
 
 
 async def run_async():

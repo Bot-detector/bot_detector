@@ -1,10 +1,14 @@
+import logging
+
 import orjson
-from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
+from aiokafka import AIOKafkaConsumer, AIOKafkaProducer, TopicPartition
 from bot_detector.kafka.interface import (
     ConsumerInterface,
     ProducerInterface,
 )
 from bot_detector.structs import ToScrapeStruct
+
+logger = logging.getLogger(__name__)
 
 
 class RepoPlayersToScrapeConsumer(ConsumerInterface):
@@ -31,6 +35,34 @@ class RepoPlayersToScrapeConsumer(ConsumerInterface):
         msg = await self.consumer.getone()
         player = ToScrapeStruct(**msg.value)
         return player
+
+    async def get_lag(self) -> int:
+        total_lag = 0
+        topic = "players.to_scrape"
+
+        # Get the list of partitions for the topic
+        partitions = self.consumer.partitions_for_topic(topic)
+
+        if partitions is None:
+            logger.warning("partitions is none")
+            return 0
+
+        for partition in partitions:
+            tp = TopicPartition(topic, partition)
+
+            # Get the last offset committed by the consumer
+            committed = await self.consumer.committed(tp)
+
+            # Get the latest offset in the topic
+            end_offset = await self.consumer.end_offsets([tp])
+
+            # Calculate the lag for this partition
+            lag = end_offset[tp] - committed
+
+            # Add the lag for this partition to the total lag
+            total_lag += lag
+
+        return total_lag
 
 
 class RepoPlayersToScrapeProducer(ProducerInterface):

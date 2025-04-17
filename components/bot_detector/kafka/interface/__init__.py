@@ -1,3 +1,3 @@
-from .player import ConsumerInterface, ProducerInterface
+from .base import ConsumerInterface, ProducerInterface
 
 __all__ = ["ConsumerInterface", "ProducerInterface"]

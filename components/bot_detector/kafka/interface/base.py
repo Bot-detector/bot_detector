@@ -22,6 +22,10 @@ class ConsumerInterface(ABC):
     async def consume_one(self):
         pass
 
+    @abstractmethod
+    async def get_lag(self):
+        pass
+
 
 class ProducerInterface(ABC):
     @abstractmethod
