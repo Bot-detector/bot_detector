@@ -10,11 +10,17 @@ on:
       - components/bot_detector/logfmt/**
       - projects/hiscore_scraper/**
   workflow_dispatch:
-  
+
 jobs:
   # lockfile is in /projects/hiscore_scraper
   lock_file:
-    runs-on: ghcr.io/astral-sh/uv:bookworm
+    # The type of runner that the job will run on
+    runs-on: [self-hosted, "hetzner"]
+    if: github.repository_owner == 'Bot-detector'
+    
+    container:
+      image: ghcr.io/astral-sh/uv:bookworm
+
     steps:
       - uses: actions/checkout@v4
       - run: cd projects/hiscore_scraper && uv lock --locked
