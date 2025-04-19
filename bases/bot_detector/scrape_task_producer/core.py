@@ -39,7 +39,7 @@ async def produce_players(
         await player_producer.produce_one(player=player)
 
 
-async def determine_fetch_params(
+def determine_fetch_params(
     days: int,
     confirmed_ban: bool,
     player_id: int,
@@ -48,22 +48,21 @@ async def determine_fetch_params(
     max_days: int = 7,
 ):
     if players is None:
-        return days, confirmed_ban, player_id, limit
+        return days, confirmed_ban, player_id
 
     if len(players) < limit and days > 1:
         logger.info("No more players to scrape, reducing days")
-        return days - 1, confirmed_ban, 0, limit
+        return days - 1, confirmed_ban, 0
 
     if len(players) < limit and days == 1 and not confirmed_ban:
         logger.info("No more players to scrape, looking for confirmed bans")
-        return max_days, True, 0, limit
+        return max_days, True, 0
 
     if len(players) < limit and days == 1 and confirmed_ban:
         logger.info("No more players to scrape, resetting")
-        await asyncio.sleep(60)
-        return max_days, False, 0, limit
+        return max_days, False, 0
 
-    return days, confirmed_ban, players[-1].id, limit
+    return days, confirmed_ban, players[-1].id
 
 
 async def process_players(
@@ -76,6 +75,7 @@ async def process_players(
     player_id = 0
     days = 7
     confirmed_ban = False
+    max_days = 7
 
     while True:
         lag = await player_consumer.get_lag()
@@ -98,14 +98,17 @@ async def process_players(
 
         await produce_players(players=players, player_producer=player_producer)
 
-        days, confirmed_ban, player_id, limit = await determine_fetch_params(
+        days, confirmed_ban, player_id = await determine_fetch_params(
             players=players,
             player_id=player_id,
             confirmed_ban=confirmed_ban,
             days=days,
-            max_days=7,
+            max_days=max_days,
             limit=limit,
         )
+
+        if (days, confirmed_ban, player_id) == (max_days, False, 0):
+            await asyncio.sleep(60)
 
 
 async def main():
