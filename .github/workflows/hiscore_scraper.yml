@@ -1,0 +1,60 @@
+name: hiscore_scraper
+
+on:
+  push:
+    paths:
+      - bases/bot_detector/hiscore_scraper/**
+      - components/bot_detector/proxy_manager/**
+      - components/bot_detector/kafka/**
+      - components/bot_detector/structs/**
+      - components/bot_detector/logfmt/**
+      - projects/hiscore_scraper/**
+
+jobs:
+  # lockfile is in /projects/hiscore_scraper
+  lock_file:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: projects/hiscore_scraper
+      - uses: ./.github/actions/setup
+      - run: uv lock --locked
+
+  linting:
+    runs-on: ubuntu-latest
+    needs: [lock_file]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: uvx ruff check .
+
+  formatting:
+    runs-on: ubuntu-latest
+    needs: [lock_file]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: uvx ruff format --check .
+
+  type_consistency:
+    runs-on: ubuntu-latest
+    needs: [lock_file]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: uv run pyright .
+
+  tests:
+    runs-on: ubuntu-latest
+    needs: [lock_file]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: |
+          uv run pytest -v --durations=0 --cov --cov-report=xml \
+          bases/bot_detector/hiscore_scraper/test_core.py \
+          components/bot_detector/proxy_manager/test_core.py \
+          components/bot_detector/kafka/test_core.py \
+          components/bot_detector/structs/test_core.py \
+          components/bot_detector/logfmt/test_core.py
