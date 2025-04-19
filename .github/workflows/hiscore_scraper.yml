@@ -19,7 +19,7 @@ jobs:
     if: github.repository_owner == 'Bot-detector'
     
     container:
-      image: ghcr.io/astral-sh/uv:bookworm
+      image: ghcr.io/astral-sh/uv:bookworm-slim
 
     steps:
       - uses: actions/checkout@v4
