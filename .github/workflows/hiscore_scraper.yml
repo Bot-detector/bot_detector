@@ -9,17 +9,15 @@ on:
       - components/bot_detector/structs/**
       - components/bot_detector/logfmt/**
       - projects/hiscore_scraper/**
-
+  workflow_dispatch:
+  
 jobs:
   # lockfile is in /projects/hiscore_scraper
   lock_file:
-    runs-on: ubuntu-latest
+    runs-on: ghcr.io/astral-sh/uv:bookworm
     steps:
       - uses: actions/checkout@v4
-        with:
-          path: projects/hiscore_scraper
-      - uses: ./.github/actions/setup
-      - run: uv lock --locked
+      - run: cd projects/hiscore_scraper && uv lock --locked
 
   linting:
     runs-on: ubuntu-latest
