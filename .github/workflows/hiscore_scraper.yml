@@ -12,5 +12,5 @@ on:
   workflow_dispatch:
 
 jobs:
-  validation_and_tests:
+  common:
     uses: ./.github/workflows/common.yml
