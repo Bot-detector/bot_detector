@@ -15,8 +15,7 @@ jobs:
   # lockfile is in /projects/hiscore_scraper
   lock_file:
     # The type of runner that the job will run on
-    runs-on: [self-hosted, "hetzner"]
-    if: github.repository_owner == 'Bot-detector'
+    runs-on: ubuntu-latest
     
     container:
       image: ghcr.io/astral-sh/uv:bookworm-slim
