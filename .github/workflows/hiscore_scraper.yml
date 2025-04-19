@@ -54,9 +54,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: |
-          uv run pytest -v --durations=0 --cov --cov-report=xml \
-          bases/bot_detector/hiscore_scraper/test_core.py \
-          components/bot_detector/proxy_manager/test_core.py \
-          components/bot_detector/kafka/test_core.py \
-          components/bot_detector/structs/test_core.py \
-          components/bot_detector/logfmt/test_core.py
+          uv run pytest -v --durations=0 --cov --cov-report=xml
