@@ -2,6 +2,10 @@ name: common
 
 on:
   workflow_call:
+    inputs:
+      project_dir:
+        required: true
+        type: string
 
 jobs:
   lock_file:
@@ -10,7 +14,7 @@ jobs:
       image: ghcr.io/astral-sh/uv:bookworm-slim
     steps:
       - uses: actions/checkout@v4
-      - run: cd projects/hiscore_scraper && uv lock --locked
+      - run: cd ${{ inputs.project_dir }} && uv lock --locked
 
   linting:
     runs-on: ubuntu-latest
