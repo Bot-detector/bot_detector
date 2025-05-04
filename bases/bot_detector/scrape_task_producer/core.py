@@ -98,7 +98,7 @@ async def process_players(
 
         await produce_players(players=players, player_producer=player_producer)
 
-        days, confirmed_ban, player_id = await determine_fetch_params(
+        days, confirmed_ban, player_id = determine_fetch_params(
             players=players,
             player_id=player_id,
             confirmed_ban=confirmed_ban,
