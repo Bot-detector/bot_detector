@@ -1,5 +1,4 @@
 USE playerdata;
-
 CREATE TABLE Players (
   id INT PRIMARY KEY AUTO_INCREMENT,
   name VARCHAR(50),
@@ -16,7 +15,6 @@ CREATE TABLE Players (
   normalized_name VARCHAR(50),
   UNIQUE KEY `Unique_name` (`name`)
 );
-
 -- these tables are for future use
 -- CREATE TABLE player (
 --   player_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -25,7 +23,6 @@ CREATE TABLE Players (
 --   PRIMARY KEY (player_id),
 --   UNIQUE KEY Unique_name (player_name)
 -- );
-
 -- CREATE TABLE player_attributes (
 --   player_id INT UNSIGNED NOT NULL,
 --   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -37,7 +34,6 @@ CREATE TABLE Players (
 --   PRIMARY KEY (player_id)
 --   FOREIGN KEY (player_id) REFERENCES player(player_id)
 -- );
-
 -- CREATE TABLE player_attributes_history (
 --   player_id INT UNSIGNED NOT NULL,
 --   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -49,7 +45,6 @@ CREATE TABLE Players (
 --   label_jagex INTEGER,
 --   PRIMARY KEY (player_id, updated_at) 
 -- ) PARTITION BY HASH (player_id) PARTITIONS 10;
-
 -- Foreign keys are not yet supported in conjunction with partitioning
 CREATE TABLE highscore_data_daily (
   player_id INT UNSIGNED NOT NULL,
@@ -86,3 +81,61 @@ CREATE TABLE highscore_data_monthly (
   activities JSON DEFAULT NULL,
   PRIMARY KEY (player_id, scrape_year, scrape_month)
 ) PARTITION BY HASH (player_id) PARTITIONS 10;
+
+CREATE TABLE Predictions (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  name VARCHAR(12),
+  prediction VARCHAR(50),
+  created TIMESTAMP,
+  predicted_confidence DECIMAL(5, 2),
+  real_player DECIMAL(5, 2) DEFAULT 0,
+  pvm_melee_bot DECIMAL(5, 2) DEFAULT 0,
+  smithing_bot DECIMAL(5, 2) DEFAULT 0,
+  magic_bot DECIMAL(5, 2) DEFAULT 0,
+  fishing_bot DECIMAL(5, 2) DEFAULT 0,
+  mining_bot DECIMAL(5, 2) DEFAULT 0,
+  crafting_bot DECIMAL(5, 2) DEFAULT 0,
+  pvm_ranged_magic_bot DECIMAL(5, 2) DEFAULT 0,
+  pvm_ranged_bot DECIMAL(5, 2) DEFAULT 0,
+  hunter_bot DECIMAL(5, 2) DEFAULT 0,
+  fletching_bot DECIMAL(5, 2) DEFAULT 0,
+  clue_scroll_bot DECIMAL(5, 2) DEFAULT 0,
+  lms_bot DECIMAL(5, 2) DEFAULT 0,
+  agility_bot DECIMAL(5, 2) DEFAULT 0,
+  wintertodt_bot DECIMAL(5, 2) DEFAULT 0,
+  runecrafting_bot DECIMAL(5, 2) DEFAULT 0,
+  zalcano_bot DECIMAL(5, 2) DEFAULT 0,
+  woodcutting_bot DECIMAL(5, 2) DEFAULT 0,
+  thieving_bot DECIMAL(5, 2) DEFAULT 0,
+  soul_wars_bot DECIMAL(5, 2) DEFAULT 0,
+  cooking_bot DECIMAL(5, 2) DEFAULT 0,
+  vorkath_bot DECIMAL(5, 2) DEFAULT 0,
+  barrows_bot DECIMAL(5, 2) DEFAULT 0,
+  herblore_bot DECIMAL(5, 2) DEFAULT 0,
+  zulrah_bot DECIMAL(5, 2) DEFAULT 0,
+  gauntlet_bot DECIMAL(5, 2) DEFAULT 0,
+  nex_bot DECIMAL(5, 2) DEFAULT 0,
+  unknown_bot DECIMAL(5, 2) DEFAULT 0
+);
+
+CREATE TABLE PredictionsFeedback (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  ts TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  voter_id INT NOT NULL,
+  subject_id INT NOT NULL,
+  prediction VARCHAR(50) NOT NULL,
+  confidence FLOAT NOT NULL,
+  vote INT NOT NULL DEFAULT '0',
+  feedback_text TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+  reviewed TINYINT NOT NULL DEFAULT '0',
+  reviewer_id INT DEFAULT NULL,
+  user_notified TINYINT NOT NULL DEFAULT '0',
+  proposed_label VARCHAR(50) DEFAULT NULL,
+  UNIQUE KEY Unique_Vote (
+    prediction,
+    subject_id,
+    voter_id
+  ) USING BTREE,
+  CONSTRAINT `FK_Subject_ID` FOREIGN KEY (`subject_id`) REFERENCES `Players` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT `FK_Voter_ID` FOREIGN KEY (`voter_id`) REFERENCES `Players` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT
+);

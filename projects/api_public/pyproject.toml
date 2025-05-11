@@ -1,0 +1,26 @@
+[build-system]
+requires = ["hatchling", "hatch-polylith-bricks"]
+build-backend = "hatchling.build"
+
+[project]
+name = "api_public"
+version = "0.1.0"
+requires-python = ">=3.10"
+
+dependencies = [
+    "aiokafkaengine==0.0.4",
+    "fastapi>=0.115.12",
+    "pydantic-settings>=2.9.1",
+    "python-dotenv>=1.0.1",
+    "sqlalchemy>=2.0.40",
+    "uvicorn>=0.34.2",
+]
+
+[project.scripts]
+scrape_task_producer = "bot_detector.api_public.core.server:run"
+
+[tool.hatch.build.hooks.polylith-bricks]
+packages = ["bot_detector"]
+
+[tool.polylith.bricks]
+"../../bases/bot_detector/api_public" = "bot_detector/api_public"

@@ -6,10 +6,12 @@ from .hiscore import (
     HighscoreDataMonthlyStruct,
     HighscoreDataWeeklyStruct,
 )
-from .kafka import NotFoundStruct, ScrapedStruct, ToScrapeStruct
+from .kafka import NotFoundStruct, ReportsToInsertStruct, ScrapedStruct, ToScrapeStruct
 from .player import PlayerStruct
+from .reports import Detection
 
 __all__ = [
+    "MetaData",
     "HighscoreBaseStruct",
     "HighscoreDataBaseStruct",
     "HighscoreDataDailyStruct",
@@ -19,5 +21,6 @@ __all__ = [
     "PlayerStruct",
     "ToScrapeStruct",
     "ScrapedStruct",
-    "MetaData",
+    "ReportsToInsertStruct",
+    "Detection",
 ]

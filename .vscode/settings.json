@@ -31,5 +31,6 @@
             "username": "root",
             "password": "root_bot_buster"
         }
-    ]
+    ],
+    "makefile.configureOnOpen": false
 }

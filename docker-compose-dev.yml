@@ -96,11 +96,14 @@ services:
         condition: service_healthy
   project_debugger:
     container_name: project_debugger
-    image: bd/project_debugger # tags the image if build
+    image: bd/project_debugger # tags the image if build 
     build:
       context: ./
       dockerfile: Dockerfile
     # command: ["uv", "run", "bases/bot_detector/hiscore_scraper/core.py"]
+    # command: uv run uvicorn bases.bot_detector.api_public.src.core.server:app --host 0.0.0.0 --reload
+    ports:
+      - 8000:8000 # api_publics
     volumes:
       - ./bases:/app/bases
       - ./components:/app/components
