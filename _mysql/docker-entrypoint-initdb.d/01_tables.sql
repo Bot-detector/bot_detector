@@ -139,3 +139,13 @@ CREATE TABLE PredictionsFeedback (
   CONSTRAINT `FK_Subject_ID` FOREIGN KEY (`subject_id`) REFERENCES `Players` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT `FK_Voter_ID` FOREIGN KEY (`voter_id`) REFERENCES `Players` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT
 );
+
+CREATE TABLE `report_sighting` (
+    `report_sighting_id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `reporting_id` INT UNSIGNED NOT NULL,
+    `reported_id` INT UNSIGNED NOT NULL,
+    `manual_detect` TINYINT(1) DEFAULT 0,
+    PRIMARY key (`report_sighting_id`),
+    UNIQUE KEY unique_sighting (`reporting_id`, `reported_id`, `manual_detect`),
+    KEY idx_reported_id (`reported_id`)
+);

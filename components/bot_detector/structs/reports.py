@@ -17,9 +17,7 @@ class Equipment(BaseModel):
     equip_shield_id: Optional[int] = Field(None, ge=0)
 
 
-class Detection(BaseModel):
-    reporter: str = Field(..., min_length=1, max_length=13)
-    reported: str = Field(..., min_length=1, max_length=12)
+class BaseDetection(BaseModel):
     region_id: int = Field(0, ge=0, le=100_000)
     x_coord: int = Field(0, ge=0)
     y_coord: int = Field(0, ge=0)
@@ -31,3 +29,13 @@ class Detection(BaseModel):
     world_number: int = Field(0, ge=300, le=1_000)
     equipment: Equipment
     equip_ge_value: int = Field(0, ge=0)
+
+
+class Detection(BaseDetection):
+    reporter: str = Field(..., min_length=1, max_length=13)
+    reported: str = Field(..., min_length=1, max_length=12)
+
+
+class ParsedDetection(BaseDetection):
+    reporter_id: int = Field(..., ge=0)
+    reported_id: int = Field(..., ge=0)

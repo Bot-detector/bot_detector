@@ -3,13 +3,16 @@ from contextlib import asynccontextmanager
 
 from bot_detector.api_public.src import api
 from bot_detector.api_public.src.core.fastapi.dependencies.kafka import kafka_manager
+from bot_detector.api_public.src.core.fastapi.middleware import (
+    LoggingMiddleware,
+    PrometheusMiddleware,
+)
 from bot_detector.kafka import Settings as KafkaSettings
 from bot_detector.kafka.repositories import RepoReportsToInsertProducer
 from fastapi import FastAPI
 from fastapi.middleware import Middleware
 from fastapi.middleware.cors import CORSMiddleware
-
-from .fastapi.middleware.logging import LoggingMiddleware
+from prometheus_client import start_http_server
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +36,7 @@ def make_middleware() -> list[Middleware]:
             allow_headers=["*"],
         ),
         Middleware(LoggingMiddleware),
+        Middleware(PrometheusMiddleware),
     ]
     return middleware
 
@@ -65,6 +69,9 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
+
+
+start_http_server(8000)
 
 
 @app.get("/")

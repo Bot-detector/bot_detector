@@ -18,7 +18,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             for key, value in request.query_params.items()
         ]
 
-        logger.debug(
+        logger.info(
             {
                 "url": request.url.path,
                 "params": query_params_list,

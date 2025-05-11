@@ -6,7 +6,12 @@ from bot_detector.api_public.src.core.fastapi.dependencies.kafka import kafka_ma
 from bot_detector.kafka.repositories.reports_to_insert import (
     RepoReportsToInsertProducer,
 )
-from bot_detector.structs import Detection, MetaData, ReportsToInsertStruct
+from bot_detector.structs import (
+    Detection,
+    MetaData,
+    ParsedDetection,
+    ReportsToInsertStruct,
+)
 from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
@@ -71,7 +76,7 @@ class Report:
         return data, None
 
     def _transform_detection(
-        self, data: list[Detection]
+        self, data: list[ParsedDetection]
     ) -> tuple[list[ReportsToInsertStruct], list | None]:
         reports = []
         errors = []
@@ -86,7 +91,7 @@ class Report:
                 errors.append(error)
         return reports, errors
 
-    async def send_to_kafka(self, data: list[Detection]) -> None:
+    async def send_to_kafka(self, data: list[ParsedDetection]) -> None:
         producer = kafka_manager.get_producer(key="reports_to_insert")
         producer: RepoReportsToInsertProducer | None
 
