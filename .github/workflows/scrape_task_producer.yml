@@ -1,0 +1,18 @@
+name: scrape_task_producer
+
+on:
+  push:
+    paths:
+      - bases/bot_detector/scrape_task_producer/**
+      - components/bot_detector/database/**
+      - components/bot_detector/kafka/**
+      - components/bot_detector/structs/**
+      - components/bot_detector/logfmt/**
+      - projects/scrape_task_producer/**
+  workflow_dispatch:
+
+jobs:
+  common:
+    uses: ./.github/workflows/common.yml
+    with:
+      project_dir: projects/scrape_task_producer

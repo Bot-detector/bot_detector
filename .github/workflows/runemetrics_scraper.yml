@@ -1,0 +1,19 @@
+name: runemetrics_scraper
+
+on:
+  push:
+    paths:
+      - bases/bot_detector/runemetrics_scraper/**
+      - components/bot_detector/runemetrics_api/**
+      - components/bot_detector/proxy_manager/**
+      - components/bot_detector/kafka/**
+      - components/bot_detector/structs/**
+      - components/bot_detector/logfmt/**
+      - projects/runemetrics_scraper/**
+  workflow_dispatch:
+
+jobs:
+  common:
+    uses: ./.github/workflows/common.yml
+    with:
+      project_dir: projects/runemetrics_scraper

@@ -1,0 +1,18 @@
+name: hiscore_worker
+
+on:
+  push:
+    paths:
+      - bases/bot_detector/hiscore_worker/**
+      - components/bot_detector/database/**
+      - components/bot_detector/kafka/**
+      - components/bot_detector/structs/**
+      - components/bot_detector/logfmt/**
+      - projects/hiscore_worker/**
+  workflow_dispatch:
+
+jobs:
+  common:
+    uses: ./.github/workflows/common.yml
+    with:
+      project_dir: projects/hiscore_worker
