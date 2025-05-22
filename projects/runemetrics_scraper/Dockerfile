@@ -19,8 +19,12 @@ RUN uv sync --frozen --no-editable
 # Production stage: Prepare the final production environment
 FROM python:3.11-slim-bookworm AS production
 
+RUN adduser -u 5678 --disabled-password --gecos "" appuser
+
 WORKDIR /app/projects/runemetrics_scraper
 
-COPY --from=builder --chown=app:app /app/projects/runemetrics_scraper/.venv /app/projects/runemetrics_scraper/.venv
+COPY --from=builder --chown=appuser /app/projects/runemetrics_scraper/.venv /app/projects/runemetrics_scraper/.venv
+
+USER appuser
 
 CMD [".venv/bin/runemetrics_scraper"]

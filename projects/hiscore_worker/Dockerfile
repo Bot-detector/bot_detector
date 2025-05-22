@@ -19,8 +19,12 @@ RUN uv sync --frozen --no-editable
 # Production stage: Prepare the final production environment
 FROM python:3.11-slim-bookworm AS production
 
+RUN adduser -u 5678 --disabled-password --gecos "" appuser
+
 WORKDIR /app/projects/hiscore_worker
 
-COPY --from=builder --chown=app:app /app/projects/hiscore_worker/.venv /app/projects/hiscore_worker/.venv
+COPY --from=builder --chown=appuser /app/projects/hiscore_worker/.venv /app/projects/hiscore_worker/.venv
+
+USER appuser
 
 CMD [".venv/bin/hiscore_worker"]

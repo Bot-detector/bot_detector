@@ -19,8 +19,12 @@ RUN uv sync --frozen --no-editable
 # Production stage: Prepare the final production environment
 FROM python:3.11-slim-bookworm AS production
 
+RUN adduser -u 5678 --disabled-password --gecos "" appuser
+
 WORKDIR /app/projects/scrape_task_producer
 
-COPY --from=builder --chown=app:app /app/projects/scrape_task_producer/.venv /app/projects/scrape_task_producer/.venv
+COPY --from=builder --chown=appuser /app/projects/scrape_task_producer/.venv /app/projects/scrape_task_producer/.venv
+
+USER appuser
 
 CMD [".venv/bin/scrape_task_producer"]

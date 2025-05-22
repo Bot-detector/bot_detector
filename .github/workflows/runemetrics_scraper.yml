@@ -11,9 +11,39 @@ on:
       - components/bot_detector/logfmt/**
       - projects/runemetrics_scraper/**
   workflow_dispatch:
-
+    inputs:
+      environment:
+        description: 'Deploy environment'
+        required: true
+        default: 'test'
+        type: choice
+        options:
+          - test
+          - deploy to prd
 jobs:
   common:
     uses: ./.github/workflows/_common.yml
     with:
       project_dir: projects/runemetrics_scraper
+  
+  build:
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/_build.yml
+    needs: common
+    with:
+      registry: quay.io/bot_detector/scraper-runemetrics
+      environment: ${{ (github.event.inputs.environment == 'deploy to prd' && 'prd') }}
+      BUILD_ARGS: "--target=production"
+      DOCKERFILE: ./projects/runemetrics_scraper/Dockerfile
+    secrets:
+      QUAY_REGISTERY_PASSWORD: ${{ secrets.QUAY_REGISTERY_PASSWORD }}
+
+  deploy:
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/_deploy.yml
+    needs: build
+    with:
+      registry: quay.io/bot_detector/scraper-runemetrics
+      value_file: scraper-runemetrics-prd/deployment.yaml
+    secrets:
+      HETZNER_ACTIONS_RUNNER_TOKEN: ${{ secrets.HETZNER_ACTIONS_RUNNER_TOKEN }}
