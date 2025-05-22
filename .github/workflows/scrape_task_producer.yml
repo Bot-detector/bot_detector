@@ -44,6 +44,6 @@ jobs:
     needs: build
     with:
       registry: quay.io/bot_detector/scrape_task_producer
-      value_file: scrape_task_producer/deployment.yaml
+      value_file: scrape-task-producer/deployment.yaml
     secrets:
       HETZNER_ACTIONS_RUNNER_TOKEN: ${{ secrets.HETZNER_ACTIONS_RUNNER_TOKEN }}
