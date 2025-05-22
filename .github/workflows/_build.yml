@@ -17,6 +17,9 @@ on:
         required: true
         type: string
         default: "Dockerfile"
+    secrets:
+      QUAY_REGISTERY_PASSWORD:
+        required: false
   
   workflow_dispatch:
 
