@@ -9,6 +9,14 @@ on:
       ENVIRONMENT:
         required: true
         type: string
+      BUILD_ARGS:
+        required: false
+        type: string
+        default: ""
+      DOCKERFILE:
+        required: true
+        type: string
+        default: "Dockerfile"
   
   workflow_dispatch:
 
@@ -29,7 +37,11 @@ jobs:
 
       - name: Docker Build
         run: |
-          docker build . --file Dockerfile --network=host -t "${{ inputs.REGISTRY }}:${{ steps.vars.outputs.GIT_HASH }}" --target production --build-arg api_port=5000 --build-arg root_path=""
+          docker build . \
+            --file "${{ inputs.DOCKERFILE }}" \
+            ${{ inputs.BUILD_ARGS }} \
+            -t "${{ inputs.REGISTRY }}:${{ steps.vars.outputs.GIT_HASH }}"\
+            
 
       - name: Login to Quay registry
         run: echo "${{ secrets.QUAY_REGISTERY_PASSWORD }}" | docker login -u "bot_detector+quay_robot" quay.io --password-stdin
