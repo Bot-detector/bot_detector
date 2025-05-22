@@ -16,3 +16,25 @@ jobs:
     uses: ./.github/workflows/_common.yml
     with:
       project_dir: projects/hiscore_worker
+  
+  build:
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/_build.yml
+    needs: common
+    with:
+      registry: quay.io/bot_detector/highscore-worker
+      environment: ${{ (github.event.inputs.environment == 'deploy to prd' && 'prd') }}
+      BUILD_ARGS: "--target=production"
+      DOCKERFILE: ./projects/highscore_worker/Dockerfile
+    secrets:
+      QUAY_REGISTERY_PASSWORD: ${{ secrets.QUAY_REGISTERY_PASSWORD }}
+
+  deploy:
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/_deploy.yml
+    needs: build
+    with:
+      registry: quay.io/bot_detector/highscore-worker
+      value_file: highscore-worker/deployment.yaml
+    secrets:
+      HETZNER_ACTIONS_RUNNER_TOKEN: ${{ secrets.HETZNER_ACTIONS_RUNNER_TOKEN }}
