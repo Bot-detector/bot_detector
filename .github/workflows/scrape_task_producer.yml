@@ -10,6 +10,15 @@ on:
       - components/bot_detector/logfmt/**
       - projects/scrape_task_producer/**
   workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deploy environment"
+        required: true
+        default: "test"
+        type: choice
+        options:
+          - test
+          - deploy to prd
 
 jobs:
   common:

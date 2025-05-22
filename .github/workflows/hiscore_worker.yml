@@ -10,13 +10,22 @@ on:
       - components/bot_detector/logfmt/**
       - projects/hiscore_worker/**
   workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deploy environment"
+        required: true
+        default: "test"
+        type: choice
+        options:
+          - test
+          - deploy to prd
 
 jobs:
   common:
     uses: ./.github/workflows/_common.yml
     with:
       project_dir: projects/hiscore_worker
-  
+
   build:
     if: github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/_build.yml

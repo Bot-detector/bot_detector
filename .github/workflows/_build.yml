@@ -20,7 +20,7 @@ on:
     secrets:
       QUAY_REGISTERY_PASSWORD:
         required: true
-  
+
   workflow_dispatch:
 
 jobs:
@@ -32,8 +32,8 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - name: git checkout
         uses: actions/checkout@v3
-      
-      - name: ls 
+
+      - name: ls
         run: ls -lah
 
       - name: Set vars
@@ -47,7 +47,6 @@ jobs:
             --file "${{ inputs.DOCKERFILE }}" \
             ${{ inputs.BUILD_ARGS }} \
             -t "${{ inputs.REGISTRY }}:${{ steps.vars.outputs.GIT_HASH }}"\
-            
 
       - name: Login to Quay registry
         run: echo "${{ secrets.QUAY_REGISTERY_PASSWORD }}" | docker login -u "bot_detector+quay_robot" quay.io --password-stdin

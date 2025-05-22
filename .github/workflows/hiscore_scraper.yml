@@ -12,9 +12,9 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Deploy environment'
+        description: "Deploy environment"
         required: true
-        default: 'test'
+        default: "test"
         type: choice
         options:
           - test

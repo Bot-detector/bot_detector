@@ -12,7 +12,7 @@ on:
     secrets:
       HETZNER_ACTIONS_RUNNER_TOKEN:
         required: true
-  
+
   workflow_dispatch:
 
 jobs:
