@@ -31,7 +31,7 @@ jobs:
     uses: ./.github/workflows/_build.yml
     needs: common
     with:
-      registry: quay.io/bot_detector/hiscore_scraper
+      registry: quay.io/bot_detector/scraper-highscore
       environment: ${{ (github.event.inputs.environment == 'deploy to prd' && 'prd') }}
       BUILD_ARGS: "--target=production"
       DOCKERFILE: ./projects/hiscore_scraper/Dockerfile
@@ -43,5 +43,5 @@ jobs:
     uses: ./.github/workflows/_deploy.yml
     needs: build
     with:
-      registry: quay.io/bot_detector/hiscore_scraper
+      registry: quay.io/bot_detector/scraper-highscore
       value_file: scraper-highscore-prd/deployment.yaml
