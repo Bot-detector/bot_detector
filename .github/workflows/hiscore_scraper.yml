@@ -22,13 +22,13 @@ on:
 
 jobs:
   common:
-    uses: ./.github/workflows/shared/common.yml
+    uses: ./.github/workflows/_common.yml
     with:
       project_dir: projects/hiscore_scraper
 
   build:
     if: github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/shared/build.yml
+    uses: ./.github/workflows/_build.yml
     needs: common
     with:
       registry: quay.io/bot_detector/hiscore_scraper
@@ -36,9 +36,8 @@ jobs:
 
   deploy:
     if: github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/shared/deploy.yml
+    uses: ./.github/workflows/_deploy.yml
     needs: build
     with:
       registry: quay.io/bot_detector/hiscore_scraper
       value_file: scraper-highscore-prd/deployment.yaml
-      
