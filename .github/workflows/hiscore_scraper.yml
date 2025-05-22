@@ -45,3 +45,5 @@ jobs:
     with:
       registry: quay.io/bot_detector/scraper-highscore
       value_file: scraper-highscore-prd/deployment.yaml
+    secrets:
+      HETZNER_ACTIONS_RUNNER_TOKEN: ${{ secrets.HETZNER_ACTIONS_RUNNER_TOKEN }}

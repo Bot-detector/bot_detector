@@ -19,7 +19,7 @@ on:
         default: "Dockerfile"
     secrets:
       QUAY_REGISTERY_PASSWORD:
-        required: false
+        required: true
   
   workflow_dispatch:
 
