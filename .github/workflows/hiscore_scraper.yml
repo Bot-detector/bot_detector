@@ -10,9 +10,35 @@ on:
       - components/bot_detector/logfmt/**
       - projects/hiscore_scraper/**
   workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deploy environment'
+        required: true
+        default: 'test'
+        type: choice
+        options:
+          - test
+          - deploy to prd
 
 jobs:
   common:
-    uses: ./.github/workflows/common.yml
+    uses: ./.github/workflows/shared/common.yml
     with:
       project_dir: projects/hiscore_scraper
+
+  build:
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/shared/build.yml
+    needs: common
+    with:
+      registry: quay.io/bot_detector/hiscore_scraper
+      environment: ${{ (github.event.inputs.environment == 'deploy to prd' && 'prd') }}
+
+  deploy:
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/shared/deploy.yml
+    needs: build
+    with:
+      registry: quay.io/bot_detector/hiscore_scraper
+      value_file: scraper-highscore-prd/deployment.yaml
+      

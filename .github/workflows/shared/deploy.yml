@@ -1,0 +1,44 @@
+name: deploy
+
+on:
+  workflow_call:
+    inputs:
+      VALUE_FILE:
+        required: true
+        type: string
+      REGISTRY:
+        required: true
+        type: string
+  
+  workflow_dispatch:
+
+jobs:
+  update_image_version:
+    runs-on: [self-hosted, "hetzner"]
+    steps:
+      - name: Checkout Target Repository
+        uses: actions/checkout@v3
+        with:
+          repository: Bot-detector/bot-detector-k8s
+
+      - name: Set vars
+        id: vars
+        run: |
+          echo "GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")" >> $GITHUB_OUTPUT
+
+      - name: Update Image Version
+        uses: fjogeleit/yaml-update-action@main
+        with:
+          repository: Bot-detector/bot-detector-k8s
+          valueFile: ${{ inputs.VALUE_FILE }}
+          token: "${{ secrets.HETZNER_ACTIONS_RUNNER_TOKEN }}"
+          commitChange: true
+          title: "${{ inputs.VALUE_FILE }}_${{ steps.vars.outputs.GIT_HASH }}"
+          branch: "${{ inputs.VALUE_FILE }}_${{ steps.vars.outputs.GIT_HASH }}"
+          targetBranch: develop
+          masterBranchName: develop
+          createPR: true
+          changes: |
+            {
+              "spec.template.spec.containers[0].image": "${{ ${{ inputs.REGISTRY }} }}:${{ steps.vars.outputs.GIT_HASH }}"
+            }

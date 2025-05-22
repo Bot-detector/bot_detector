@@ -1,0 +1,44 @@
+name: build
+
+on:
+  workflow_call:
+    inputs:
+      REGISTRY:
+        required: true
+        type: string
+      ENVIRONMENT:
+        required: true
+        type: string
+  
+  workflow_dispatch:
+
+jobs:
+  build_image:
+    runs-on: [self-hosted, "hetzner"]
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - name: git checkout
+        uses: actions/checkout@v3
+
+      - name: Set vars
+        id: vars
+        run: |
+          echo "GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")" >> $GITHUB_OUTPUT
+
+      - name: Docker Build
+        run: |
+          docker build . --file Dockerfile --network=host -t "${{ inputs.REGISTRY }}:${{ steps.vars.outputs.GIT_HASH }}" --target production --build-arg api_port=5000 --build-arg root_path=""
+
+      - name: Login to Quay registry
+        run: echo "${{ secrets.QUAY_REGISTERY_PASSWORD }}" | docker login -u "bot_detector+quay_robot" quay.io --password-stdin
+
+      - name: Tag image
+        run: |
+          docker tag "${{ inputs.REGISTRY }}:${{ steps.vars.outputs.GIT_HASH }}" "${{ inputs.REGISTRY }}:${{ inputs.ENVIRONMENT}}"
+
+      - name: Docker Push image to Quay registry
+        run: |
+          docker push "${{ inputs.REGISTRY }}:${{ steps.vars.outputs.GIT_HASH }}"
+          docker push "${{ inputs.REGISTRY }}:${{ inputs.ENVIRONMENT }}"

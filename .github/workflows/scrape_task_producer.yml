@@ -13,6 +13,6 @@ on:
 
 jobs:
   common:
-    uses: ./.github/workflows/common.yml
+    uses: ./.github/workflows/shared/common.yml
     with:
       project_dir: projects/scrape_task_producer
