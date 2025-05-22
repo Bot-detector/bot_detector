@@ -34,7 +34,7 @@ jobs:
       registry: quay.io/bot_detector/highscore-worker
       environment: ${{ (github.event.inputs.environment == 'deploy to prd' && 'prd') }}
       BUILD_ARGS: "--target=production"
-      DOCKERFILE: ./projects/highscore_worker/Dockerfile
+      DOCKERFILE: ./projects/hiscore_worker/Dockerfile
     secrets:
       QUAY_REGISTERY_PASSWORD: ${{ secrets.QUAY_REGISTERY_PASSWORD }}
 
