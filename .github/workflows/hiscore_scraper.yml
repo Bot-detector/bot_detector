@@ -35,6 +35,8 @@ jobs:
       environment: ${{ (github.event.inputs.environment == 'deploy to prd' && 'prd') }}
       BUILD_ARGS: "--target=production"
       DOCKERFILE: ./projects/hiscore_scraper/Dockerfile
+    secrets:
+      QUAY_REGISTERY_PASSWORD: ${{ secrets.QUAY_REGISTERY_PASSWORD }}
 
   deploy:
     if: github.event_name == 'workflow_dispatch'
