@@ -167,7 +167,9 @@ async def work(
                 session=session,
                 runemetrics_instance=runemetrics_instance,
             )
-            latency_histogram.labels(proxy=_proxy).observe(latency)
+
+            if latency:
+                latency_histogram.labels(proxy=_proxy).observe(latency)
 
             # handle exceptions
             if error:
