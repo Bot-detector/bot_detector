@@ -58,18 +58,19 @@ async def scrape_player(
     player: PlayerStruct,
     session: ClientSession,
     runemetrics_instance: RuneMetrics,
-) -> tuple[PlayerStruct | None, str | None]:
-    player_data, error = None, None
+) -> tuple[PlayerStruct | None, float | None, str | None]:
+    player_data, latency, error = None, None, None
     try:
         player_data, latency = await runemetrics_instance.get(
             player_name=player.name,
             session=session,
+            return_latency=True,
         )
         return player_data, latency, error
     except UnexpectedRedirection:
         error = f"Unexpected redirection for {player.name=}."
         logger.error(error)
-        return None, error
+        return None, None, error
     except (
         aiohttp.ClientResponseError,
         aiohttp.ConnectionTimeoutError,
@@ -77,7 +78,7 @@ async def scrape_player(
     ) as e:
         error = f"Client response error: {e}"
         logger.error(error)
-        return None, error
+        return None, None, error
 
 
 async def update_player(
