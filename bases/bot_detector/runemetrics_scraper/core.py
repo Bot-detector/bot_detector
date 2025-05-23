@@ -41,9 +41,6 @@ latency_histogram = Histogram(
     documentation="Latency of RuneMetrics requests",
     labelnames=["proxy"],
     buckets=(
-        0.005,
-        0.01,
-        0.025,
         0.05,
         0.075,
         0.1,
