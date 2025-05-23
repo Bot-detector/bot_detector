@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import time
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -30,7 +31,8 @@ from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
 
-start_http_server(8000)
+if os.environ.get("ENVIRONMENT") != "test":
+    start_http_server(8000)
 
 # Define Prometheus metrics
 total_counter = Counter(

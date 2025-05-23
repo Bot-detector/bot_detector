@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from datetime import datetime
 
 import aiohttp
@@ -21,7 +22,8 @@ from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
 
-start_http_server(8000)
+if os.environ.get("ENVIRONMENT") != "test":
+    start_http_server(8000)
 
 # Prometheus metrics
 success_counter = Counter(
