@@ -105,6 +105,11 @@ async def work(
             await asyncio.sleep(10)
             continue
 
+        # data validation, if for name is too long, skip
+        # can happen for anonymous players (anonymoususer-abcdefgh-ijkl-mnop-qrst-uvwxyz123456)
+        if len(scraped_data.player_data.name) > 13:
+            continue
+
         # insert data into the database
         try:
             await process_data(

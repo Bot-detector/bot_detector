@@ -33,6 +33,7 @@ async def produce_players(
             player_data=player,
         )
         for player in players
+        if len(player.name) <= 13
     ]
 
     for player in player_structs:
