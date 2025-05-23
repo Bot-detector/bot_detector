@@ -1,4 +1,5 @@
 import logging
+import time
 
 from aiohttp import ClientSession
 from osrs.utils import RateLimiter
@@ -48,9 +49,13 @@ class RuneMetrics:
         self.rate_limiter = rate_limiter
 
     async def get(
-        self, player_name: str, session: ClientSession | None
-    ) -> RuneMetricsResponse:
+        self,
+        player_name: str,
+        session: ClientSession | None,
+        return_latency: bool = False,
+    ) -> RuneMetricsResponse | tuple[RuneMetricsResponse, float]:
         await self.rate_limiter.check()
+        start_time = time.perf_counter()
 
         logger.debug(f"Performing runemetrics lookup on {player_name}")
         params = {"user": player_name}
@@ -81,5 +86,7 @@ class RuneMetrics:
             player=RuneMetricsPlayer(**data) if "error" not in data else None,
             error=RuneMetricsError(**data) if "error" in data else None,
         )
-
+        if return_latency:
+            total_time = time.perf_counter() - start_time
+            return _data, total_time
         return _data

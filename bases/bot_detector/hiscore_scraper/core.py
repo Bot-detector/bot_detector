@@ -25,9 +25,39 @@ from osrs.asyncio import Hiscore, HSMode
 from osrs.asyncio.osrs.hiscores import PlayerStats
 from osrs.exceptions import PlayerDoesNotExist, UnexpectedRedirection
 from osrs.utils import RateLimiter
+from prometheus_client import Counter, Histogram, start_http_server
 from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
+
+start_http_server(8000)
+
+# Define Prometheus metrics
+total_counter = Counter(
+    name="highscore_request_count",
+    documentation="Count of request player stats fetches",
+    labelnames=["proxy"],
+)
+success_counter = Counter(
+    name="highscore_success_count",
+    documentation="Count of successful player stats fetches",
+    labelnames=["proxy"],
+)
+error_counter = Counter(
+    name="highscore_error_count",
+    documentation="Count of failed player stats fetches",
+    labelnames=["proxy"],
+)
+not_found_counter = Counter(
+    name="highscore_not_found_count",
+    documentation="Count of players not found",
+    labelnames=["proxy"],
+)
+latency_histogram = Histogram(
+    name="highscore_fetch_latency_seconds",
+    documentation="Latency of player stats fetches",
+    labelnames=["proxy"],
+)
 
 
 async def get_proxy(
@@ -114,6 +144,7 @@ async def work(
         while True:
             # get proxy
             proxy = await get_proxy(proxy_manager, worker_id)
+            _proxy = proxy.split("@")[1]
 
             # handle exceptions
             if proxy is None:
@@ -133,7 +164,7 @@ async def work(
 
             # handle exceptions
             if player is None:
-                logger.error(f"[{worker_id}]: No player available.")
+                logger.warning(f"[{worker_id}]: No player available.")
                 await asyncio.sleep(10)
                 continue
 
@@ -144,6 +175,9 @@ async def work(
                 rate_limiter=rate_limiter,
             )
 
+            # metric: every time we scrape a player, we increment the counter
+            total_counter.labels(proxy=_proxy).inc()
+
             player_stats, latency, error = await scrape_player(
                 player=player_data,
                 session=session,
@@ -151,17 +185,20 @@ async def work(
             )
 
             if latency:
+                latency_histogram.labels(proxy=_proxy).observe(latency)
                 logger.debug(f"[{worker_id}]: scrape one {latency:.4f}")
 
             # handle exceptions
             if error:
-                logger.error(f"[{worker_id}][{player_data.name}]: {error=}")
+                error_counter.labels(proxy=_proxy).inc()
+                logger.warning(f"[{worker_id}][{player_data.name}]: {error=}")
                 await player_ts_producer.produce_one(player=player)
                 await asyncio.sleep(10)
                 continue
 
             # if player not found, than send to not found topic
             if player_stats is None:
+                not_found_counter.labels(proxy=_proxy).inc()
                 logger.debug(f"[{worker_id}][{player_data.name}]: not found.")
                 await player_nf_producer.produce_one(
                     player=NotFoundStruct(
@@ -170,6 +207,8 @@ async def work(
                     )
                 )
                 continue
+
+            success_counter.labels(proxy=_proxy).inc()
 
             # transform player stats to hiscore data
             scraped_data, error = await transform_player_stats(

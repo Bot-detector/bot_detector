@@ -13,6 +13,7 @@ dependencies = [
     "pydantic-settings>=2.7.0",
     "pydantic>=2.10.4",
     "orjson>=3.10.16",
+    "prometheus-client>=0.22.0",
 ]
 
 [project.scripts]

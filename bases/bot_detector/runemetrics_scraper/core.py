@@ -16,9 +16,29 @@ from bot_detector.runemetrics_api import RuneMetrics, RuneMetricsResponse
 from bot_detector.runemetrics_api.exceptions import UnexpectedRedirection
 from bot_detector.structs import MetaData, PlayerStruct, ScrapedStruct
 from osrs.utils import RateLimiter
+from prometheus_client import Counter, Histogram, start_http_server
 from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
+
+start_http_server(8000)
+
+# Prometheus metrics
+success_counter = Counter(
+    name="rune_metrics_success",
+    documentation="Successful RuneMetrics requests",
+    labelnames=["proxy"],
+)
+error_counter = Counter(
+    name="rune_metrics_errors",
+    documentation="Errors in RuneMetrics requests",
+    labelnames=["proxy"],
+)
+latency_histogram = Histogram(
+    name="rune_metrics_latency",
+    documentation="Latency of RuneMetrics requests",
+    labelnames=["proxy"],
+)
 
 
 async def get_proxy(
@@ -39,11 +59,11 @@ async def scrape_player(
 ) -> tuple[PlayerStruct | None, str | None]:
     player_data, error = None, None
     try:
-        player_data = await runemetrics_instance.get(
+        player_data, latency = await runemetrics_instance.get(
             player_name=player.name,
             session=session,
         )
-        return player_data, error
+        return player_data, latency, error
     except UnexpectedRedirection:
         error = f"Unexpected redirection for {player.name=}."
         logger.error(error)
@@ -95,6 +115,7 @@ async def work(
         while True:
             # get proxy
             proxy = await get_proxy(proxy_manager, worker_id)
+            _proxy = proxy.split("@")[1]
 
             # handle exceptions
             if proxy is None:
@@ -123,13 +144,16 @@ async def work(
                 rate_limiter=rate_limiter,
             )
 
-            runemetrics_response, error = await scrape_player(
+            runemetrics_response, latency, error = await scrape_player(
                 player=player_data,
                 session=session,
                 runemetrics_instance=runemetrics_instance,
             )
+            latency_histogram.labels(proxy=_proxy).observe(latency)
+
             # handle exceptions
             if error:
+                error_counter.labels(proxy=_proxy).inc()
                 logger.error(f"[{worker_id}][{player_data.name}]: {error=}")
                 await player_nf_producer.produce_one(player=player)
                 await asyncio.sleep(10)
@@ -154,6 +178,7 @@ async def work(
                 continue
 
             # push data to kafka
+            success_counter.labels(proxy=_proxy).inc()
             await player_sc_producer.produce_one(scraped_data=scraped_data)
             logger.debug(
                 f"[{worker_id}][{player_data.name}]: {player_data.label_jagex=}"
