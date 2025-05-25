@@ -1,5 +1,7 @@
 import asyncio
 import logging
+from dataclasses import dataclass
+from datetime import date
 
 from bot_detector.database import Settings as DBSettings
 from bot_detector.database import get_session_factory
@@ -77,9 +79,17 @@ async def process_players(
     days = 7
     confirmed_ban = False
     max_days = 7
+    last_day = date.today()
 
     while True:
         lag = await player_consumer.get_lag()
+
+        if last_day != date.today():
+            logger.info("New day detected, resetting days and confirmed_ban")
+            last_day = date.today()
+            days = max_days
+            confirmed_ban = False
+            player_id = 0
 
         if lag >= 100_000:
             logger.info(f"{lag=} to high, sleeping(10)")
