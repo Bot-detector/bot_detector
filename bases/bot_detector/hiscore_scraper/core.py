@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 if os.environ.get("ENVIRONMENT") != "test":
     start_http_server(8000)
 
-# Define Prometheus metrics
+# Prometheus metrics
 total_counter = Counter(
     name="highscore_request_count",
     documentation="Count of request player stats fetches",
