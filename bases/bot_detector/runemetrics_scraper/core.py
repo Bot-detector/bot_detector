@@ -84,7 +84,7 @@ async def scrape_player(
         return player_data, latency, error
     except UnexpectedRedirection:
         error = f"Unexpected redirection for {player.name=}."
-        logger.error(error)
+        # logger.error(error)
         return None, None, error
     except (
         aiohttp.ClientResponseError,
@@ -92,7 +92,7 @@ async def scrape_player(
         aiohttp.ClientConnectorError,
     ) as e:
         error = f"Client response error: {e}"
-        logger.error(error)
+        # logger.error(error)
         return None, None, error
 
 
@@ -174,7 +174,7 @@ async def work(
             # handle exceptions
             if error:
                 error_counter.labels(proxy=_proxy).inc()
-                logger.error(f"[{worker_id}][{player_data.name}]: {error=}")
+                logger.warning(f"[{worker_id}][{player_data.name}]: {error=}")
                 await player_nf_producer.produce_one(player=player)
                 await asyncio.sleep(10)
                 continue
