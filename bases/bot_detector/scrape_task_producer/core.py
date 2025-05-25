@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import date
+from datetime import date, datetime, time
 
 from bot_detector.database import Settings as DBSettings
 from bot_detector.database import get_session_factory
@@ -117,8 +117,16 @@ async def process_players(
             limit=limit,
         )
 
+        # sleep the remaining time of the current day
         if (days, confirmed_ban, player_id) == (max_days, False, 0):
-            await asyncio.sleep(60)
+            now = datetime.now()
+            end_of_today = datetime.combine(now.date(), time.max)
+
+            time_remaining = end_of_today - now
+            sleep_time = int(time_remaining.total_seconds() / 4)
+            sleep_time = max(sleep_time, 1)  # Ensure at least 1 second sleep
+            logger.info(f"Sleeping for {sleep_time} seconds until end of day")
+            await asyncio.sleep(sleep_time)
 
 
 async def main():
