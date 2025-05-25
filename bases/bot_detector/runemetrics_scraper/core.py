@@ -26,6 +26,11 @@ if os.environ.get("ENVIRONMENT") != "test":
     start_http_server(8000)
 
 # Prometheus metrics
+total_counter = Counter(
+    name="rune_metrics_request",
+    documentation="Count of request player stats fetches",
+    labelnames=["proxy"],
+)
 success_counter = Counter(
     name="rune_metrics_success",
     documentation="Successful RuneMetrics requests",
@@ -55,6 +60,12 @@ latency_histogram = Histogram(
         20.0,
         30.0,
     ),
+)
+
+player_update_errors = Counter(
+    "player_update_errors_total",
+    "Count of errors during player update by error type",
+    ["error_type"],
 )
 
 
@@ -110,6 +121,7 @@ async def update_player(
         return player_data
 
     _error = runemetrics_response.error.error
+    player_update_errors.labels(error_type=_error).inc()
 
     match _error:
         # username is not associated to an account
@@ -167,6 +179,9 @@ async def work(
                 proxy=proxy,
                 rate_limiter=rate_limiter,
             )
+
+            # metric: every time we scrape a player, we increment the counter
+            total_counter.labels(proxy=_proxy).inc()
 
             runemetrics_response, latency, error = await scrape_player(
                 player=player_data,
