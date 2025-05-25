@@ -1,6 +1,5 @@
 import asyncio
 import logging
-from dataclasses import dataclass
 from datetime import date
 
 from bot_detector.database import Settings as DBSettings
