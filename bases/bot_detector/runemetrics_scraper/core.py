@@ -100,12 +100,20 @@ async def scrape_player(
 async def update_player(
     player_data: PlayerStruct,
     runemetrics_response: RuneMetricsResponse,
-):
+) -> PlayerStruct:
     player_data.updated_at = datetime.now()
     player_data.possible_ban = 1
     player_data.confirmed_player = 0
 
-    match runemetrics_response.error:
+    logger.info(f"{runemetrics_response.error=}")
+
+    if runemetrics_response.error is None:
+        player_data.label_jagex = 0
+        return player_data
+
+    _error = runemetrics_response.error.error
+
+    match _error:
         # username is not associated to an account
         case "NO_PROFILE":
             player_data.label_jagex = 1
@@ -118,7 +126,6 @@ async def update_player(
         case _:
             # account is active, probably just too low stats for hiscores
             player_data.label_jagex = 0
-
     return player_data
 
 
