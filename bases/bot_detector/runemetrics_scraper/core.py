@@ -105,8 +105,6 @@ async def update_player(
     player_data.possible_ban = 1
     player_data.confirmed_player = 0
 
-    logger.info(f"{runemetrics_response.error=}")
-
     if runemetrics_response.error is None:
         player_data.label_jagex = 0
         return player_data
