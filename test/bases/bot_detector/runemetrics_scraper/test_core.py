@@ -4,7 +4,6 @@ from datetime import datetime, timedelta
 import pytest
 from bot_detector.runemetrics_api.core import (
     RuneMetricsError,
-    RuneMetricsPlayer,
     RuneMetricsResponse,
 )
 from bot_detector.runemetrics_scraper import core
