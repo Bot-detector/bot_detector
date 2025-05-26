@@ -31,12 +31,17 @@ class PlayerRepo(playerInterface):
 
         sql = sqla.select(PlayersTableStruct)
 
+        # length of the name should be <= 13
+        sql = sql.where(sqla.func.length(PlayersTableStruct.name) <= 13)
+
         if days:
+            # If days is set, we want to fetch players that were updated more than 'days' ago
+            # or never updated (updated_at is None)
+            interval_expr = sqla.func.now() - sqla.text("interval :days day")
             sql = sql.where(
                 sqla.or_(
-                    PlayersTableStruct.updated_at is None,
-                    PlayersTableStruct.updated_at
-                    < sqla.func.now() - sqla.text("interval :days day"),
+                    PlayersTableStruct.updated_at.is_(None),
+                    PlayersTableStruct.updated_at < interval_expr,
                 )
             )
 
