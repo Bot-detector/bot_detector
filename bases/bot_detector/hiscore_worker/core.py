@@ -7,6 +7,7 @@ from bot_detector import database as db
 from bot_detector.database import Settings as DBSettings
 from bot_detector.database.repositories import (
     HighscoreDataDailyRepo,
+    HighscoreDataLatestRepo,
     HighscoreDataMonthlyRepo,
     HighscoreDataWeeklyRepo,
     PlayerRepo,
@@ -51,6 +52,7 @@ async def process_data(
     session_factory: async_sessionmaker[AsyncSession],
     scraped_data: ScrapedStruct,
     player_repo: PlayerRepo,
+    hs_repo_latest: HighscoreDataLatestRepo,
     hs_repo_daily: HighscoreDataDailyRepo,
     hs_repo_weekly: HighscoreDataWeeklyRepo,
     hs_repo_monthly: HighscoreDataMonthlyRepo,
@@ -72,6 +74,10 @@ async def process_data(
 
                 # extreme4all: this is a lazy way to insert into the other tables,
                 # it does mean alot of insert.on_duplicate_key_update()
+                # we should probably refactor this later to use staging tables
+                await hs_repo_latest.insert_highscore(
+                    async_session=session, highscore_data=hs_data
+                )
                 await hs_repo_daily.insert_highscore(
                     async_session=session, highscore_data=hs_daily
                 )
@@ -116,6 +122,7 @@ async def work(
                 session_factory=session_factory,
                 scraped_data=scraped_data,
                 player_repo=PlayerRepo(),
+                hs_repo_latest=HighscoreDataLatestRepo(),
                 hs_repo_daily=HighscoreDataDailyRepo(),
                 hs_repo_weekly=HighscoreDataWeeklyRepo(),
                 hs_repo_monthly=HighscoreDataMonthlyRepo(),
@@ -139,10 +146,13 @@ async def main():
     b_server = KafkaSettings().KAFKA_BOOTSTRAP_SERVERS
     ## consumer
     player_sc_consumer = RepoPlayerScrapedConsumer(
-        bootstrap_servers=b_server, group_id="highscore_worker"
+        bootstrap_servers=b_server,
+        group_id="highscore_worker",
     )
     ## producer
-    player_sc_producer = RepoPlayerScrapedProducer(bootstrap_servers=b_server)
+    player_sc_producer = RepoPlayerScrapedProducer(
+        bootstrap_servers=b_server,
+    )
 
     # start kafka producers and consumers
     await player_sc_consumer.start()

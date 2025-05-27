@@ -18,6 +18,10 @@ class HighscoreDataBaseStruct(HighscoreBaseStruct):
     scrape_week: int
 
 
+class HighscoreDataLatestStruct(HighscoreDataBaseStruct):
+    pass
+
+
 class HighscoreDataDailyStruct(HighscoreDataBaseStruct):
     pass
 

@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 from bot_detector.structs import PlayerStruct
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class playerInterface(ABC):
@@ -13,7 +13,7 @@ class playerInterface(ABC):
     @abstractmethod
     def select_player(
         self,
-        async_session: async_sessionmaker[AsyncSession],
+        async_session: AsyncSession,
         days: int = 7,
         confirmed_ban: bool | None = None,
         player_id: int | None = None,
