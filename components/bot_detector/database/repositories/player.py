@@ -69,7 +69,12 @@ class PlayerRepo(playerInterface):
         """Update an existing player in the database."""
         sql = sqla.update(PlayersTableStruct)
         sql = sql.where(PlayersTableStruct.id == player_data.id)
-        sql = sql.where(PlayersTableStruct.updated_at < player_data.updated_at)
+        sql = sql.where(
+            sqla.or_(
+                PlayersTableStruct.updated_at < player_data.updated_at,
+                PlayersTableStruct.updated_at.is_(None),
+            )
+        )
         sql = sql.values(player_data.model_dump())
 
         await async_session.execute(sql)
