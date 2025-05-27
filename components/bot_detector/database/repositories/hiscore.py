@@ -13,7 +13,7 @@ from bot_detector.database.structs import (
     HighscoreDataMonthlyTableStruct,
     HighscoreDataWeeklyTableStruct,
 )
-from bot_detector.structs import HighscoreBaseStruct, HighscoreDataLatestStruct
+from bot_detector.structs import HighscoreBaseStruct
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
