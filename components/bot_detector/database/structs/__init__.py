@@ -1,5 +1,6 @@
 from .hiscore import (
     HighscoreDataDailyTableStruct,
+    HighscoreDataLatestTableStruct,
     HighscoreDataMonthlyTableStruct,
     HighscoreDataWeeklyTableStruct,
 )
@@ -10,4 +11,5 @@ __all__ = [
     "HighscoreDataDailyTableStruct",
     "HighscoreDataMonthlyTableStruct",
     "HighscoreDataWeeklyTableStruct",
+    "HighscoreDataLatestTableStruct",
 ]

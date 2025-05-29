@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class RepoPlayerScrapedConsumer(ConsumerInterface):
-    def __init__(self, group_id: str, bootstrap_servers: list[str]):
+    def __init__(self, group_id: str, bootstrap_servers: str):
         self.consumer = AIOKafkaConsumer(
             "players.scraped",
             group_id=group_id,
@@ -33,7 +33,7 @@ class RepoPlayerScrapedConsumer(ConsumerInterface):
 
     async def consume_one(self) -> ScrapedStruct:
         msg = await self.consumer.getone()
-        player = ScrapedStruct(**msg.value)
+        player = ScrapedStruct(**msg.value)  # type: ignore
         return player
 
     async def get_lag(self) -> int:
@@ -66,7 +66,7 @@ class RepoPlayerScrapedConsumer(ConsumerInterface):
 
 
 class RepoPlayerScrapedProducer(ProducerInterface):
-    def __init__(self, bootstrap_servers: list[str]):
+    def __init__(self, bootstrap_servers: str):
         self.producer = AIOKafkaProducer(
             bootstrap_servers=bootstrap_servers,
             value_serializer=lambda v: orjson.dumps(v),

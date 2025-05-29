@@ -3,6 +3,7 @@ from .hiscore import (
     HighscoreBaseStruct,
     HighscoreDataBaseStruct,
     HighscoreDataDailyStruct,
+    HighscoreDataLatestStruct,
     HighscoreDataMonthlyStruct,
     HighscoreDataWeeklyStruct,
 )
@@ -13,6 +14,7 @@ from .reports import Detection, ParsedDetection
 __all__ = [
     "MetaData",
     "HighscoreBaseStruct",
+    "HighscoreDataLatestStruct",
     "HighscoreDataBaseStruct",
     "HighscoreDataDailyStruct",
     "HighscoreDataWeeklyStruct",

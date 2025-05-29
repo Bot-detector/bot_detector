@@ -46,6 +46,18 @@ CREATE TABLE Players (
 --   PRIMARY KEY (player_id, updated_at) 
 -- ) PARTITION BY HASH (player_id) PARTITIONS 10;
 -- Foreign keys are not yet supported in conjunction with partitioning
+
+CREATE TABLE highscore_data_latest (
+  player_id INT UNSIGNED NOT NULL,
+  scrape_date DATE NOT NULL,
+  scrape_year SMALLINT UNSIGNED AS (YEAR(scrape_date)) STORED NOT NULL,
+  scrape_month TINYINT UNSIGNED AS (MONTH(scrape_date)) STORED NOT NULL,
+  scrape_week TINYINT UNSIGNED AS (WEEK(scrape_date, 3)) STORED NOT NULL,
+  skills JSON DEFAULT NULL,
+  activities JSON DEFAULT NULL,
+  PRIMARY KEY (player_id)
+) PARTITION BY HASH (player_id) PARTITIONS 10;
+
 CREATE TABLE highscore_data_daily (
   player_id INT UNSIGNED NOT NULL,
   scrape_date DATE NOT NULL,

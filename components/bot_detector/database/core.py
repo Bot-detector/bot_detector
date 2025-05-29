@@ -1,3 +1,4 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -9,7 +10,7 @@ from sqlalchemy.orm import DeclarativeBase, MappedAsDataclass
 
 
 class Settings(BaseSettings):
-    DATABASE_URL: str
+    DATABASE_URL: str = Field(default=...)
     POOL_TIMEOUT: int = 25
     POOL_RECYCLE: int = 25
     DB_DEBUG: bool = False
