@@ -14,7 +14,10 @@ from bot_detector.kafka.repositories import (
 from bot_detector.proxy_manager import ProxyManager
 from bot_detector.proxy_manager import Settings as ProxySettings
 from bot_detector.runemetrics_api import RuneMetrics, RuneMetricsResponse
-from bot_detector.runemetrics_api.exceptions import UnexpectedRedirection
+from bot_detector.runemetrics_api.exceptions import (
+    RateLimitExceeded,
+    UnexpectedRedirection,
+)
 from bot_detector.structs import MetaData, PlayerStruct, ScrapedStruct
 from osrs.utils import RateLimiter
 from prometheus_client import Counter, Histogram, start_http_server
@@ -93,6 +96,10 @@ async def scrape_player(
             return_latency=True,
         )
         return player_data, latency, error
+    except RateLimitExceeded as e:
+        error = f"Rate limit exceeded: {e.message}"
+        # logger.error(error)
+        return None, None, error
     except UnexpectedRedirection:
         error = f"Unexpected redirection for {player.name=}."
         # logger.error(error)
