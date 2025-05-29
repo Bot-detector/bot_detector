@@ -5,7 +5,7 @@ from aiohttp import ClientSession
 from osrs.utils import RateLimiter
 from pydantic import BaseModel
 
-from .exceptions import RateLimitExceeded, Undefined, UnexpectedRedirection
+from .exceptions import Undefined, UnexpectedRedirection
 
 logger = logging.getLogger(__name__)
 
@@ -72,12 +72,6 @@ class RuneMetrics:
                     f"Redirection occured: {response.url} - {response.history[0].url}"
                 )
                 raise UnexpectedRedirection(error_msg)
-            elif response.status == 429:
-                # raises ClientResponseError
-                txt = await response.text()
-                headers = response.headers
-                msg = f"Response: {txt}, Headers: {headers}"
-                raise RateLimitExceeded(message=msg)
             elif response.status != 200:
                 # raises ClientResponseError
                 response.raise_for_status()
