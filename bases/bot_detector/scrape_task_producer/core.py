@@ -60,7 +60,7 @@ def determine_fetch_params(
         logger.info("No more players to scrape, looking for confirmed bans")
         return max_days, True, 0
 
-    if len(players) < limit and days == 5 and confirmed_ban:
+    if len(players) < limit and days <= 5 and confirmed_ban:
         logger.info("No more players to scrape, resetting")
         return max_days, False, 0
 
