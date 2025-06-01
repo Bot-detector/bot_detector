@@ -60,7 +60,7 @@ def determine_fetch_params(
         logger.info("No more players to scrape, looking for confirmed bans")
         return max_days, True, 0
 
-    if len(players) < limit and days == 1 and confirmed_ban:
+    if len(players) < limit and days == 5 and confirmed_ban:
         logger.info("No more players to scrape, resetting")
         return max_days, False, 0
 
@@ -125,7 +125,7 @@ async def process_players(
             time_remaining = end_of_today - now
             sleep_time = int(time_remaining.total_seconds() / 4)
             sleep_time = max(sleep_time, 1)  # Ensure at least 1 second sleep
-            logger.info(f"Sleeping for {sleep_time} seconds until end of day")
+            logger.info(f"Sleeping for {sleep_time} seconds until end of day (1/4)")
             await asyncio.sleep(sleep_time)
 
 
