@@ -1,8 +1,9 @@
 import os
 
-from bot_detector.hiscore_scraper import core
-
 os.environ["ENVIRONMENT"] = "test"
+os.environ["DEBUG"] = "true"
+
+from bot_detector.hiscore_scraper import core
 
 
 def test_sample():
