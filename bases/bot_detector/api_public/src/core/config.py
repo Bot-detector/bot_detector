@@ -1,9 +1,13 @@
 import asyncio
+import sys
 
 from dotenv import find_dotenv, load_dotenv
 from pydantic_settings import BaseSettings
 
-load_dotenv(find_dotenv())
+if "pytest" in sys.modules:
+    load_dotenv(find_dotenv(".env.test"))
+else:
+    load_dotenv(find_dotenv())  # fallback to normal .env
 
 
 class Settings(BaseSettings):
