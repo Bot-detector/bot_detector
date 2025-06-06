@@ -1,12 +1,12 @@
 import logging
 
-from bot_detector.api_public.src.app.repositories.feedback import Feedback
-from bot_detector.api_public.src.app.views.input.feedback import FeedbackInput
-from bot_detector.api_public.src.app.views.response.ok import Ok
 from bot_detector.api_public.src.core.fastapi.dependencies.session import get_session
 from bot_detector.api_public.src.core.fastapi.dependencies.to_jagex_name import (
     to_jagex_name,
 )
+from bot_detector.features.public_api.feedback.schemas import FeedbackInput
+from bot_detector.features.public_api.feedback.service import Feedback
+from bot_detector.features.public_api.response.schemas import Ok
 from fastapi import APIRouter, Depends, HTTPException, status
 
 router = APIRouter(tags=["Feedback"])
