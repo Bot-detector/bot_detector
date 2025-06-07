@@ -8,12 +8,16 @@ version = "0.1.0"
 requires-python = ">=3.10"
 
 dependencies = [
+    "aiokafka>=0.12.0",
     "aiokafkaengine==0.0.4",
     "fastapi>=0.115.12",
     "pydantic-settings>=2.9.1",
     "python-dotenv>=1.0.1",
     "sqlalchemy>=2.0.40",
     "uvicorn>=0.34.2",
+    "asyncmy>=0.2.9",
+    "orjson>=3.10.16",
+    "prometheus-client>=0.22.0",
 ]
 
 [project.scripts]
