@@ -14,10 +14,6 @@ dependencies = [
 
     # config / validation
     "pydantic-settings>=2.9.1",
-    "python-dotenv>=1.0.1",
-
-    # Kafka  (choose one)
-    "kafka-python>=2.0.2",
 
     # Database
     "sqlalchemy>=2.0.40",

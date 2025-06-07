@@ -33,9 +33,7 @@ source = { editable = "." }
 dependencies = [
     { name = "asyncmy" },
     { name = "fastapi" },
-    { name = "kafka-python" },
     { name = "pydantic-settings" },
-    { name = "python-dotenv" },
     { name = "sqlalchemy" },
     { name = "uvicorn" },
 ]
@@ -44,9 +42,7 @@ dependencies = [
 requires-dist = [
     { name = "asyncmy", specifier = ">=0.2.9" },
     { name = "fastapi", specifier = ">=0.115.12" },
-    { name = "kafka-python", specifier = ">=2.0.2" },
     { name = "pydantic-settings", specifier = ">=2.9.1" },
-    { name = "python-dotenv", specifier = ">=1.0.1" },
     { name = "sqlalchemy", specifier = ">=2.0.40" },
     { name = "uvicorn", specifier = ">=0.34.2" },
 ]
@@ -202,15 +198,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/f1/70/7703c29685631f5a7590aa73f1f1d3fa9a380e654b86af429e0934a32f7d/idna-3.10.tar.gz", hash = "sha256:12f65c9b470abda6dc35cf8e63cc574b1c52b11df2c86030af0ac09b01b13ea9", size = 190490 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/76/c6/c88e154df9c4e1a2a66ccf0005a88dfb2650c1dffb6f5ce603dfbd452ce3/idna-3.10-py3-none-any.whl", hash = "sha256:946d195a0d259cbba61165e88e65941f16e9b36ea6ddb97f00452bae8b1287d3", size = 70442 },
-]
-
-[[package]]
-name = "kafka-python"
-version = "2.2.11"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/01/cf/f55532155c7e2c54fdbdceb1412425f894fd0a6897575fa3454e541ce186/kafka_python-2.2.11.tar.gz", hash = "sha256:8ff8bcc158f48b47ba516536a5b1287db75a8ceff13d639da917ec52e171acde", size = 347568 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/94/e1/89df26df8a93d24c4ad01db6cffb65894ef3e39c1cedf4a281178e7cb669/kafka_python-2.2.11-py2.py3-none-any.whl", hash = "sha256:c285ce322108382ea9fd62273aab175d9a6959866145cf7cf9d4ca447b632372", size = 309650 },
 ]
 
 [[package]]
