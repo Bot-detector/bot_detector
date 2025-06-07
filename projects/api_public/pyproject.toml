@@ -17,6 +17,7 @@ dependencies = [
     "uvicorn>=0.34.2",
     "asyncmy>=0.2.9",
     "orjson>=3.10.16",
+    "prometheus-client>=0.22.0",
 ]
 
 [project.scripts]
