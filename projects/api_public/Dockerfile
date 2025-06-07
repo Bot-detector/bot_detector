@@ -27,4 +27,5 @@ COPY --from=base --chown=appuser /app/projects/api_public/.venv /app/projects/ap
 
 USER appuser
 
-CMD [".venv/bin/uvicorn", "bot_detector.api_public.src.core.server:app", "--proxy-headers", "--host", "0.0.0.0", "--port", "5000", "--log-level", "warning"]
+# we let the port be set by the environment variable UVICORN_PORT (default 8000)
+CMD [".venv/bin/uvicorn", "bot_detector.api_public.src.core.server:app", "--proxy-headers", "--host", "0.0.0.0", "--log-level", "warning"]
