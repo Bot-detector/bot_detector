@@ -194,7 +194,6 @@ services:
       - .env
     environment:
       - UVICORN_PORT=5000
-      - KAFKA_HOST=kafka:9092
       - DATABASE_URL=mysql+asyncmy://root:root_bot_buster@mysql:3306/playerdata
       - ENV=DEV
       - POOL_RECYCLE=60
