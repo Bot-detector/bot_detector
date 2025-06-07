@@ -10,7 +10,7 @@ engine = create_async_engine(
     max_overflow=90,
     pool_timeout=settings.POOL_TIMEOUT,
     pool_recycle=settings.POOL_RECYCLE,
-    echo=(settings.ENV != "PRD"),
+    # echo=(settings.ENV != "PRD"),
 )
 
 # Create a session factory
