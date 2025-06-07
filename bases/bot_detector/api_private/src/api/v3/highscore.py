@@ -1,17 +1,16 @@
 import logging
 from collections import defaultdict
 
-from fastapi import APIRouter, Depends, Query
-
-from bases.bot_detector.api_private.src.app.repositories import ScraperDataRepo
-from bases.bot_detector.api_private.src.app.views.response import (
+from bot_detector.api_private.src.app.repositories import ScraperDataRepo
+from bot_detector.api_private.src.app.views.response import (
     ActivityView,
     ScraperDataView,
     SkillView,
 )
-from bases.bot_detector.api_private.src.core.fastapi.dependencies.session import (
+from bot_detector.api_private.src.core.fastapi.dependencies.session import (
     get_session,
 )
+from fastapi import APIRouter, Depends, Query
 
 logger = logging.getLogger(__name__)
 

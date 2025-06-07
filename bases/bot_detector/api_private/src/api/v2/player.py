@@ -1,9 +1,8 @@
-from fastapi import APIRouter, Depends, Query
-
-from bases.bot_detector.api_private.src.app.repositories.player import PlayerRepo
-from bases.bot_detector.api_private.src.core.fastapi.dependencies.session import (
+from bot_detector.api_private.src.app.repositories.player import PlayerRepo
+from bot_detector.api_private.src.core.fastapi.dependencies.session import (
     get_session,
 )
+from fastapi import APIRouter, Depends, Query
 
 router = APIRouter()
 

@@ -1,7 +1,6 @@
+from bot_detector.api_private.src.core.database.database import Base
 from sqlalchemy import Column, Date, DateTime, func
 from sqlalchemy.dialects.mysql import BIGINT, SMALLINT
-
-from bases.bot_detector.api_private.src.core.database.database import Base
 
 
 class ScraperData(Base):

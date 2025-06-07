@@ -1,9 +1,5 @@
-from sqlalchemy import func, literal, select, union_all
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import aliased
-
-from bases.bot_detector.api_private.src.core.database.models.player import Player
-from bases.bot_detector.api_private.src.core.database.models.scraper_data_v3 import (
+from bot_detector.api_private.src.core.database.models.player import Player
+from bot_detector.api_private.src.core.database.models.scraper_data_v3 import (
     Activity,
     PlayerActivity,
     PlayerSkill,
@@ -12,6 +8,9 @@ from bases.bot_detector.api_private.src.core.database.models.scraper_data_v3 imp
     ScraperPlayerSkill,
     Skill,
 )
+from sqlalchemy import func, literal, select, union_all
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 
 class ScraperDataRepo:

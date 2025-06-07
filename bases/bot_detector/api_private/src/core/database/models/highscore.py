@@ -1,3 +1,4 @@
+from bot_detector.api_private.src.core.database.database import Base
 from sqlalchemy import (
     BigInteger,
     Column,
@@ -8,8 +9,6 @@ from sqlalchemy import (
     Integer,
     text,
 )
-
-from bases.bot_detector.api_private.src.core.database.database import Base
 
 
 class playerHiscoreData(Base):

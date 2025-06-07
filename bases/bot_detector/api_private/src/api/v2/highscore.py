@@ -1,20 +1,19 @@
 import logging
 
-from fastapi import APIRouter, Depends, Query
-
-from bases.bot_detector.api_private.src.app.repositories import (
+from bot_detector.api_private.src.app.repositories import (
     PlayerActivityRepo,
     PlayerSkillsRepo,
     ScraperDataRepo,
 )
-from bases.bot_detector.api_private.src.app.views.response.highscore import (
+from bot_detector.api_private.src.app.views.response.highscore import (
     PlayerHiscoreData,
 )
 
 # from src.app.repositories.highscore import HighscoreRepo
-from bases.bot_detector.api_private.src.core.fastapi.dependencies.session import (
+from bot_detector.api_private.src.core.fastapi.dependencies.session import (
     get_session,
 )
+from fastapi import APIRouter, Depends, Query
 
 logger = logging.getLogger(__name__)
 

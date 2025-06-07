@@ -1,6 +1,5 @@
+from bot_detector.api_private.src.core.database.database import Base
 from sqlalchemy import DECIMAL, TIMESTAMP, Column, Integer, String
-
-from bases.bot_detector.api_private.src.core.database.database import Base
 
 
 class Prediction(Base):

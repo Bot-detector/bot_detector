@@ -1,6 +1,5 @@
+from bot_detector.api_private.src.core.database.database import Base
 from sqlalchemy import Boolean, Column, DateTime, Integer, Text
-
-from bases.bot_detector.api_private.src.core.database.database import Base
 
 
 class Player(Base):

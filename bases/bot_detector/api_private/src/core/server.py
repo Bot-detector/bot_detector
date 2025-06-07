@@ -1,13 +1,12 @@
 import logging
 
+from bot_detector.api_private.src import api
+from bot_detector.api_private.src.core.fastapi.middleware.logging import (
+    LoggingMiddleware,
+)
 from fastapi import FastAPI
 from fastapi.middleware import Middleware
 from fastapi.middleware.cors import CORSMiddleware
-
-from bases.bot_detector.api_private.src import api
-from bases.bot_detector.api_private.src.core.fastapi.middleware.logging import (
-    LoggingMiddleware,
-)
 
 logger = logging.getLogger(__name__)
 

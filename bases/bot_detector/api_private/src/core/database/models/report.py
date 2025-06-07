@@ -1,6 +1,5 @@
+from bot_detector.api_private.src.core.database.database import Base
 from sqlalchemy import TIMESTAMP, BigInteger, Column, Integer, SmallInteger
-
-from bases.bot_detector.api_private.src.core.database.database import Base
 
 
 class Report(Base):

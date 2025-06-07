@@ -1,7 +1,6 @@
+from bot_detector.api_private.src.core.config import settings
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
-
-from bases.bot_detector.api_private.src.core.config import settings
 
 # Create an async SQLAlchemy engine
 engine = create_async_engine(

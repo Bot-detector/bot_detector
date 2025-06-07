@@ -1,12 +1,11 @@
+from bot_detector.api_private.src.app.repositories.abstract_repo import (
+    AbstractAPI,
+)
+from bot_detector.api_private.src.core.database.models import PlayerSkills, Skills
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.ext.asyncio import AsyncResult, AsyncSession
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql.expression import Select
-
-from bases.bot_detector.api_private.src.app.repositories.abstract_repo import (
-    AbstractAPI,
-)
-from bases.bot_detector.api_private.src.core.database.models import PlayerSkills, Skills
 
 
 class PlayerSkillsRepo(AbstractAPI):
