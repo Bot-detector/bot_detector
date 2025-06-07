@@ -107,6 +107,8 @@ services:
       - botdetector-network
     env_file:
       - .env
+    ports:
+      - "8001:8000"
     depends_on:
       kafka_setup:
         condition: service_completed_successfully
@@ -122,6 +124,8 @@ services:
       - botdetector-network
     env_file:
       - .env
+    ports:
+      - "8002:8000"
     depends_on:
       kafka_setup:
         condition: service_completed_successfully
@@ -180,6 +184,7 @@ services:
       - POOL_TIMEOUT=30
     ports:
       - "5000:5000"
+      - "8003:8000"
     networks:
       - botdetector-network
     depends_on:
