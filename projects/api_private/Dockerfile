@@ -1,31 +1,30 @@
-FROM python:3.11-slim AS base
+FROM python:3.12-slim-bookworm AS base
 
-ARG api_port
-ENV UVICORN_PORT=${api_port}
-
-ARG root_path
-ENV UVICORN_ROOT_PATH=${root_path}
-
-# Keeps Python from generating .pyc files in the container
-ENV PYTHONDONTWRITEBYTECODE=1
-
-# Turns off buffering for easier container logging
-ENV PYTHONUNBUFFERED=1
+# Copy uv from external repository
+COPY --from=ghcr.io/astral-sh/uv:0.5.4 /uv /uvx /bin/
 
 # set the working directory
-WORKDIR /project
+WORKDIR /app
 
-# install dependencies
-COPY ./requirements.txt /project
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy only necessary files to run the projects
+COPY ./bases ./bases
+COPY ./components ./components
+COPY ./projects ./projects
 
-# copy the scripts to the folder
-COPY ./src /project/src
+WORKDIR /app/projects/api_private
 
-# production image
-FROM base AS production
+# install dependencies via RUN uv build
+RUN uv sync --frozen --no-editable
+
+# Production stage: Prepare the final production environment
+FROM python:3.12-slim-bookworm AS production
+
 # Creates a non-root user with an explicit UID and adds permission to access the /project folder
-RUN adduser -u 5678 --disabled-password --gecos "" appuser && chown -R appuser /project
+RUN adduser -u 5678 --disabled-password --gecos "" appuser
+
+WORKDIR /app/projects/api_private
+COPY --from=base --chown=appuser /app/projects/api_private/.venv /app/projects/api_private/.venv
+
 USER appuser
 
-CMD ["uvicorn", "src.core.server:app", "--proxy-headers", "--host", "0.0.0.0"]
+CMD [".venv/bin/uvicorn", "bot_detector.api_private.src.core.server:app", "--proxy-headers", "--host", "0.0.0.0", "--port", "5000", "--log-level", "warning"]
