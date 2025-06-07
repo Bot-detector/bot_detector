@@ -15,6 +15,7 @@ dependencies = [
     "sqlalchemy>=2.0.40",
     "uvicorn>=0.34.2",
     "asyncmy>=0.2.9",
+    "orjson>=3.10.16",
 ]
 
 [project.scripts]
