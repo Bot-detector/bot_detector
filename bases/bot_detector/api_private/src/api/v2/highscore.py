@@ -21,23 +21,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-# @router.get("/highscore/latest", response_model=list[PlayerHiscoreData])
-# async def get_highscore_latest(
-#     player_id: int,
-#     label_id: int = None,
-#     many: bool = False,
-#     limit: int = Query(default=10, ge=0, le=10_000),
-#     session=Depends(get_session),
-# ):
-#     repo = HighscoreRepo(session=session)
-#     data: list[dict] = await repo.select(
-#         player_id=player_id, label_id=label_id, many=many, limit=limit
-#     )
-
-#     data = [{k: v for k, v in d.items() if v} for d in data]
-#     return [PlayerHiscoreData(**d).model_dump(mode="json") for d in data]
-
-
 @router.get("/highscore/latest")
 async def get_highscore_latest_v2(
     player_id: int,
