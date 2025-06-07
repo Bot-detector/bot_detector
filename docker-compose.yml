@@ -194,9 +194,9 @@ services:
       retries: 3
       start_period: 30s
 
-  wait_for_api:
+  wait_for_api_public:
     image: alpine:latest
-    container_name: wait_for_api
+    container_name: wait_for_api_public
     command: ["sh", "-c", "echo 'api_public healthy'"]
     depends_on:
       api_public:
