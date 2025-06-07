@@ -34,4 +34,4 @@ COPY --from=base --chown=appuser /app/projects/api_public/ /app/projects/api_pub
 
 USER appuser
 
-CMD ["/app/projects/api_public/.venv/bin/uvicorn", "bot_detector.api_public.src.core.server:app", "--proxy-headers", "--host", "0.0.0.0", "--log-level", "warning"]
+CMD ["/app/projects/api_public/.venv/bin/uvicorn", "bot_detector.api_public.src.core.server:app", "--proxy-headers", "--host", "0.0.0.0", "--port", "5000", "--log-level", "warning"]
