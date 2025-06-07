@@ -197,9 +197,9 @@ services:
   wait_for_api:
     image: alpine:latest
     container_name: wait_for_api
-    command: ["sh", "-c", "echo 'public_api healthy'"]
+    command: ["sh", "-c", "echo 'api_public healthy'"]
     depends_on:
-      public_api:
+      api_public:
         condition: service_healthy
     networks:
       - botdetector-network
