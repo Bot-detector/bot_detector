@@ -54,7 +54,7 @@ services:
       - JVM_OPTS=-Xms32M -Xmx64M
       - SERVER_SERVLET_CONTEXTPATH=/
     ports:
-      - 9000:9000
+      - 9042:9000 # too many things use 9000 like portainer.. lets use 9042 instead?
     restart: on-failure
     networks:
       - botdetector-network
@@ -159,6 +159,50 @@ services:
         condition: service_completed_successfully
       mysql_setup:
         condition: service_completed_successfully
+
+  api_public:
+    container_name: api_public
+    image: bd/api_public
+    build:
+      context: .                         # repo root
+      dockerfile: ./projects/api_public/Dockerfile
+      target: production
+      args:
+        root_path: ""
+        api_port: 5000
+    env_file:
+      - .env
+    environment:
+      - KAFKA_HOST=kafka:9092
+      - DATABASE_URL=mysql+asyncmy://root:root_bot_buster@mysql:3306/playerdata
+      - ENV=DEV
+      - POOL_RECYCLE=60
+      - POOL_TIMEOUT=30
+    ports:
+      - "5000:5000"
+    networks:
+      - botdetector-network
+    depends_on:
+      kafka_setup:
+        condition: service_completed_successfully
+      mysql_setup:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request,sys; sys.exit(0 if urllib.request.urlopen(\"http://localhost:5000/\").getcode()==200 else 1)'"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  wait_for_api:
+    image: alpine:latest
+    container_name: wait_for_api
+    command: ["sh", "-c", "echo 'public_api healthy'"]
+    depends_on:
+      public_api:
+        condition: service_healthy
+    networks:
+      - botdetector-network
 networks:
   botdetector-network:
     name: bd-network
