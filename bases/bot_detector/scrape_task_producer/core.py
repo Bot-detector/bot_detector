@@ -153,16 +153,17 @@ async def process_players(
         if last_day != date.today():
             logger.info("New day detected, resetting days and confirmed_ban")
             last_day = date.today()
-            days = max_days
-            confirmed_ban = False
-            player_id = 0
+            fp.days = max_days
+            fp.confirmed_ban = False
+            fp.possible_ban = False
+            fp.player_id = 0
 
         if lag >= 100_000:
             logger.info(f"{lag=} to high, sleeping(10)")
             await asyncio.sleep(10)
             continue
 
-        logger.info(f"{player_id=}, {confirmed_ban=}, {days=}, {limit=}")
+        logger.info(f"{fp.player_id=}, {fp.confirmed_ban=}, {fp.days=}, {fp.limit=}")
 
         async with async_session() as session:
             players = await player_repo.select_player(
@@ -177,13 +178,9 @@ async def process_players(
         await produce_players(players=players, player_producer=player_producer)
 
         fp = determine_fetch_params(
+            fetch_params=fp,
             players=players,
-            player_id=player_id,
-            confirmed_ban=confirmed_ban,
-            possible_ban=possible_ban,
-            days=days,
             max_days=max_days,
-            limit=limit,
         )
 
         if all(
