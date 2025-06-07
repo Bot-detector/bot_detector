@@ -1,0 +1,44 @@
+[build-system]
+requires = ["hatchling", "hatch-polylith-bricks"]
+build-backend = "hatchling.build"
+
+[project]
+name = "api_private"
+version = "0.1.0"
+requires-python = ">=3.10"
+
+dependencies = [
+    # core
+    "fastapi>=0.115.12",
+    "uvicorn>=0.34.2",
+
+    # config / validation
+    "pydantic-settings>=2.9.1",
+    "python-dotenv>=1.0.1",
+
+    # Kafka  (choose one)
+    "kafka-python>=2.0.2",
+
+    # Database
+    "sqlalchemy>=2.0.40",
+    "asyncmy>=0.2.9",
+]
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3"
+pytest-asyncio = "^0.25"
+httpx = "^0.27"
+watchfiles = "^0.21"
+pytest-benchmark = "^3.0.0"
+
+[project.scripts]
+scrape_task_producer = "bot_detector.api_private.core.server:run"
+
+[tool.hatch.build.hooks.polylith-bricks]
+packages = ["bot_detector"]
+
+[tool.polylith.bricks]
+"../../bases/bot_detector/api_private" = "bot_detector/api_private"
+"../../components/bot_detector/kafka" = "bot_detector/kafka"
+"../../components/bot_detector/structs" = "bot_detector/structs"
+"../../components/bot_detector/logfmt" = "bot_detector/logfmt"
