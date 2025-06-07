@@ -1,0 +1,65 @@
+version: '3'
+services:
+  mysql:
+    container_name: database
+    build:
+      context: ./mysql
+    image: bot-detector/mysql:latest
+    environment:
+      - MYSQL_ROOT_PASSWORD=root_bot_buster
+    volumes:
+      - ./mysql/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
+      # - ./mysql/mount:/var/lib/mysql # creates persistence
+    ports:
+      - 3307:3306
+    networks:
+      - botdetector-network
+    healthcheck:
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  mysql_setup:
+    container_name: mysql_setup
+    image: bot-detector/mysql_setup
+    build:
+      context: ./mysql_setup
+    command: ["python", "-u","setup_mysql.py"]
+    networks:
+      - botdetector-network
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  private_api:
+    container_name: private_api
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: base
+      args:
+        root_path: /
+        api_port: 5000
+    # command: bash -c "apt update && apt install -y curl && sleep infinity"
+    command: uvicorn src.core.server:app --host 0.0.0.0 --reload --reload-include src/*
+    ports:
+      - 5000:5000
+    networks:
+      - botdetector-network
+    # this overrides the env_file for the specific variable
+    environment:
+      - KAFKA_HOST=kafka:9092
+      - DATABASE_URL=mysql+aiomysql://root:root_bot_buster@mysql:3306/playerdata
+      - ENV=DEV
+      - POOL_RECYCLE=60
+      - POOL_TIMEOUT=30
+    # env_file:
+    #   - .env
+    volumes:
+      - ./src:/project/src
+    depends_on:
+      - mysql
+      - mysql_setup
+
+networks:
+  botdetector-network:
