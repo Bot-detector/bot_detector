@@ -46,6 +46,7 @@ test-verbose: docker-restart ## restart containers & test
 	uv run pytest -s
 
 restart-%: ## Restart a docker service by name, eg make restart-api_public
+	uv sync --project project/$*
 	docker compose stop $*
 	docker compose build $*
 	docker compose up -d $*
