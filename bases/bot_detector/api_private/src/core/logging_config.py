@@ -2,7 +2,7 @@ import json
 import logging
 import sys
 
-from src.core.config import settings
+from .config import settings
 
 # # log formatting
 formatter = logging.Formatter(

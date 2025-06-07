@@ -1,6 +1,6 @@
-from sqlalchemy import Column, Integer, String, TIMESTAMP, DECIMAL
-from src.core.database.database import Base
+from sqlalchemy import DECIMAL, TIMESTAMP, Column, Integer, String
 
+from bases.bot_detector.api_private.src.core.database.database import Base
 
 
 class Prediction(Base):
@@ -36,4 +36,3 @@ class Prediction(Base):
     barrows_bot = Column(DECIMAL(5, 2), default=0)
     herblore_bot = Column(DECIMAL(5, 2), default=0)
     unknown_bot = Column(DECIMAL(5, 2), default=0)
-

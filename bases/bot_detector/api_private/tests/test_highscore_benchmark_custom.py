@@ -2,8 +2,9 @@ import random
 import statistics
 
 import pytest
-from benchmark import Benchmark
 from httpx import AsyncClient
+
+from .benchmark import Benchmark
 
 # Global variable to store the results
 benchmark_results = {"v2": [], "v3": []}

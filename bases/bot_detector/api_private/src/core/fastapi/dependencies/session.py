@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.database.database import SessionFactory
+from bases.bot_detector.api_private.src.core.database.database import SessionFactory
 
 
 # Dependency to get an asynchronous session

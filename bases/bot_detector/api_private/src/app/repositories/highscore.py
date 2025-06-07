@@ -5,11 +5,13 @@ from sqlalchemy.ext.asyncio import AsyncResult, AsyncSession
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql.expression import Select
 
-from src.app.repositories.abstract_repo import AbstractAPI
-from src.core.database.models import (  # playerHiscoreData,; PlayerHiscoreDataXPChange,
+from bases.bot_detector.api_private.src.app.repositories.abstract_repo import (
+    AbstractAPI,
+)
+from bases.bot_detector.api_private.src.core.database.models import (  # playerHiscoreData,; PlayerHiscoreDataXPChange,
     PlayerHiscoreDataLatest,
 )
-from src.core.database.models.player import Player
+from bases.bot_detector.api_private.src.core.database.models.player import Player
 
 logger = logging.getLogger(__name__)
 

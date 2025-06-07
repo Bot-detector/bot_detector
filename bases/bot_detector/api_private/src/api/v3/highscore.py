@@ -3,9 +3,15 @@ from collections import defaultdict
 
 from fastapi import APIRouter, Depends, Query
 
-from src.app.repositories import ScraperDataRepo
-from src.app.views.response import ActivityView, ScraperDataView, SkillView
-from src.core.fastapi.dependencies.session import get_session
+from bases.bot_detector.api_private.src.app.repositories import ScraperDataRepo
+from bases.bot_detector.api_private.src.app.views.response import (
+    ActivityView,
+    ScraperDataView,
+    SkillView,
+)
+from bases.bot_detector.api_private.src.core.fastapi.dependencies.session import (
+    get_session,
+)
 
 logger = logging.getLogger(__name__)
 

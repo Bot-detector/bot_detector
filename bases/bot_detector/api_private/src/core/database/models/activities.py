@@ -1,7 +1,7 @@
 from sqlalchemy import Column, ForeignKey, Integer, String
 from sqlalchemy.dialects.mysql import BIGINT, TINYINT
 
-from src.core.database.database import Base
+from bases.bot_detector.api_private.src.core.database.database import Base
 
 
 class Activities(Base):

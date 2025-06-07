@@ -9,7 +9,7 @@ from sqlalchemy import (
     text,
 )
 
-from src.core.database.database import Base
+from bases.bot_detector.api_private.src.core.database.database import Base
 
 
 class playerHiscoreData(Base):

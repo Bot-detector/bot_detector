@@ -2,7 +2,7 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy.ext.asyncio import AsyncResult, AsyncSession
 from sqlalchemy.sql.expression import Select
 
-from src.core.database.models.player import Player
+from bases.bot_detector.api_private.src.core.database.models.player import Player
 
 
 class PlayerRepo:

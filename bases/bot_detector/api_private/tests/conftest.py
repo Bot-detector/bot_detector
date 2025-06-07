@@ -13,8 +13,10 @@ from sqlalchemy.orm import sessionmaker
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
-from src.core import server  # noqa: E402
-from src.core.fastapi.dependencies.session import get_session  # noqa: E402
+from bases.bot_detector.api_private.src.core import server  # noqa: E402
+from bases.bot_detector.api_private.src.core.fastapi.dependencies.session import (
+    get_session,  # noqa: E402
+)
 
 
 # Create an async SQLAlchemy engine

@@ -3,8 +3,10 @@ from sqlalchemy.ext.asyncio import AsyncResult, AsyncSession
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql.expression import Select
 
-from src.app.repositories.abstract_repo import AbstractAPI
-from src.core.database.models import PlayerSkills, Skills
+from bases.bot_detector.api_private.src.app.repositories.abstract_repo import (
+    AbstractAPI,
+)
+from bases.bot_detector.api_private.src.core.database.models import PlayerSkills, Skills
 
 
 class PlayerSkillsRepo(AbstractAPI):
