@@ -4,7 +4,7 @@ from bot_detector.api_public.src.app.repositories.player import Player
 from bot_detector.api_public.src.app.repositories.report import CustomError, Report
 from bot_detector.api_public.src.core._cache import SimpleALRUCache
 from bot_detector.api_public.src.core.fastapi.dependencies.session import get_session
-from bot_detector.features.public_api.response.schemas import Ok
+from bot_detector.shared.schemas import Ok
 from bot_detector.structs import Detection, ParsedDetection
 from fastapi import APIRouter, Depends, status
 from fastapi.exceptions import HTTPException

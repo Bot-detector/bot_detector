@@ -3,7 +3,7 @@ import logging
 import sqlalchemy as sqla
 from bot_detector.api_public.src.app.views.player import PlayerCreate, PlayerInDB
 from bot_detector.api_public.src.core._cache import SimpleALRUCache
-from bot_detector.api_public.src.core.database.models.feedback import (
+from bot_detector.feedback.feedback import (
     PredictionFeedback as dbFeedback,
 )
 from bot_detector.api_public.src.core.database.models.player import Player as dbPlayer

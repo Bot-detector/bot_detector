@@ -3,10 +3,6 @@ from typing import Optional
 from pydantic import BaseModel, Field, field_validator
 
 
-class Ok(BaseModel):
-    detail: str = "ok"
-
-
 class FeedbackInput(BaseModel):
     """
     Class representing prediction feedback input.

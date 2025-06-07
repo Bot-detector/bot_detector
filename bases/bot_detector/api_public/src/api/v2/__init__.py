@@ -1,5 +1,6 @@
-from bot_detector.features.public_api import feedback
 from fastapi import APIRouter
+
+from components.bot_detector.feedback import feedback
 
 from . import player, report
 

@@ -4,9 +4,9 @@ from bot_detector.api_public.src.core.fastapi.dependencies.session import get_se
 from bot_detector.api_public.src.core.fastapi.dependencies.to_jagex_name import (
     to_jagex_name,
 )
-from bot_detector.features.public_api.feedback.schemas import FeedbackInput
-from bot_detector.features.public_api.feedback.service import Feedback
-from bot_detector.features.public_api.response.schemas import Ok
+from .schemas import FeedbackInput
+from .service import Feedback
+from bot_detector.shared.schemas import Ok
 from fastapi import APIRouter, Depends, HTTPException, status
 
 router = APIRouter(tags=["Feedback"])
