@@ -23,18 +23,15 @@ WORKDIR /app/projects/api_public
 # install dependencies via RUN uv build
 RUN uv sync --frozen --no-editable
 
-# copy the scripts to the folder
-# COPY ./src /project/src
-
 # Production stage: Prepare the final production environment
 FROM python:3.11-slim AS production
 
 # Creates a non-root user with an explicit UID and adds permission to access the /project folder
 RUN adduser -u 5678 --disabled-password --gecos "" appuser
 
-WORKDIR /app/projects/api_public
-COPY --from=base --chown=appuser /app/projects/api_public/.venv /app/projects/api_public/.venv
+WORKDIR /app/projects/
+COPY --from=base --chown=appuser /app/projects/api_public/ /app/projects/api_public/
 
 USER appuser
 
-CMD ["uvicorn", "src.core.server:app", "--proxy-headers", "--host", "0.0.0.0", "--log-level", "warning"]
+CMD ["/app/projects/api_public/.venv/bin/uvicorn", "bot_detector.api_public.src.core.server:app", "--proxy-headers", "--host", "0.0.0.0", "--log-level", "warning"]

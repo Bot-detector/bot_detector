@@ -164,7 +164,7 @@ services:
     container_name: api_public
     image: bd/api_public
     build:
-      context: .                         # repo root
+      context: .
       dockerfile: ./projects/api_public/Dockerfile
       target: production
       args:
