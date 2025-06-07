@@ -14,6 +14,7 @@ dependencies = [
     "python-dotenv>=1.0.1",
     "sqlalchemy>=2.0.40",
     "uvicorn>=0.34.2",
+    "asyncmy>=0.2.9",
 ]
 
 [project.scripts]
