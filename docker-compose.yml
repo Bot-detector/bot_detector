@@ -167,9 +167,7 @@ services:
       context: .
       dockerfile: ./projects/api_public/Dockerfile
       target: production
-      args:
-        root_path: ""
-        api_port: 5000
+    # command: ["sleep", "infinity"]
     env_file:
       - .env
     environment:
