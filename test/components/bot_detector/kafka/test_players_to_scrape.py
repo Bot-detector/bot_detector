@@ -7,16 +7,21 @@ from bot_detector.kafka.repositories.players_to_scrape import (
 )
 
 
-@pytest.mark.asyncio
-async def test_get_lag_handles_none_committed(monkeypatch):
-    # Setup a fake Kafka consumer
-    fake_consumer = AsyncMock()
-    fake_consumer.partitions_for_topic = AsyncMock(return_value={0})
+@pytest.fixture
+def fake_consumer():
+    """Fixture to create a fake Kafka consumer with default behavior."""
+    mock_consumer = AsyncMock()
+    mock_consumer.partitions_for_topic = lambda topic: {0}
     tp = TopicPartition("players.to_scrape", 0)
-    fake_consumer.committed = AsyncMock(return_value=None)
-    fake_consumer.end_offsets = AsyncMock(return_value={tp: 10})
+    # These will be overridden in each test if needed
+    mock_consumer.committed = AsyncMock(return_value=None)
+    mock_consumer.end_offsets = AsyncMock(return_value={tp: 10})
+    return mock_consumer
 
-    # Patch the real consumer with the fake
+
+@pytest.mark.asyncio
+async def test_get_lag_handles_none_committed(fake_consumer):
+    # Default committed is None (set in the fixture)
     consumer = RepoPlayersToScrapeConsumer("test-group", ["localhost:9092"])
     consumer.consumer = fake_consumer
 
@@ -25,13 +30,8 @@ async def test_get_lag_handles_none_committed(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_get_lag_handles_committed_zero(monkeypatch):
-    fake_consumer = AsyncMock()
-    fake_consumer.partitions_for_topic = AsyncMock(return_value={0})
-    tp = TopicPartition("players.to_scrape", 0)
-    fake_consumer.committed = AsyncMock(return_value=0)
-    fake_consumer.end_offsets = AsyncMock(return_value={tp: 10})
-
+async def test_get_lag_handles_committed_zero(fake_consumer):
+    fake_consumer.committed = AsyncMock(return_value=0)  # Override for this test
     consumer = RepoPlayersToScrapeConsumer("test-group", ["localhost:9092"])
     consumer.consumer = fake_consumer
 
