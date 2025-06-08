@@ -5,6 +5,7 @@ import pytest
 
 
 @pytest.mark.asyncio
+@pytest.mark.integration
 async def test_highscore_v2(benchmark, custom_client):
     player_ids = list(range(1, 101))  # Or any other player IDs you want to use
     async with httpx.AsyncClient() as client:
@@ -25,6 +26,7 @@ async def test_highscore_v2(benchmark, custom_client):
 
 
 @pytest.mark.asyncio
+@pytest.mark.integration
 async def test_highscore_v3(benchmark, custom_client):
     player_ids = list(range(1, 101))  # Or any other player IDs you want to use
     async with httpx.AsyncClient() as client:
