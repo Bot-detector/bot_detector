@@ -7,7 +7,7 @@ engine = create_async_engine(
     settings.DATABASE_URL,
     pool_timeout=settings.POOL_TIMEOUT,
     pool_recycle=settings.POOL_RECYCLE,
-    echo=(settings.ENV != "PRD"),
+    # echo=(settings.ENV != "PRD"),
     pool_pre_ping=True,
 )
 
