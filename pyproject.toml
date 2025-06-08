@@ -26,12 +26,13 @@ dependencies = [
 [dependency-groups]
 dev = [
     "kafka-python>=2.0.2",
-    "polylith-cli>=1.24.0",
+    "polylith-cli>=1.30.1",
     "pytest>=8.3.4",
     "ruff>=0.8.4",
     "pytest-asyncio>=0.25.0",
     "pytest-cov>=6.1.1",
     "httpx>=0.27.0",
+    "greenlet>=3.0.3",
 ]
 
 
@@ -42,3 +43,19 @@ dev-mode-dirs = ["components", "bases", "development", "."]
 
 [tool.hatch.metadata]
 allow-direct-references = true
+
+[tool.polylith.bricks]
+"bases/bot_detector/api_public" = "bot_detector/api_public"
+"bases/bot_detector/runemetrics_scraper" = "bot_detector/runemetrics_scraper"
+"bases/bot_detector/hiscore_worker" = "bot_detector/hiscore_worker"
+"bases/bot_detector/api_private" = "bot_detector/api_private"
+"bases/bot_detector/scrape_task_producer" = "bot_detector/scrape_task_producer"
+"bases/bot_detector/hiscore_scraper" = "bot_detector/hiscore_scraper"
+"components/bot_detector/feedback" = "bot_detector/feedback"
+"components/bot_detector/proxy_manager" = "bot_detector/proxy_manager"
+"components/bot_detector/structs" = "bot_detector/structs"
+"components/bot_detector/kafka" = "bot_detector/kafka"
+"components/bot_detector/kafka_client" = "bot_detector/kafka_client"
+"components/bot_detector/runemetrics_api" = "bot_detector/runemetrics_api"
+"components/bot_detector/logfmt" = "bot_detector/logfmt"
+"components/bot_detector/database" = "bot_detector/database"
