@@ -51,6 +51,15 @@ restart-%: ## Restart a docker service by name, eg make restart-api_public
 	docker compose build $*
 	docker compose up -d $*
 
+info:
+	uv run poly info
+
+libs:
+	uv run poly libs
+
+checks: info libs
+	uv run poly check
+
 setup:
 	uv sync
 
