@@ -24,10 +24,13 @@ class PlayerRepo(playerInterface):
         async_session: AsyncSession,
         days: int = 7,
         confirmed_ban: bool | None = None,
+        possible_ban: bool | None = None,
         player_id: int | None = None,
         limit: int = 10_000,
     ) -> list[PlayerStruct]:
-        logger.info(f"{player_id=}, {confirmed_ban=}, {days=}, {limit=}")
+        logger.info(
+            f"{player_id=}, {confirmed_ban=}, {possible_ban=}, {days=}, {limit=}"
+        )
 
         sql = sqla.select(PlayersTableStruct)
 
@@ -51,8 +54,12 @@ class PlayerRepo(playerInterface):
         if confirmed_ban is not None:
             sql = sql.where(PlayersTableStruct.confirmed_ban == confirmed_ban)
 
+        if possible_ban is not None:
+            sql = sql.where(PlayersTableStruct.possible_ban == possible_ban)
+
         if limit:
             sql = sql.limit(limit)
+
         sql = sql.order_by(sqla.asc(PlayersTableStruct.id))
 
         result = await async_session.scalars(sql, params={"days": days})

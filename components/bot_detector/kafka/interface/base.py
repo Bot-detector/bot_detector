@@ -23,7 +23,7 @@ class ConsumerInterface(ABC):
         pass
 
     @abstractmethod
-    async def get_lag(self):
+    async def get_lag(self) -> int:
         pass
 
 
