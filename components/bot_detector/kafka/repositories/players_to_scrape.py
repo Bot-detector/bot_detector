@@ -41,7 +41,7 @@ class RepoPlayersToScrapeConsumer(ConsumerInterface):
         topic = "players.to_scrape"
 
         # Get the list of partitions for the topic
-        partitions = await self.consumer.partitions_for_topic(topic)
+        partitions = self.consumer.partitions_for_topic(topic)
 
         if partitions is None:
             logger.warning("partitions is none")
