@@ -13,8 +13,8 @@ COPY ./projects ./projects
 
 WORKDIR /app/projects/api_private
 
-# install dependencies via RUN uv build
-RUN uv sync --frozen --no-editable
+# install dependencies via RUN uv build, exclude dev packages group
+RUN uv sync --frozen --no-editable --no-dev
 
 # Production stage: Prepare the final production environment
 FROM python:3.12-slim-bookworm AS production

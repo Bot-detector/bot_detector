@@ -20,12 +20,14 @@ dependencies = [
     "asyncmy>=0.2.9",
 ]
 
-[tool.poetry.group.dev.dependencies]
-pytest = "^8.3"
-pytest-asyncio = "^0.25"
-httpx = "^0.27"
-watchfiles = "^0.21"
-pytest-benchmark = "^3.0.0"
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+    "httpx>=0.27",
+    "watchfiles>=0.21",
+    "pytest-benchmark>=3.0.0"
+]
 
 [project.scripts]
 scrape_task_producer = "bot_detector.api_private.core.server:run"
