@@ -1,13 +1,12 @@
 import asyncio
 import logging
+from dataclasses import asdict, dataclass
 from datetime import date, datetime, time
 
 from bot_detector.database import Settings as DBSettings
 from bot_detector.database import get_session_factory
-from bot_detector.database.interfaces import playerInterface
 from bot_detector.database.repositories import PlayerRepo
 from bot_detector.kafka import Settings as KafkaSettings
-from bot_detector.kafka.interface import ConsumerInterface, ProducerInterface
 from bot_detector.kafka.repositories import (
     RepoPlayersToScrapeConsumer,
     RepoPlayersToScrapeProducer,
@@ -21,6 +20,15 @@ logger = logging.getLogger(__name__)
 
 class Settings(BaseSettings):
     LIMIT: int = 10_000
+
+
+@dataclass
+class FetchParams:
+    days: int = 7
+    confirmed_ban: bool = False
+    possible_ban: bool = False
+    player_id: int = 0
+    limit: int = 10_000
 
 
 async def produce_players(
@@ -42,41 +50,100 @@ async def produce_players(
 
 
 def determine_fetch_params(
-    days: int,
-    confirmed_ban: bool,
-    player_id: int,
-    limit: int,
+    fetch_params: FetchParams,
     players: list[PlayerStruct] | None,
     max_days: int = 7,
-):
+    max_possible_ban_days: int = 2,
+    max_confirmed_ban_days: int = 7,
+) -> FetchParams:
+    def _reduce_days(fetch_params: FetchParams) -> FetchParams:
+        logger.info(f"Reducing days for {asdict(fetch_params)}")
+        fetch_params.days = fetch_params.days - 1 if fetch_params.days > 1 else 1
+        fetch_params.player_id = 0
+        return fetch_params
+
     if players is None:
-        return days, confirmed_ban, player_id
+        return fetch_params
 
-    if len(players) < limit and days > 1:
-        logger.info("No more players to scrape, reducing days")
-        return days - 1, confirmed_ban, 0
+    if not fetch_params.possible_ban and fetch_params.confirmed_ban:
+        logger.warning(
+            "Confirmed ban is True but possible_ban is False, resetting confirmed_ban"
+        )
+        fetch_params.possible_ban = True
 
-    if len(players) < limit and days == 1 and not confirmed_ban:
-        logger.info("No more players to scrape, looking for confirmed bans")
-        return max_days, True, 0
+    if len(players) < fetch_params.limit:
+        # reduce days
+        if fetch_params.days > 1:
+            if not fetch_params.confirmed_ban and not fetch_params.possible_ban:
+                logger.info("No players found, reducing days")
+                return _reduce_days(fetch_params)
+            elif (
+                fetch_params.possible_ban
+                and not fetch_params.confirmed_ban
+                and fetch_params.days > max_possible_ban_days
+            ):
+                return _reduce_days(fetch_params)
+            elif (
+                fetch_params.possible_ban
+                and fetch_params.confirmed_ban
+                and fetch_params.days > max_confirmed_ban_days
+            ):
+                return _reduce_days(fetch_params)
 
-    if len(players) < limit and days <= 5 and confirmed_ban:
-        logger.info("No more players to scrape, resetting")
-        return max_days, False, 0
+        # change state
+        if (
+            fetch_params.days <= 1
+            and not fetch_params.possible_ban
+            and not fetch_params.confirmed_ban
+        ):
+            logger.info("No players found, setting possible_ban to True")
+            fetch_params.days = max_days
+            fetch_params.possible_ban = True
+            fetch_params.player_id = 0
+            return fetch_params
 
-    return days, confirmed_ban, players[-1].id
+        if (
+            fetch_params.days <= max_possible_ban_days
+            and fetch_params.possible_ban
+            and not fetch_params.confirmed_ban
+        ):
+            logger.info("all Possible ban scraped, setting confirmed_ban to True")
+            fetch_params.days = max_days
+            fetch_params.confirmed_ban = True
+            fetch_params.player_id = 0
+            return fetch_params
+
+        if (
+            fetch_params.days <= max_confirmed_ban_days
+            and fetch_params.possible_ban
+            and fetch_params.confirmed_ban
+        ):
+            logger.info("all Confirmed ban scraped, resetting to default")
+            fetch_params.days = max_days
+            fetch_params.confirmed_ban = False
+            fetch_params.possible_ban = False
+            fetch_params.player_id = 0
+            return fetch_params
+
+    fetch_params.player_id = players[-1].id
+    return fetch_params
 
 
 async def process_players(
     async_session: async_sessionmaker[AsyncSession],
-    player_repo: playerInterface,
-    player_producer: ProducerInterface,
-    player_consumer: ConsumerInterface,
+    player_repo: PlayerRepo,
+    player_producer: RepoPlayersToScrapeProducer,
+    player_consumer: RepoPlayersToScrapeConsumer,
     limit: int = 10,
 ):
-    player_id = 0
-    days = 7
-    confirmed_ban = False
+    fp = FetchParams(
+        days=7,
+        confirmed_ban=False,
+        possible_ban=False,
+        player_id=0,
+        limit=limit,
+    )
+
     max_days = 7
     last_day = date.today()
 
@@ -86,39 +153,44 @@ async def process_players(
         if last_day != date.today():
             logger.info("New day detected, resetting days and confirmed_ban")
             last_day = date.today()
-            days = max_days
-            confirmed_ban = False
-            player_id = 0
+            fp.days = max_days
+            fp.confirmed_ban = False
+            fp.possible_ban = False
+            fp.player_id = 0
 
         if lag >= 100_000:
             logger.info(f"{lag=} to high, sleeping(10)")
             await asyncio.sleep(10)
             continue
 
-        logger.info(f"{player_id=}, {confirmed_ban=}, {days=}, {limit=}")
+        logger.info(f"{fp.player_id=}, {fp.confirmed_ban=}, {fp.days=}, {fp.limit=}")
 
         async with async_session() as session:
             players = await player_repo.select_player(
                 async_session=session,
-                player_id=player_id,
-                confirmed_ban=confirmed_ban,
-                days=days,
+                player_id=fp.player_id,
+                possible_ban=fp.possible_ban,
+                confirmed_ban=fp.confirmed_ban,
+                days=fp.days,
                 limit=limit,
             )
 
         await produce_players(players=players, player_producer=player_producer)
 
-        days, confirmed_ban, player_id = determine_fetch_params(
+        fp = determine_fetch_params(
+            fetch_params=fp,
             players=players,
-            player_id=player_id,
-            confirmed_ban=confirmed_ban,
-            days=days,
             max_days=max_days,
-            limit=limit,
         )
 
-        # sleep the remaining time of the current day
-        if (days, confirmed_ban, player_id) == (max_days, False, 0):
+        if all(
+            [
+                fp.days == max_days,
+                not fp.possible_ban,
+                not fp.confirmed_ban,
+                fp.player_id == 0,
+            ]
+        ):
             now = datetime.now()
             end_of_today = datetime.combine(now.date(), time.max)
 
