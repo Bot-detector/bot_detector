@@ -35,6 +35,5 @@ packages = ["bot_detector"]
 
 [tool.polylith.bricks]
 "../../bases/bot_detector/api_private" = "bot_detector/api_private"
-"../../components/bot_detector/kafka" = "bot_detector/kafka"
 "../../components/bot_detector/structs" = "bot_detector/structs"
 "../../components/bot_detector/logfmt" = "bot_detector/logfmt"
