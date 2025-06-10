@@ -51,7 +51,7 @@ class RepoPlayersToScrapeConsumer(ConsumerInterface):
             tp = TopicPartition(topic, partition)
 
             # Get the last offset committed by the consumer
-            committed = await self.consumer.committed(tp)
+            committed = await self.consumer.committed(tp) or 0
 
             # Get the latest offset in the topic
             end_offset = await self.consumer.end_offsets([tp])
