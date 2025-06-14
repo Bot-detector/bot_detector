@@ -19,7 +19,7 @@ class HighscoreDataLatestInterface(ABC):
     @abstractmethod
     async def select_highscore_list(
         self, async_session: AsyncSession, player_id: int, label_id: int, limit: int
-    ) -> HighscoreDataLatestStruct:
+    ) -> list[HighscoreDataLatestStruct]:
         raise NotImplementedError()
 
     @abstractmethod
