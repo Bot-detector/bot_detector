@@ -11,6 +11,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 class HighscoreDataLatestInterface(ABC):
     @abstractmethod
+    async def select_highscore(
+        self, async_session: AsyncSession, player_id: int, label_id: int
+    ) -> HighscoreDataLatestStruct:
+        raise NotImplementedError()
+
+    @abstractmethod
+    async def select_highscore_list(
+        self, async_session: AsyncSession, player_id: int, label_id: int, limit: int
+    ) -> HighscoreDataLatestStruct:
+        raise NotImplementedError()
+
+    @abstractmethod
     async def insert_highscore(
         self,
         async_session: AsyncSession,
