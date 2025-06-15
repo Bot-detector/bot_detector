@@ -13,8 +13,8 @@ from bot_detector.database.structs import (
     HighscoreDataMonthlyTableStruct,
     HighscoreDataWeeklyTableStruct,
 )
-from bot_detector.structs import HighscoreBaseStruct
-from sqlalchemy import func
+from bot_detector.structs import HighscoreBaseStruct, HighscoreDataLatestStruct
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -53,6 +53,31 @@ class HighscoreDataLatestRepo(HighscoreDataLatestInterface):
         )
         sql = sql.prefix_with("IGNORE")
         await async_session.execute(sql)
+
+    async def select_highscore(
+        self, async_session: AsyncSession, player_id: int, label_id: int
+    ) -> HighscoreDataLatestStruct:
+        stmt = select(HighscoreDataLatestTableStruct).where(
+            HighscoreDataLatestTableStruct.player_id == player_id
+        )
+        result = await async_session.execute(stmt)
+        row = result.scalar_one_or_none()
+        if row is None:
+            return None  # or raise NotFoundError
+        return HighscoreDataLatestStruct.model_validate(row)
+
+    async def select_highscore_list(
+        self, async_session: AsyncSession, player_id: int, label_id: int, limit: int
+    ) -> list[HighscoreDataLatestStruct]:
+        stmt = (
+            select(HighscoreDataLatestTableStruct)
+            .where(HighscoreDataLatestTableStruct.player_id == player_id)
+            .order_by(HighscoreDataLatestTableStruct.scrape_date.desc())
+            .limit(limit)
+        )
+        result = await async_session.execute(stmt)
+        rows = result.scalars().all()
+        return [HighscoreDataLatestStruct.model_validate(row) for row in rows]
 
 
 class HighscoreDataDailyRepo(HighscoreDataDailyInterface):

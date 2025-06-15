@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 
 from pydantic import BaseModel
@@ -19,7 +19,8 @@ class HighscoreDataBaseStruct(HighscoreBaseStruct):
 
 
 class HighscoreDataLatestStruct(HighscoreDataBaseStruct):
-    pass
+    player_name: Optional[str] = None
+    created_at: Optional[datetime] = None
 
 
 class HighscoreDataDailyStruct(HighscoreDataBaseStruct):
