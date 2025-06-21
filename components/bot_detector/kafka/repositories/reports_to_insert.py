@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class RepoReportsToInsertConsumer(ConsumerInterface):
-    def __init__(self, group_id: str, bootstrap_servers: list[str]):
+    def __init__(self, group_id: str, bootstrap_servers: str):
         self.topic = "reports.to_insert"
         self.consumer = AIOKafkaConsumer(
             self.topic,
@@ -34,7 +34,16 @@ class RepoReportsToInsertConsumer(ConsumerInterface):
 
     async def consume_one(self) -> ReportsToInsertStruct:
         msg = await self.consumer.getone()
-        report = ReportsToInsertStruct(**msg.value)
+        value = msg.value
+        if not isinstance(value, dict):
+            raise ValueError("Message value is not a dict")
+        if "metadata" not in value or "report" not in value:
+            raise ValueError(
+                "Missing required fields 'metadata' or 'report' in message value"
+            )
+        report = ReportsToInsertStruct(
+            metadata=value["metadata"], report=value["report"]
+        )
         return report
 
     async def get_lag(self) -> int:
@@ -66,7 +75,7 @@ class RepoReportsToInsertConsumer(ConsumerInterface):
 
 
 class RepoReportsToInsertProducer(ProducerInterface):
-    def __init__(self, bootstrap_servers: list[str]):
+    def __init__(self, bootstrap_servers: str):
         self.producer = AIOKafkaProducer(
             bootstrap_servers=bootstrap_servers,
             value_serializer=lambda v: orjson.dumps(v),
