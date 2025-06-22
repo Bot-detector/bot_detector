@@ -102,19 +102,20 @@ async def batch_task(
     """
     batch, _time = [], time.time()
     while True:
-        report = await get_report_queue(queue=report_queue)
+        if not report_queue.empty():
+            report = await get_report_queue(queue=report_queue)
+            if report:
+                logger.debug(
+                    {
+                        "msg": "adding to batch",
+                        "reporter_id": report.report.reporter_id,
+                        "reported_id": report.report.reported_id,
+                    }
+                )
+                batch = add_to_batch(batch=batch, report=report)
+        else:
+            await asyncio.sleep(1)
 
-        if report is None:
-            continue
-
-        logger.debug(
-            {
-                "msg": "adding to batch",
-                "reporter_id": report.report.reporter_id,
-                "reported_id": report.report.reported_id,
-            }
-        )
-        batch = add_to_batch(batch=batch, report=report)
         batch, _time = await update_batch_queue(
             batch=batch,
             batch_queue=batch_queue,
