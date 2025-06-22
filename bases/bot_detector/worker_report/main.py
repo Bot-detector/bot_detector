@@ -32,6 +32,17 @@ async def add_to_report_queue(report: ReportsToInsertStruct, queue: Queue):
     await queue.put(item=report)
 
 
+async def get_report_queue(queue: Queue) -> ReportsToInsertStruct | None:
+    report = await queue.get()
+    queue.task_done()
+    if not isinstance(report, ReportsToInsertStruct):
+        logger.warning(
+            f"invalid report, expected class: ReportsToInsertStruct, received: {report.__class__}"
+        )
+        return
+    return report
+
+
 async def add_to_error_queue(report: ReportsToInsertStruct, queue: Queue):
     if not isinstance(report, ReportsToInsertStruct):
         logger.warning(
@@ -91,9 +102,18 @@ async def batch_task(
     """
     batch, _time = [], time.time()
     while True:
-        report = await report_queue.get()
-        report_queue.task_done()
+        report = await get_report_queue(queue=report_queue)
 
+        if report is None:
+            continue
+
+        logger.debug(
+            {
+                "msg": "adding to batch",
+                "reporter_id": report.report.reporter_id,
+                "reported_id": report.report.reported_id,
+            }
+        )
         batch = add_to_batch(batch=batch, report=report)
         batch, _time = await update_batch_queue(
             batch=batch,
@@ -185,6 +205,14 @@ async def consume_task(
         # read message from kafka queue
         try:
             report = await report_consumer.consume_one()
+
+            logger.debug(
+                {
+                    "msg": "consumed_report",
+                    "reporter_id": report.report.reporter_id,
+                    "reported_id": report.report.reported_id,
+                }
+            )
         except ValidationError as e:
             error = e.json()
             logger.error(error)
@@ -225,10 +253,17 @@ async def main():
         bootstrap_servers=b_server,
         group_id="report_worker",
     )
+
     ## producer
     report_producer = RepoReportsToInsertProducer(
         bootstrap_servers=b_server,
     )
+
+    # start kafka producers and consumers
+    await report_consumer.start()
+    await report_producer.start()
+
+    # start tasks
     tasks = [
         asyncio.create_task(
             consume_task(report_consumer=report_consumer, report_queue=report_queue)
