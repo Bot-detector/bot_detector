@@ -26,27 +26,64 @@ class InvalidReport(Exception): ...
 async def add_to_report_queue(report: ReportsToInsertStruct, queue: Queue):
     if not isinstance(report, ReportsToInsertStruct):
         logger.warning(
-            f"invalid report, expected class: ReportsToInsertStruct, received: {report.__class__}"
+            {
+                "msg": "invalid report",
+                "expected": "ReportsToInsertStruct",
+                "received": report.__class__,
+            }
         )
         return
     await queue.put(item=report)
 
 
 async def get_report_queue(queue: Queue) -> ReportsToInsertStruct | None:
+    if queue.empty():
+        await asyncio.sleep(1)
+        return
+
     report = await queue.get()
     queue.task_done()
+
     if not isinstance(report, ReportsToInsertStruct):
         logger.warning(
-            f"invalid report, expected class: ReportsToInsertStruct, received: {report.__class__}"
+            {
+                "msg": "invalid report",
+                "expected": "ReportsToInsertStruct",
+                "received": report.__class__,
+            }
         )
         return
     return report
 
 
+async def get_batch_queue(queue: Queue) -> list[ReportsToInsertStruct]:
+    batch = await queue.get()
+    queue.task_done()
+
+    valid_items = []
+    for item in batch:
+        if isinstance(item, ReportsToInsertStruct):
+            valid_items.append(item)
+        else:
+            logger.warning(
+                {
+                    "msg": "invalid report",
+                    "expected": "ReportsToInsertStruct",
+                    "received": item.__class__,
+                }
+            )
+
+    return valid_items
+
+
 async def add_to_error_queue(report: ReportsToInsertStruct, queue: Queue):
     if not isinstance(report, ReportsToInsertStruct):
         logger.warning(
-            f"invalid report, expected class: ReportsToInsertStruct, received: {report.__class__}"
+            {
+                "msg": "invalid report",
+                "expected": "ReportsToInsertStruct",
+                "received": report.__class__,
+            }
         )
         return
     await queue.put(item=report)
@@ -57,11 +94,15 @@ def add_to_batch(
 ) -> list[ReportsToInsertStruct]:
     if not isinstance(report, ReportsToInsertStruct):
         logger.warning(
-            f"invalid report, expected class: ReportsToInsertStruct, received: {report.__class__}"
+            {
+                "msg": "invalid report",
+                "expected": "ReportsToInsertStruct",
+                "received": report.__class__,
+            }
         )
         return batch
 
-    batch.append(report.report)
+    batch.append(report)
     return batch
 
 
@@ -72,10 +113,11 @@ async def update_batch_queue(
     batch_queue: Queue,
     max_batch_size: int,
 ) -> tuple[list, float]:
-    delta = _time - time.time()
+    delta = time.time() - _time
     if len(batch) == max_batch_size or delta > max_interval:
         await batch_queue.put(batch)
         return [], time.time()
+    logger.debug(f"{len(batch)=}, {max_batch_size=}, {delta=}, {max_interval=}")
     return batch, _time
 
 
@@ -102,19 +144,16 @@ async def batch_task(
     """
     batch, _time = [], time.time()
     while True:
-        if not report_queue.empty():
-            report = await get_report_queue(queue=report_queue)
-            if report:
-                logger.debug(
-                    {
-                        "msg": "adding to batch",
-                        "reporter_id": report.report.reporter_id,
-                        "reported_id": report.report.reported_id,
-                    }
-                )
-                batch = add_to_batch(batch=batch, report=report)
-        else:
-            await asyncio.sleep(1)
+        report = await get_report_queue(queue=report_queue)
+        if report:
+            logger.debug(
+                {
+                    "msg": "adding to batch",
+                    "reporter_id": report.report.reporter_id,
+                    "reported_id": report.report.reported_id,
+                }
+            )
+            batch = add_to_batch(batch=batch, report=report)
 
         batch, _time = await update_batch_queue(
             batch=batch,
@@ -161,14 +200,14 @@ async def insert_task(
     """
 
     while True:
-        batch: list[ReportsToInsertStruct] = await batch_queue.get()
-        batch_queue.task_done()
-
+        batch = await get_batch_queue(queue=batch_queue)
+        if len(batch) == 0:
+            continue
         try:
-            _batch = [r.report for r in batch]
+            batch_pared_detection = [r.report for r in batch]
             await insert_batch(
                 report_repo=report_repo,
-                batch=_batch,
+                batch=batch_pared_detection,
                 session_factory=session_factory,
             )
         except OperationalError as e:

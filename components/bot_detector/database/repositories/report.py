@@ -1,4 +1,6 @@
 import logging
+import time
+from datetime import datetime
 
 import sqlalchemy as sqla
 from bot_detector.database.interfaces import ReportInterface
@@ -16,12 +18,29 @@ class ReportRepo(ReportInterface):
         for report in reports:
             if not isinstance(report, ParsedDetection):
                 logger.warning(
-                    f"invalid report, expected class: ParsedDetection, received: {report.__class__}"
+                    {
+                        "msg": "invalid report",
+                        "expected": "ParsedDetection",
+                        "received": report.__class__,
+                    }
                 )
                 continue
+            # convert model to dict
             report_dict = report.model_dump()
-            equipment = report_dict.pop("equipment", {})
+            # flatten nested equiment
+            equipment: dict = report_dict.pop("equipment", {})
+            ## correct for item bug
+            equipment = {k: 0 if v > 32767 else v for k, v in equipment.items()}
             report_dict.update(equipment)
+
+            # epoch timestamp to datetime value
+            ts = report_dict.pop("ts")
+            ## assume ts is in ms if its very large and convert to seconds
+            ts = ts / 1000 if ts > 10**10 else ts
+            human_time = datetime.fromtimestamp(ts)
+            report_dict["timestamp"] = human_time
+
+            # add to reports
             _reports.append(report_dict)
         return _reports
 
