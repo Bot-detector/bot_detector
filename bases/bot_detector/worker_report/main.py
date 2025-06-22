@@ -259,5 +259,13 @@ async def main():
     await asyncio.gather(*tasks)
 
 
+async def run_async():
+    await main()
+
+
+def run():
+    asyncio.run(run_async())
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    run()
