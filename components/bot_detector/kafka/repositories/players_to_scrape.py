@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class RepoPlayersToScrapeConsumer(ConsumerInterface):
-    def __init__(self, group_id: str, bootstrap_servers: list[str]):
+    def __init__(self, group_id: str, bootstrap_servers: str):
         self.consumer = AIOKafkaConsumer(
             "players.to_scrape",
             group_id=group_id,
@@ -31,10 +31,61 @@ class RepoPlayersToScrapeConsumer(ConsumerInterface):
     async def get_consumer(self):
         return self.consumer
 
+    def _validate_value(self, value) -> tuple[dict | None, str | None]:
+        if not isinstance(value, dict):
+            return None, "Message value is not a dict"
+        if "metadata" not in value:
+            return None, "Missing required field 'metadata' in message value"
+        if "player_data" not in value:
+            return None, "Missing required field 'player_data' in message value"
+        return value, None
+
     async def consume_one(self) -> ToScrapeStruct:
         msg = await self.consumer.getone()
-        player = ToScrapeStruct(**msg.value)
+        value, error = self._validate_value(value=msg.value)
+
+        if error:
+            raise ValueError(f"Invalid message value: {error}")
+
+        if not value:
+            raise ValueError("Message value is None")
+
+        player = ToScrapeStruct(
+            metadata=value["metadata"],
+            player_data=value["player_data"],
+        )
         return player
+
+    async def consume_many(
+        self, max_messages: int = 1_000, timeout_ms: int = 1000
+    ) -> tuple[list[ToScrapeStruct], list[str]]:
+        messages = await self.consumer.getmany(
+            timeout_ms=timeout_ms,
+            max_records=max_messages,
+        )
+
+        msg_values = [msg.value for tp, msgs in messages.items() for msg in msgs]
+
+        players, errors = [], []
+
+        for value in msg_values:
+            value, error = self._validate_value(value)
+
+            if error:
+                errors.append(error)
+                continue
+
+            if not value:
+                errors.append("Message value is None")
+                continue
+
+            player = ToScrapeStruct(
+                metadata=value["metadata"],
+                player_data=value["player_data"],
+            )
+            players.append(player)
+
+        return players, errors
 
     async def get_lag(self) -> int:
         total_lag = 0
@@ -66,7 +117,7 @@ class RepoPlayersToScrapeConsumer(ConsumerInterface):
 
 
 class RepoPlayersToScrapeProducer(ProducerInterface):
-    def __init__(self, bootstrap_servers: list[str]):
+    def __init__(self, bootstrap_servers: str):
         self.producer = AIOKafkaProducer(
             bootstrap_servers=bootstrap_servers,
             value_serializer=lambda v: orjson.dumps(v),

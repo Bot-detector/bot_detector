@@ -103,10 +103,8 @@ class Report:
         # Transform data to ReportsToInsertStruct
         reports, error = self._transform_detection(data)
 
-        for report in reports:
-            task = producer.produce_one(report=report)
-            tasks.append(task)
-            await asyncio.gather(*tasks)
+        tasks = [producer.produce_one(report=report) for report in reports]
+        await asyncio.gather(*tasks)
 
         if len(error) > 0:
             error_msg = f"Received {len(error)} validation errors like this: {error[0]}"
