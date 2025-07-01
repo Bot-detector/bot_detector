@@ -93,7 +93,6 @@ class RepoReportsToInsertConsumer(ConsumerInterface):
                 report=value["report"],
             )
             reports.append(report)
-        await self.consumer.commit()
         return reports, errors
 
     async def get_lag(self) -> int:
@@ -122,6 +121,9 @@ class RepoReportsToInsertConsumer(ConsumerInterface):
             total_lag += lag
 
         return total_lag
+
+    async def commit(self):
+        await self.consumer.commit()
 
 
 class RepoReportsToInsertProducer(ProducerInterface):
