@@ -23,6 +23,10 @@ class ConsumerInterface(ABC):
         pass
 
     @abstractmethod
+    async def consume_many(self):
+        pass
+
+    @abstractmethod
     async def get_lag(self) -> int:
         pass
 

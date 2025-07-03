@@ -9,7 +9,7 @@ from .hiscore import (
 )
 from .kafka import NotFoundStruct, ReportsToInsertStruct, ScrapedStruct, ToScrapeStruct
 from .player import PlayerStruct
-from .reports import Detection, ParsedDetection
+from .reports import Detection, Equipment, ParsedDetection
 
 __all__ = [
     "MetaData",
@@ -26,4 +26,5 @@ __all__ = [
     "ReportsToInsertStruct",
     "Detection",
     "ParsedDetection",
+    "Equipment",
 ]

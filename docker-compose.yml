@@ -142,6 +142,23 @@ services:
         condition: service_completed_successfully
       mysql_setup:
         condition: service_completed_successfully
+  worker_report:
+    container_name: worker_report
+    image: bd/worker_report # tags the image if build
+    build:
+      context: ./
+      dockerfile: ./projects/worker_report/Dockerfile
+      target: production
+    # command: ["sleep", "infinity"]
+    networks:
+      - botdetector-network
+    env_file:
+      - .env
+    depends_on:
+      kafka_setup:
+        condition: service_completed_successfully
+      mysql_setup:
+        condition: service_completed_successfully
   scrape_task_producer:
     container_name: scrape_task_producer
     image: bd/scrape_task_producer # tags the image if build

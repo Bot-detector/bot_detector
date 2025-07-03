@@ -5,6 +5,7 @@ from .hiscore import (
     HighscoreDataWeeklyInterface,
 )
 from .player import playerInterface
+from .report import ReportInterface
 
 __all__ = [
     "playerInterface",
@@ -12,4 +13,5 @@ __all__ = [
     "HighscoreDataDailyInterface",
     "HighscoreDataWeeklyInterface",
     "HighscoreDataMonthlyInterface",
+    "ReportInterface",
 ]
