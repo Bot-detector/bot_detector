@@ -23,31 +23,49 @@ env:
   QUAY_REGISTERY: quay.io/bot_detector/report-worker
   DOCKERFILE: ./projects/worker_report/Dockerfile
   DEPLOYMENT_FILE: worker_report/deployment.yaml
+  PROJECT_DIR: projects/worker_report
 
 jobs:
+  # messy AF
+  env_vars:
+    runs-on: [self-hosted, "hetzner"]
+    outputs:
+      QUAY_REGISTERY: ${{ env.QUAY_REGISTERY }}
+      DOCKERFILE: ${{ env.DOCKERFILE }}
+      DEPLOYMENT_FILE: ${{ env.DEPLOYMENT_FILE }}
+      PROJECT_DIR: ${{ env.PROJECT_DIR }}
+    steps:
+      - run: | 
+          echo "Exposing env vars to other jobs"
+          echo "QUAY_REGISTERY=${{ env.QUAY_REGISTERY }}"
+          echo "DOCKERFILE=${{ env.DOCKERFILE }}"
+          echo "DEPLOYMENT_FILE=${{ env.DEPLOYMENT_FILE }}"
+          echo "PROJECT_DIR=${{ env.PROJECT_DIR }}"
+
   common:
     uses: ./.github/workflows/_common.yml
+    needs: [env_vars]
     with:
-      project_dir: projects/worker_report
+      project_dir: ${{ needs.vars.outputs.PROJECT_DIR }}
 
   build:
     if: github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/_build.yml
-    needs: common
+    needs: [common, env_vars]
     with:
-      registry: ${{ env.QUAY_REGISTERY }}
+      registry: ${{ needs.vars.outputs.QUAY_REGISTERY }}
       environment: ${{ (github.event.inputs.environment == 'deploy to prd' && 'prd') }}
       BUILD_ARGS: "--target=production"
-      DOCKERFILE: ${{ env.DOCKERFILE }}
+      DOCKERFILE: ${{ needs.vars.outputs.DOCKERFILE }}
     secrets:
       QUAY_REGISTERY_PASSWORD: ${{ secrets.QUAY_REGISTERY_PASSWORD }}
 
   deploy:
     if: github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/_deploy.yml
-    needs: build
+    needs: [build, env_vars]
     with:
-      registry: ${{ env.QUAY_REGISTERY }}
-      value_file: ${{ env.DEPLOYMENT_FILE }}
+      registry: ${{ needs.vars.outputs.QUAY_REGISTERY }}
+      value_file: ${{ needs.vars.outputs.DEPLOYMENT_FILE }}
     secrets:
       HETZNER_ACTIONS_RUNNER_TOKEN: ${{ secrets.HETZNER_ACTIONS_RUNNER_TOKEN }}
