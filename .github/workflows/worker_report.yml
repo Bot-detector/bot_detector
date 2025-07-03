@@ -46,17 +46,17 @@ jobs:
     uses: ./.github/workflows/_common.yml
     needs: [env_vars]
     with:
-      project_dir: ${{ needs.vars.outputs.PROJECT_DIR }}
+      project_dir: ${{ needs.env_vars.outputs.PROJECT_DIR }}
 
   build:
     if: github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/_build.yml
     needs: [common, env_vars]
     with:
-      registry: ${{ needs.vars.outputs.QUAY_REGISTERY }}
+      registry: ${{ needs.env_vars.outputs.QUAY_REGISTERY }}
       environment: ${{ (github.event.inputs.environment == 'deploy to prd' && 'prd') }}
       BUILD_ARGS: "--target=production"
-      DOCKERFILE: ${{ needs.vars.outputs.DOCKERFILE }}
+      DOCKERFILE: ${{ needs.env_vars.outputs.DOCKERFILE }}
     secrets:
       QUAY_REGISTERY_PASSWORD: ${{ secrets.QUAY_REGISTERY_PASSWORD }}
 
@@ -65,7 +65,7 @@ jobs:
     uses: ./.github/workflows/_deploy.yml
     needs: [build, env_vars]
     with:
-      registry: ${{ needs.vars.outputs.QUAY_REGISTERY }}
-      value_file: ${{ needs.vars.outputs.DEPLOYMENT_FILE }}
+      registry: ${{ needs.env_vars.outputs.QUAY_REGISTERY }}
+      value_file: ${{ needs.env_vars.outputs.DEPLOYMENT_FILE }}
     secrets:
       HETZNER_ACTIONS_RUNNER_TOKEN: ${{ secrets.HETZNER_ACTIONS_RUNNER_TOKEN }}
