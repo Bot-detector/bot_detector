@@ -1,0 +1,53 @@
+name: worker_report
+
+on:
+  push:
+    paths:
+      - bases/bot_detector/worker_report/**
+      - components/bot_detector/database/**
+      - components/bot_detector/kafka/**
+      - components/bot_detector/structs/**
+      - components/bot_detector/logfmt/**
+      - projects/worker_report/**
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deploy environment"
+        required: true
+        default: "test"
+        type: choice
+        options:
+          - test
+          - deploy to prd
+env:
+  QUAY_REGISTERY: quay.io/bot_detector/report-worker
+  DOCKERFILE: ./projects/worker_report/Dockerfile
+  DEPLOYMENT_FILE: worker_report/deployment.yaml
+
+jobs:
+  common:
+    uses: ./.github/workflows/_common.yml
+    with:
+      project_dir: projects/worker_report
+
+  build:
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/_build.yml
+    needs: common
+    with:
+      registry: ${{ env.QUAY_REGISTERY }}
+      environment: ${{ (github.event.inputs.environment == 'deploy to prd' && 'prd') }}
+      BUILD_ARGS: "--target=production"
+      DOCKERFILE: ${{ env.DOCKERFILE }}
+    secrets:
+      QUAY_REGISTERY_PASSWORD: ${{ secrets.QUAY_REGISTERY_PASSWORD }}
+
+  deploy:
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/_deploy.yml
+    needs: build
+    with:
+      registry: ${{ env.QUAY_REGISTERY }}
+      value_file: ${{ env.DEPLOYMENT_FILE }}
+    secrets:
+      HETZNER_ACTIONS_RUNNER_TOKEN: ${{ secrets.HETZNER_ACTIONS_RUNNER_TOKEN }}
