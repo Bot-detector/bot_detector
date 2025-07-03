@@ -27,7 +27,7 @@ jobs:
       project_dir: projects/hiscore_scraper
 
   build:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' and github.event.inputs.environment == 'deploy to prd'
     uses: ./.github/workflows/_build.yml
     needs: common
     with:
@@ -39,7 +39,7 @@ jobs:
       QUAY_REGISTERY_PASSWORD: ${{ secrets.QUAY_REGISTERY_PASSWORD }}
 
   deploy:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' and github.event.inputs.environment == 'deploy to prd'
     uses: ./.github/workflows/_deploy.yml
     needs: build
     with:
