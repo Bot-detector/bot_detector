@@ -12,6 +12,7 @@ from bot_detector.kafka.repositories import (
     RepoReportsToInsertProducer,
 )
 from bot_detector.structs import ParsedDetection, ReportsToInsertStruct
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 logger = logging.getLogger(__name__)
@@ -34,13 +35,33 @@ async def insert_batch(
     report_repo: ReportRepo,
     batch: list[ParsedDetection],
     session_factory: async_sessionmaker[AsyncSession],
-):
+) -> tuple[None, str | None]:
     logger.debug(f"batch inserting: {len(batch)}")
-    async with session_factory() as session:
-        async with session.begin():
-            await report_repo.insert(async_session=session, reports=batch)
-            await session.commit()
+    try:
+        async with session_factory() as session:
+            async with session.begin():
+                await report_repo.insert(async_session=session, reports=batch)
+                await session.commit()
+    except OperationalError as e:
+        return None, str(e)
     logger.debug(f"inserted: {len(batch)}")
+    return None, None
+
+
+async def parse_detections(
+    reports: list[ReportsToInsertStruct],
+) -> list[ParsedDetection]:
+    parsed_detections = []
+    for report in reports:
+        if not isinstance(report, ReportsToInsertStruct):
+            logger.warning(f"Invalid report type: {report.__class__}")
+            continue
+        # this allows us to handle different versions of the report
+        if report.metadata.version == 1:
+            parsed_detections.append(report.report)
+        else:
+            logger.warning(f"Unsupported report version: {report.metadata.version}")
+    return parsed_detections
 
 
 async def consume_many_task(
@@ -49,6 +70,7 @@ async def consume_many_task(
     max_interval_ms: int,
     session_factory: async_sessionmaker[AsyncSession],
     report_repo: ReportRepo,
+    error_queue: Queue,
 ):
     while True:
         try:
@@ -61,12 +83,7 @@ async def consume_many_task(
             if errors:
                 logger.error(f"Errors during consumption: {errors}")
 
-            reports_v1 = [report for report in reports if report.metadata.version == 1]
-
-            parsed_detections = []
-
-            if reports_v1:
-                parsed_detections.extend(r.report for r in reports_v1)
+            parsed_detections = await parse_detections(reports)
 
             if not parsed_detections:
                 logger.info("No valid reports to process.")
@@ -75,11 +92,16 @@ async def consume_many_task(
 
             logger.debug(f"Parsed {len(parsed_detections)} valid reports.")
 
-            await insert_batch(
+            _, error = await insert_batch(
                 report_repo=report_repo,
                 batch=parsed_detections,
                 session_factory=session_factory,
             )
+            if error:
+                await asyncio.gather(
+                    *[add_to_error_queue(report=r, queue=error_queue) for r in reports]
+                )
+                await asyncio.sleep(15)
             await report_consumer.commit()
         except Exception as e:
             logger.error(f"Error consuming reports: {e}")
@@ -130,6 +152,7 @@ async def main():
                 max_messages=MAX_BATCH_SIZE,
                 max_interval_ms=MAX_INTERVAL_MS,
                 session_factory=session_factory,
+                error_queue=error_queue,
             )
         ),
         asyncio.create_task(
