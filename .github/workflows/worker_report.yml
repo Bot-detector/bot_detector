@@ -49,7 +49,7 @@ jobs:
       project_dir: ${{ needs.env_vars.outputs.PROJECT_DIR }}
 
   build:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' and github.event.inputs.environment == 'deploy to prd'
     uses: ./.github/workflows/_build.yml
     needs: [common, env_vars]
     with:
