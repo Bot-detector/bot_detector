@@ -116,6 +116,9 @@ class RepoPlayerScrapedConsumer(ConsumerInterface):
 
         return total_lag
 
+    async def commit(self):
+        await self.consumer.commit()
+
 
 class RepoPlayerScrapedProducer(ProducerInterface):
     def __init__(self, bootstrap_servers: str):

@@ -19,6 +19,15 @@ class HighscoreDataLatestInterface(ABC):
         """Insert a new highscore record into the database."""
         raise NotImplementedError()
 
+    @abstractmethod
+    async def insert_highscore_many(
+        self,
+        async_session: AsyncSession,
+        highscore_data: list[HighscoreDataLatestStruct],
+    ) -> None:
+        """Insert multiple highscore records into the database."""
+        raise NotImplementedError()
+
 
 class HighscoreDataDailyInterface(ABC):
     @abstractmethod

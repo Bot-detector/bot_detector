@@ -5,6 +5,7 @@ import sqlalchemy as sqla
 from bot_detector.database.interfaces import playerInterface
 from bot_detector.database.structs import PlayersTableStruct
 from bot_detector.structs import PlayerStruct
+from sqlalchemy import TextClause
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -68,6 +69,79 @@ class PlayerRepo(playerInterface):
         players_struct = [PlayerStruct(**player_dict) for player_dict in players_dict]
         return players_struct
 
+    def _create_temp_player(self) -> TextClause:
+        """Create a temporary player table for the latest data."""
+        return sqla.text(
+            """
+            CREATE TEMPORARY TABLE temp_player_data (
+                id BIGINT NOT NULL,
+                name VARCHAR(255) NOT NULL,
+                updated_at TIMESTAMP DEFAULT NULL,
+                possible_ban BOOLEAN NOT NULL DEFAULT '0',
+                confirmed_ban BOOLEAN NOT NULL DEFAULT '0',
+                confirmed_player BOOLEAN NOT NULL DEFAULT '0',
+                label_id INTEGER NOT NULL DEFAULT '0',
+                label_jagex INTEGER NOT NULL DEFAULT '0'
+            ) ENGINE=MEMORY;
+            """
+        )
+
+    def _insert_temp_player(self) -> TextClause:
+        """Insert data into the temporary player table."""
+        return sqla.text(
+            """
+            INSERT INTO temp_player_data (id, name, updated_at)
+            VALUES (:id, :name, :updated_at);
+            """
+        )
+
+    def _update_player(self) -> TextClause:
+        """Update the player data in the main table from the temporary table."""
+
+        return sqla.text(
+            """
+            UPDATE Players AS p
+            JOIN temp_player_data AS t ON p.id = t.id
+            SET 
+                p.updated_at = t.updated_at,
+                p.possible_ban = t.possible_ban,
+                p.confirmed_ban = t.confirmed_ban,
+                p.confirmed_player = t.confirmed_player,
+                p.label_id = t.label_id,
+                p.label_jagex = t.label_jagex
+            WHERE 1=1
+                AND (p.updated_at < t.updated_at OR p.updated_at IS NULL);
+            """
+        )
+
+    async def update_many_players(
+        self,
+        async_session: AsyncSession,
+        players_data: list[PlayerStruct],
+    ) -> None:
+        """Update multiple players in the database."""
+        if not players_data:
+            return
+
+        _data = [p.model_dump() for p in players_data]
+
+        drop_temp_table = sqla.text("DROP TEMPORARY TABLE IF EXISTS temp_player_data;")
+        # Drop temporary table if it exists
+        await async_session.execute(drop_temp_table)
+
+        # Create temporary table
+        await async_session.execute(self._create_temp_player())
+
+        # Insert data into temporary table
+        await async_session.execute(self._insert_temp_player(), _data)
+
+        # Update main table from temporary table
+        await async_session.execute(self._update_player())
+
+        # Drop temporary table if it exists
+        await async_session.execute(drop_temp_table)
+        return
+
     async def update_player(
         self,
         async_session: AsyncSession,
@@ -89,35 +163,3 @@ class PlayerRepo(playerInterface):
     def delete_player(self, player_id: int):
         """Delete a player from the database by player_id."""
         raise NotImplementedError("delete_player method not implemented")
-
-
-if __name__ == "__main__":
-    import asyncio
-    from dataclasses import asdict
-    from datetime import datetime
-
-    from bot_detector.database import Settings as DBSettings
-    from bot_detector.database import get_session_factory
-
-    player_repo = PlayerRepo()
-    async_session, async_engine = get_session_factory(SETTINGS=DBSettings())
-
-    async def main():
-        async with async_session() as session:
-            async with session.begin():
-                players = await player_repo.select_player(
-                    async_session=session,
-                    confirmed_ban=0,
-                    player_id=1,
-                    limit=5,
-                )
-                for player in players:
-                    print(asdict(player))
-                    print("=" * 50)
-                    player.updated_at = datetime.now()
-                    await player_repo.update_player(
-                        async_session=session, player_data=player
-                    )
-                await session.commit()
-
-    asyncio.run(main())

@@ -46,6 +46,7 @@ CREATE TABLE Players (
 --   PRIMARY KEY (player_id, updated_at) 
 -- ) PARTITION BY HASH (player_id) PARTITIONS 10;
 -- Foreign keys are not yet supported in conjunction with partitioning
+
 CREATE TABLE highscore_data_latest (
   player_id INT UNSIGNED NOT NULL,
   scrape_date DATE NOT NULL,
@@ -56,6 +57,7 @@ CREATE TABLE highscore_data_latest (
   activities JSON DEFAULT NULL,
   PRIMARY KEY (player_id)
 ) PARTITION BY HASH (player_id) PARTITIONS 10;
+
 CREATE TABLE highscore_data_daily (
   player_id INT UNSIGNED NOT NULL,
   scrape_date DATE NOT NULL,
@@ -67,6 +69,7 @@ CREATE TABLE highscore_data_daily (
   activities JSON DEFAULT NULL,
   PRIMARY KEY (player_id, scrape_date)
 ) PARTITION BY HASH (player_id) PARTITIONS 10;
+
 CREATE TABLE highscore_data_weekly (
   player_id INT UNSIGNED NOT NULL,
   scrape_date DATE NOT NULL,
@@ -78,6 +81,7 @@ CREATE TABLE highscore_data_weekly (
   activities JSON DEFAULT NULL,
   PRIMARY KEY (player_id, scrape_year, scrape_week)
 ) PARTITION BY HASH (player_id) PARTITIONS 10;
+
 CREATE TABLE highscore_data_monthly (
   player_id INT UNSIGNED NOT NULL,
   scrape_date DATE NOT NULL,
@@ -89,6 +93,7 @@ CREATE TABLE highscore_data_monthly (
   activities JSON DEFAULT NULL,
   PRIMARY KEY (player_id, scrape_year, scrape_month)
 ) PARTITION BY HASH (player_id) PARTITIONS 10;
+
 CREATE TABLE Predictions (
   id INT PRIMARY KEY AUTO_INCREMENT,
   name VARCHAR(12),

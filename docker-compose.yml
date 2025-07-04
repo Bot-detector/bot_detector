@@ -140,8 +140,8 @@ services:
     depends_on:
       kafka_setup:
         condition: service_completed_successfully
-      mysql_setup:
-        condition: service_completed_successfully
+      # mysql_setup:
+      #   condition: service_completed_successfully
   worker_report:
     container_name: worker_report
     image: bd/worker_report # tags the image if build
