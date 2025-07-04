@@ -2,6 +2,7 @@ from .hiscore import (
     HighscoreDataDailyRepo,
     HighscoreDataLatestRepo,
     HighscoreDataMonthlyRepo,
+    HighscoreDataRepo,
     HighscoreDataWeeklyRepo,
 )
 from .player import PlayerRepo
@@ -14,4 +15,5 @@ __all__ = [
     "HighscoreDataDailyRepo",
     "HighscoreDataWeeklyRepo",
     "HighscoreDataMonthlyRepo",
+    "HighscoreDataRepo",
 ]
