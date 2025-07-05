@@ -102,7 +102,7 @@ async def consume_many_task(
             await asyncio.sleep(15)
 
         # ideally we want batches to be as full as possible, this is more efficient on the database
-        if len(batch) < max_messages:
+        if len(batch) < 1000:
             await asyncio.sleep(60)
 
 
