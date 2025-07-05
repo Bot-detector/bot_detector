@@ -80,6 +80,9 @@ async def consume_many_task(
                 await asyncio.sleep(15)
                 continue
 
+            if len(batch) < max_messages:
+                await asyncio.sleep(15)
+
             _, error = await insert_batch(
                 highscore_repo=highscore_repo,
                 player_repo=player_repo,
