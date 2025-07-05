@@ -80,9 +80,6 @@ async def consume_many_task(
                 await asyncio.sleep(15)
                 continue
 
-            if len(batch) < max_messages:
-                await asyncio.sleep(15)
-
             _, error = await insert_batch(
                 highscore_repo=highscore_repo,
                 player_repo=player_repo,
@@ -103,6 +100,10 @@ async def consume_many_task(
             logger.debug(f"[{worker_id}] Traceback: \n{traceback.format_exc()}")
             await asyncio.gather(*[player_sc_producer.produce_one(b) for b in batch])
             await asyncio.sleep(15)
+
+        # ideally we want batches to be as full as possible, this is more efficient on the database
+        if len(batch) < max_messages:
+            await asyncio.sleep(60)
 
 
 async def main():
