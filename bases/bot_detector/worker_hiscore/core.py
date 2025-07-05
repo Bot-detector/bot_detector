@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 
 class Settings(BaseSettings):
     N_WORKERS: int = 1
-    MAX_BATCH_SIZE: int = 10_000  # TODO: env variable?
-    MAX_INTERVAL_MS: int = 1_000  # TODO: env variable?
+    MAX_BATCH_SIZE: int = 10_000
+    MAX_INTERVAL_MS: int = 5_000
 
 
 async def insert_batch(
@@ -70,7 +70,7 @@ async def consume_many_task(
                 max_messages=max_messages,
                 timeout_ms=max_interval_ms,
             )
-            logger.debug(f"[{worker_id}] consumed {len(batch)} scrapes")
+            logger.info(f"[{worker_id}] consumed {len(batch)} scrapes")
 
             if errors:
                 logger.error(f"[{worker_id}] Errors during consumption: {errors}")
