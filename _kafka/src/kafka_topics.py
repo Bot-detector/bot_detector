@@ -22,7 +22,7 @@ def create_topics(kafka_broker: str | list):
             ),
             # producer: hiscore_scraper
             # producer: runemetrics_scraper
-            # consumer: hiscore_worker
+            # consumer: worker_hiscore
             NewTopic(
                 name="players.scraped",
                 num_partitions=4,

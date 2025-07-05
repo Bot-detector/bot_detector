@@ -1,14 +1,14 @@
-name: hiscore_worker
+name: worker_hiscore
 
 on:
   push:
     paths:
-      - bases/bot_detector/hiscore_worker/**
+      - bases/bot_detector/worker_hiscore/**
       - components/bot_detector/database/**
       - components/bot_detector/kafka/**
       - components/bot_detector/structs/**
       - components/bot_detector/logfmt/**
-      - projects/hiscore_worker/**
+      - projects/worker_hiscore/**
   workflow_dispatch:
     inputs:
       environment:
@@ -24,7 +24,7 @@ jobs:
   common:
     uses: ./.github/workflows/_common.yml
     with:
-      project_dir: projects/hiscore_worker
+      project_dir: projects/worker_hiscore
 
   build:
     if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'deploy to prd' }}
@@ -34,7 +34,7 @@ jobs:
       registry: quay.io/bot_detector/highscore-worker
       environment: ${{ (github.event.inputs.environment == 'deploy to prd' && 'prd') }}
       BUILD_ARGS: "--target=production"
-      DOCKERFILE: ./projects/hiscore_worker/Dockerfile
+      DOCKERFILE: ./projects/worker_hiscore/Dockerfile
     secrets:
       QUAY_REGISTERY_PASSWORD: ${{ secrets.QUAY_REGISTERY_PASSWORD }}
 

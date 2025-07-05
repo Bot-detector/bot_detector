@@ -11,7 +11,7 @@ COPY ./bases ./bases
 COPY ./components ./components
 COPY ./projects ./projects
 
-WORKDIR /app/projects/hiscore_worker
+WORKDIR /app/projects/worker_hiscore
 
 # RUN uv build
 RUN uv sync --frozen --no-editable
@@ -21,10 +21,10 @@ FROM python:3.11-slim-bookworm AS production
 
 RUN adduser -u 5678 --disabled-password --gecos "" appuser
 
-WORKDIR /app/projects/hiscore_worker
+WORKDIR /app/projects/worker_hiscore
 
-COPY --from=builder --chown=appuser /app/projects/hiscore_worker/.venv /app/projects/hiscore_worker/.venv
+COPY --from=builder --chown=appuser /app/projects/worker_hiscore/.venv /app/projects/worker_hiscore/.venv
 
 USER appuser
 
-CMD [".venv/bin/hiscore_worker"]
+CMD [".venv/bin/worker_hiscore"]

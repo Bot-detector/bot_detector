@@ -1,4 +1,4 @@
-from bot_detector.hiscore_worker import core
+from bot_detector.worker_hiscore import core
 
 
 def test_sample():
