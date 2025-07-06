@@ -1,4 +1,5 @@
 import logging
+import time
 
 import orjson
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer, TopicPartition
@@ -58,15 +59,45 @@ class RepoPlayerScrapedConsumer(ConsumerInterface):
         )
         return scraped
 
-    async def consume_many(
-        self, max_messages: int = 1_000, timeout_ms: int = 1000
-    ) -> tuple[list[ScrapedStruct], list[str]]:
-        messages = await self.consumer.getmany(
-            timeout_ms=timeout_ms,
-            max_records=max_messages,
-        )
+    async def buffer_records(self, max_records: int, timeout_ms: int) -> list:
+        """
+        Collect up to `max_records` from Kafka within `timeout_ms`.
 
-        msg_values = [msg.value for tp, msgs in messages.items() for msg in msgs]
+        Unlike `getmany()`, which returns early when any data is available,
+        this method accumulates records in a loop to form a larger batch,
+        or until the timeout is reached.
+
+        Args:
+            max_records (int): Max number of records to collect.
+            timeout_ms (int): Max time to wait (in milliseconds).
+
+        Returns:
+            list: Buffered records (may be fewer than `max_records`).
+        """
+        buffer = []
+        start = time.time()
+
+        while len(buffer) < max_records:
+            time_left = timeout_ms / 1000 - (time.time() - start)
+
+            if time_left <= 0:
+                break
+
+            records = await self.consumer.getmany(
+                timeout_ms=int(time_left * 1000),
+                max_records=max_records - len(buffer),
+            )
+            buffer.extend([msg.value for msgs in records.values() for msg in msgs])
+
+        return buffer
+
+    async def consume_many(
+        self, max_messages: int, timeout_ms: int
+    ) -> tuple[list[ScrapedStruct], list[str]]:
+        msg_values = await self.buffer_records(
+            max_records=max_messages,
+            timeout_ms=timeout_ms,
+        )
 
         scraped_records, errors = [], []
 
@@ -80,11 +111,13 @@ class RepoPlayerScrapedConsumer(ConsumerInterface):
             if not value:
                 errors.append("Message value is None")
                 continue
+
             scraped = ScrapedStruct(
                 metadata=value["metadata"],
                 player_data=value["player_data"],
                 highscore_data=value["highscore_data"],
             )
+
             scraped_records.append(scraped)
         return scraped_records, errors
 
