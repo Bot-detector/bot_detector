@@ -90,8 +90,8 @@ class PlayerRepo(playerInterface):
         """Insert data into the temporary player table."""
         return sqla.text(
             """
-            INSERT INTO temp_player_data (id, name, updated_at)
-            VALUES (:id, :name, :updated_at);
+            INSERT INTO temp_player_data (id, name, updated_at, possible_ban, confirmed_ban, confirmed_player, label_id, label_jagex) 
+            VALUES (:id, :name, :updated_at, :possible_ban, :confirmed_ban, :confirmed_player, :label_id, :label_jagex);
             """
         )
 
