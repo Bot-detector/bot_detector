@@ -49,6 +49,7 @@ class Feedback:
                 await self.session.rollback()
                 return False, "voter_does_not_exist"
 
+            print(result)
             voter_id = result["id"]
             sql_dupe_check = sql_dupe_check.where(dbFeedback.voter_id == voter_id)
 
