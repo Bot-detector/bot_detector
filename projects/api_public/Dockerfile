@@ -23,7 +23,7 @@ FROM python:3.12-slim-bookworm AS production
 RUN adduser -u 5678 --disabled-password --gecos "" appuser
 
 WORKDIR /app/projects/api_public
-COPY --from=base --chown=appuser /app/projects/api_public/.venv /app/projects/api_public/.venv
+COPY --from=builder --chown=appuser /app/projects/api_public/.venv /app/projects/api_public/.venv
 
 USER appuser
 
