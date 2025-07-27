@@ -44,7 +44,7 @@ async def insert_batch(
                 await session.commit()
     except OperationalError as e:
         return None, str(e)
-    logger.debug(f"inserted: {len(batch)}")
+    logger.info(f"inserted: {len(batch)}")
     return None, None
 
 
