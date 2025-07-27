@@ -59,7 +59,7 @@ async def post_reports(
 
         _data.append(ParsedDetection(**_d))
 
-    print(_data)
+    # print(_data)
     try:
         await report_repo.send_to_kafka(data=_data)
     except CustomError:
