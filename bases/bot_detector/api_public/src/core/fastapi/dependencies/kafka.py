@@ -28,7 +28,7 @@ class KafkaManager:
             logger.warning(f"Producer not found for key: {key}")
             return None
 
-        logger.info(f"Producer retrieved for key: {key}")
+        logger.debug(f"Producer retrieved for key: {key}")
         return producer
 
     def set_consumer(self, key: str, consumer: ConsumerInterface) -> None:
@@ -54,4 +54,4 @@ class KafkaManager:
 kafka_manager = KafkaManager()
 
 # memory location
-print(id(kafka_manager))
+# print(id(kafka_manager))
