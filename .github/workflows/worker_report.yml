@@ -22,7 +22,7 @@ on:
 env:
   QUAY_REGISTERY: quay.io/bot_detector/report-worker
   DOCKERFILE: ./projects/worker_report/Dockerfile
-  DEPLOYMENT_FILE: worker_report/deployment.yaml
+  DEPLOYMENT_FILE: worker-report/deployment.yaml
   PROJECT_DIR: projects/worker_report
 
 jobs:
