@@ -98,6 +98,7 @@ async def consume_many_task(
                 session_factory=session_factory,
             )
             if error:
+                logger.error(error)
                 await asyncio.gather(
                     *[add_to_error_queue(report=r, queue=error_queue) for r in reports]
                 )
