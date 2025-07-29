@@ -208,3 +208,10 @@ CREATE TABLE report (
     region_id
   )
 );
+
+CREATE TABLE `Labels` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `label` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `Unique_label` (`label`) USING BTREE
+)
