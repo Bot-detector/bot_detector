@@ -1,13 +1,9 @@
 import logging
 
-from bot_detector.api_public.src.app.views.input.feedback import FeedbackInput
-from bot_detector.api_public.src.core.database.models.feedback import (
-    PredictionFeedback as dbFeedback,
-)
 from bot_detector.api_public.src.core.database.models.label import Label as dbLabel
-from sqlalchemy import and_, insert, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncResult, AsyncSession
-from sqlalchemy.sql.expression import Insert, Select
+from sqlalchemy.sql.expression import Select
 
 logger = logging.getLogger(__name__)
 
