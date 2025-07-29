@@ -17,7 +17,13 @@ logger = logging.getLogger(__name__)
 async def get_labels(session=Depends(get_session)):
     _label_repo = LabelRepository(session)
     labels = await _label_repo.get_labels()
-    return labels
+
+    _labels = []
+    for label in labels:
+        _label = LabelResponse(**label.__dict__)
+        _label.label = _label.label.lower()
+        _labels.append(_label)
+    return _labels
 
 
 @router.get(
@@ -30,4 +36,9 @@ async def get_label_by_id(
 ) -> LabelResponse | None:
     _label_repo = LabelRepository(session)
     label = await _label_repo.get_label_by_id(label_id=label_id)
-    return label
+
+    if label is None:
+        return None
+    _label = LabelResponse(**label.__dict__)
+    _label.label = _label.label.lower()
+    return _label

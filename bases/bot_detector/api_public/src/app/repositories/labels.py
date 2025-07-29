@@ -30,4 +30,4 @@ class LabelRepository:
             result: AsyncResult = await self.session.execute(sql_select)
             label = result.scalar_one_or_none()
 
-        return label  # commet
+        return label

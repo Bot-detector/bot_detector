@@ -26,4 +26,4 @@ async def post_feedback(
     success, detail = await _feedback.insert_feedback(feedback=feedback)
     if not success:
         raise HTTPException(status_code=422, detail=detail)
-    return Ok()
+    return Ok(detail=detail)
