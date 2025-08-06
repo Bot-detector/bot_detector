@@ -60,3 +60,46 @@ A project is the entry point for your application, built using the base and comp
 ```sh
 uv run poly create project --name <project_name>
 ```
+# design
+
+```mermaid
+flowchart TD
+    subgraph Ingestion
+        JavaPlugin(Java Plugin)
+        PublicAPI(Public API)
+        JavaPlugin --> PublicAPI
+        PublicAPI --> KafkaReports[/"Kafka: reports.to_insert"/]
+    end
+
+    subgraph Scheduling
+        TaskScheduler(Task Scheduler)
+        TaskScheduler --> KafkaToScrape[/"Kafka: players.to_scrape"/]
+    end
+
+    subgraph Scraping
+        KafkaToScrape --> HighscoreScraper(Highscore Scraper)
+        HighscoreScraper --> KafkaNotFound[/"Kafka: players.not_found"/]
+        HighscoreScraper --> KafkaScraped[/"Kafka: players.scraped"/]
+        KafkaNotFound --> RunemetricsScraper(Runemetrics Scraper)
+        RunemetricsScraper --> KafkaScraped
+    end
+
+    subgraph Processing
+        KafkaScraped --> HighscoreWorker(Highscore Worker)
+        HighscoreWorker --> KafkaForML[/"Kafka: players.to_score"/]
+    end
+
+    subgraph ML
+        KafkaForML --> MLServing(ML-Serving)
+        MLServing --> KafkaPredictions[/"Kafka: players.scored"/]
+    end
+
+    subgraph Storage
+        KafkaPredictions --> PredictionWorker(Prediction Worker)
+        KafkaReports --> ReportWorker(Report Worker)
+
+        HighscoreWorker --> MySQL[(MySQL)]
+        PredictionWorker --> MySQL[(MySQL)]
+        ReportWorker --> MySQL[(MySQL)]
+    end
+```

@@ -175,7 +175,10 @@ class RepoPlayerScrapedProducer(ProducerInterface):
         if not isinstance(scraped_data, ScrapedStruct):
             raise Exception()
 
+        player_id = scraped_data.player_data.id
+
         await self.producer.send(
             topic="players.scraped",
             value=scraped_data.model_dump(),
+            key=player_id % 10,  # db table is partitioned on player_id % 10
         )
