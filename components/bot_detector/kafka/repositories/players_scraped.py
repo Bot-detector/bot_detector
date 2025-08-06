@@ -176,9 +176,10 @@ class RepoPlayerScrapedProducer(ProducerInterface):
             raise Exception()
 
         player_id = scraped_data.player_data.id
+        partition_key = str(player_id % 10).encode("utf-8")
 
         await self.producer.send(
             topic="players.scraped",
             value=scraped_data.model_dump(),
-            key=player_id % 10,  # db table is partitioned on player_id % 10
+            key=partition_key,  # db table is partitioned on player_id % 10
         )
