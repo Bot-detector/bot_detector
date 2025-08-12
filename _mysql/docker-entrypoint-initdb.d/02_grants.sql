@@ -13,4 +13,11 @@ GRANT SELECT, INSERT, CREATE, DROP ON playerdata.temp_sighting TO `report-worker
 GRANT SELECT, INSERT, CREATE, DROP ON playerdata.temp_gear TO `report-worker`@`%`;
 GRANT SELECT, INSERT, CREATE, DROP ON playerdata.temp_location TO `report-worker`@`%`;
 GRANT SELECT, INSERT, CREATE, DROP ON playerdata.temp_report TO `report-worker`@`%`;
+
+/*job-prune-hs*/
+GRANT CREATE TEMPORARY TABLES ON *.* TO `job-prune-hs`@`%`;
+GRANT SELECT ON playerdata.Players TO `job-prune-hs`@`%`;
+GRANT SELECT, DELETE ON playerdata.highscore_data_daily TO `job-prune-hs`@`%`;
+
+GRANT SELECT, INSERT, CREATE, DROP ON playerdata.tmp_player_ids TO `job-prune-hs`@`%`;
 FLUSH PRIVILEGES;

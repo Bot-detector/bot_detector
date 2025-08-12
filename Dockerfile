@@ -13,9 +13,4 @@ COPY ./README.md .
 
 RUN uv sync
 
-# Copy only necessary files to run the projects
-COPY ./bases ./bases
-COPY ./components ./components
-COPY ./projects ./projects
-
 CMD [ "sleep", "infinity" ]
