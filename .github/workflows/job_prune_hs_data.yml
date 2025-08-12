@@ -1,4 +1,4 @@
-name: worker_report
+name: job_prune_hs
 
 on:
   push:
