@@ -194,6 +194,7 @@ services:
       - botdetector-network
     environment:
       - LIMIT=100
+      - DATABASE_URL=mysql+asyncmy://job-prune-hs:job_prune_hs_pw@mysql:3306/playerdata
     env_file:
       - .env
     depends_on:
