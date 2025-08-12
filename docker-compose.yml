@@ -182,6 +182,23 @@ services:
         condition: service_completed_successfully
       mysql_setup:
         condition: service_completed_successfully
+  job_prune_hs_data:
+    container_name: job_prune_hs_data
+    image: bd/job_prune_hs_data # tags the image if build
+    build:
+      context: ./
+      dockerfile: ./projects/job_prune_hs_data/Dockerfile
+      target: production
+    # command: ["sleep", "infinity"]
+    networks:
+      - botdetector-network
+    environment:
+      - LIMIT=100
+    env_file:
+      - .env
+    depends_on:
+      mysql_setup:
+        condition: service_completed_successfully
 
   api_public:
     container_name: api_public

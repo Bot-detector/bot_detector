@@ -1,13 +1,17 @@
 import asyncio
 import logging
-from dataclasses import asdict
 
 import sqlalchemy as sqla
 from bot_detector.database import Settings as DBSettings
 from bot_detector.database import get_session_factory
+from pydantic_settings import BaseSettings
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 logger = logging.getLogger(__name__)
+
+
+class Settings(BaseSettings):
+    LIMIT: int = 10000
 
 
 def create_temp_table():
@@ -24,7 +28,8 @@ def insert_temp_table():
         SELECT id FROM Players 
         WHERE 1=1 
             AND possible_ban = 0 
-            AND id > :player_id; 
+            AND id > :player_id
+        limit :limit
         """
     )
     return sql
@@ -46,6 +51,7 @@ def delete_highscore_data_daily():
 	JOIN tmp_player_ids pl ON hdd.player_id = pl.id
 	WHERE hdd.time_to_live < CURDATE();
     """)
+    return sql
 
 
 async def prune(async_session: async_sessionmaker[AsyncSession]):
@@ -64,7 +70,8 @@ async def prune(async_session: async_sessionmaker[AsyncSession]):
                     # Drop and create temp table each loop
                     await session.execute(sql_drop_tmp)
                     await session.execute(sql_create_tmp)
-                    await session.execute(sql_insert_tmp, {"player_id": player_id})
+                    params = {"player_id": player_id, "limit": Settings().LIMIT}
+                    await session.execute(sql_insert_tmp, params=params)
 
                     result = await session.scalars(sql_select_tmp)
                     new_player_id = result.first()  # This returns an int or None
@@ -77,7 +84,7 @@ async def prune(async_session: async_sessionmaker[AsyncSession]):
                     logger.info(f"Processed up to player_id: {player_id}")
 
                     # Perform deletion after temp table is populated
-                    # await session.execute(sql_delete_hdd)
+                    await session.execute(sql_delete_hdd)
                     result = await session.scalars(sql_row_count)
                     rows_deleted = result.first()
                     logger.info(f"Deleted {rows_deleted} records")
