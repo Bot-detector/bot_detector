@@ -21,7 +21,7 @@ env:
   QUAY_REGISTERY: quay.io/bot_detector/job_prune_hs_data
   DOCKERFILE: ./projects/job_prune_hs_data/Dockerfile
   PROJECT_DIR: projects/job_prune_hs_data
-  DEPLOYMENT_FILE: job-prune-hs/cron-job.yaml
+  DEPLOYMENT_FILE: jobs/prune-hs.yaml
   
 
 jobs:
