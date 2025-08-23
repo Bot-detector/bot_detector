@@ -1,4 +1,4 @@
-name: job_prune_hs
+name: job_hs_migration_v3
 
 on:
   push:
