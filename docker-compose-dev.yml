@@ -109,11 +109,13 @@ services:
       - ./components:/app/components
       - ./projects:/app/projects
     command: ["sleep", "infinity"]
-    networks:
-      - botdetector-network
+    # network_mode: host # needed if we do any portforwarding from the cluster
+    # networks:
+    #   - botdetector-network
     env_file:
       - .env
 
+# use host network mode
 networks:
   botdetector-network:
     name: bd-network

@@ -20,4 +20,10 @@ GRANT SELECT ON playerdata.Players TO `job-prune-hs`@`%`;
 GRANT SELECT, DELETE ON playerdata.highscore_data_daily TO `job-prune-hs`@`%`;
 
 GRANT SELECT, INSERT, CREATE, DROP ON playerdata.tmp_player_ids TO `job-prune-hs`@`%`;
+/*job-hs-migration*/
+GRANT SELECT, UPDATE ON playerdata.migration_hs_v3 TO `job-hs-migration`@`%`;
+GRANT SELECT ON playerdata.Players TO `job-hs-migration`@`%`;
+GRANT SELECT ON playerdata.scraper_data_v3 TO `job-hs-migration`@`%`;
+
+
 FLUSH PRIVILEGES;

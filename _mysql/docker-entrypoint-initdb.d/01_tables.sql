@@ -15,6 +15,11 @@ CREATE TABLE Players (
   normalized_name VARCHAR(50),
   UNIQUE KEY Unique_name (name)
 );
+
+CREATE TABLE migration_hs_v3 (
+  player_id INT UNSIGNED NOT NULL
+);
+
 -- these tables are for future use
 -- CREATE TABLE player (
 --   player_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
