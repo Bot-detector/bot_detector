@@ -24,6 +24,11 @@ GRANT SELECT, INSERT, CREATE, DROP ON playerdata.tmp_player_ids TO `job-prune-hs
 GRANT SELECT, UPDATE ON playerdata.migration_hs_v3 TO `job-hs-migration`@`%`;
 GRANT SELECT ON playerdata.Players TO `job-hs-migration`@`%`;
 GRANT SELECT ON playerdata.scraper_data_v3 TO `job-hs-migration`@`%`;
-
+GRANT SELECT ON playerdata.scraper_player_skill TO `job-hs-migration`@`%`;
+GRANT SELECT ON playerdata.player_skill TO `job-hs-migration`@`%`;
+GRANT SELECT ON playerdata.skill TO `job-hs-migration`@`%`;
+GRANT SELECT ON playerdata.scraper_player_activity TO `job-hs-migration`@`%`;
+GRANT SELECT ON playerdata.player_activity TO `job-hs-migration`@`%`;
+GRANT SELECT ON playerdata.activity TO `job-hs-migration`@`%`;
 
 FLUSH PRIVILEGES;
