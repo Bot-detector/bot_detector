@@ -261,3 +261,13 @@ INSERT INTO Labels (label) VALUES
 	 ('test_label'),
 	 ('Nex_bot'),
 	 ('Gauntlet_bot');
+
+CREATE TABLE `scraper_data_v3` (
+  `scrape_id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `scrape_ts` datetime NOT NULL,
+  `scrape_date` date NOT NULL,
+  `player_id` int NOT NULL,
+  PRIMARY KEY (`scrape_id`),
+  UNIQUE KEY `unique_player_scrape` (`player_id`,`scrape_date`),
+  KEY `idx_scrape_ts` (`scrape_ts`)
+)
