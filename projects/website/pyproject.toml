@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling", "hatch-polylith-bricks"]
+build-backend = "hatchling.build"
+
+[project]
+name = "website"
+version = "0.1.0"
+requires-python = ">=3.10"
+
+dependencies = [
+    "fastapi>=0.115.12",
+    "pydantic-settings>=2.9.1",
+    "sqlalchemy>=2.0.40",
+    "uvicorn>=0.34.2",
+    "prometheus-client>=0.22.0",
+    "python-multipart>=0.0.20",
+    "jinja2>=3.1.6",
+    "aiohttp>=3.12.15",
+]
+
+[project.scripts]
+scrape_task_producer = "bot_detector.website.core.server:run"
+
+[tool.hatch.build.hooks.polylith-bricks]
+packages = ["bot_detector"]
+
+[tool.polylith.bricks]
+"../../bases/bot_detector/website" = "bot_detector/website"
+"../../components/bot_detector/logfmt" = "bot_detector/logfmt"

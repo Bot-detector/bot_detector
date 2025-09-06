@@ -1,3 +1,4 @@
+import ast
 import json
 import logging
 
@@ -8,6 +9,14 @@ class Settings(BaseSettings):
     DEBUG: bool = False
 
 
+def can_convert_to_json(s: str) -> dict | None:
+    try:
+        result = ast.literal_eval(s)
+        return result if isinstance(result, dict) else None
+    except ValueError:
+        return None
+
+
 # Configure JSON logging
 class JsonFormatter(logging.Formatter):
     def format(self, record):
@@ -15,13 +24,19 @@ class JsonFormatter(logging.Formatter):
             "ts": self.formatTime(record, self.datefmt),
             "lvl": record.levelname,
             "name": record.name,
-            # "module": record.module,
             "func": record.funcName,
             "line": record.lineno,
-            "msg": record.getMessage(),
         }
+
+        msg = record.getMessage()
+        if msg_dict := can_convert_to_json(msg):
+            log_record.update({f"msg.{k}": v for k, v in msg_dict.items()})
+        else:
+            log_record["msg"] = msg
+
         if record.exc_info:
             log_record["exception"] = self.formatException(record.exc_info)
+
         return json.dumps(log_record)
 
 
