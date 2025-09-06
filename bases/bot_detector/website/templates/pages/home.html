@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="pt-5">
+    <div class="container">
+        <div class="row">
+            <!-- Main content column -->
+            <div class="col-md-8">
+                <article>
+                    <!-- Article card for Bot Detector information -->
+                    <div class="card card-article card-server mb-2">
+                        <div class="card-img text-center">
+                            <!-- You may want to add an image here -->
+                        </div>
+                        <div class="card-body">
+                            <div class="card-icon">
+                                <img src="/static/images/logo-sm.png" alt="Bot Detector">
+                            </div>
+                            <h1 class="h3 mt-2">Bot Detector</h1>
+                            <div class="post-date mt-1">An Open-Source Machine Learning Plugin</div>
+                            <p class="fs-16 mt-4 bt-plugin-desc">
+                                The Bot Detector Plugin is an open-source community-run machine learning plugin made for
+                                Old School RuneScape using the popular third-party client RuneLite.<br><br>We aim to use
+                                this plugin and the corresponding machine learning algorithms to separate players from
+                                bots, from a bird's eye view - and send likely bot accounts to Jagex's anti-cheating
+                                team for swift removal.<br><br>
+                                If you're interested in supporting our efforts to combat botting in Old School
+                                RuneScape, consider joining our Discord community or making a donation to help fund the
+                                development of the Bot Detector Plugin. Every contribution helps us continue our work to
+                                make the game a better place for all players.
+                            </p>
+                            <hr>
+                        </div>
+                    </div>
+                </article>
+            </div>
+
+            <!-- Sidebar column for Bot Detector statistics and RuneLite installation -->
+            <div class="col-md-4 mb-4">
+                <!-- Bot statistics card -->
+                <div class="card botstats">
+                    <div class="card-body">
+                        <h2 class="h5 mb-4"><i class="fa-duotone fa-chart-pie-simple-circle-dollar i-bdstats"
+                                style="font-size:32px;"></i><br><br>Bot Detector stats</h2>
+                        <div class="d-grid gap-2 col-12 mx-auto">
+                            <p class="mb-0">
+                            <h5 class="mb-2 stat-bt">Total bans<br><span class="badge bt-stat">{{
+                                    '{:,}'.format(stats.total_bans) }}</span></h5>
+                            <h5 class="mb-2 stat-bt">Total real players<br><span
+                                    style="font-size:11px;opacity:0.3;text-transform:uppercase;font-weight:normal">(manually
+                                    flagged)</span><br><span class="badge bt-stat">{{
+                                    '{:,}'.format(stats.total_real_players) }}</span></h5>
+                            <h5 class="mb-2 stat-bt">Total accounts<br><span class="badge bt-stat">{{
+                                    '{:,}'.format(stats.total_accounts) }}</span></h5>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <br>
+
+                <!-- RuneLite installation card -->
+                <div class="card runelite">
+                    <div class="card-body">
+                        <h2 class="h5 mb-4"><i class="fa-duotone fa-badge-check i-runelite"
+                                style="font-size:32px;"></i><br><br>Get Bot Detector</h2>
+                        <div class="d-grid gap-2 col-12 mx-auto">
+                            <p class="mb-0">Install plugin in <strong>RuneLite</strong>:</p>
+                            <hr>
+                            <img src="/static/plugin.png" alt="Plugin installation instructions">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
