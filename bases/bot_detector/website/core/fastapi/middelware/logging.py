@@ -4,7 +4,7 @@ import time
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("logging_middleware")
 
 
 class LoggingMiddleware(BaseHTTPMiddleware):
@@ -17,7 +17,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             {
                 "url": request.url.path,
                 "params": request.query_params._dict,
-                "process_time": f"{process_time:.4f}",
+                "ptime": f"{process_time:.4f}",
             }
         )
         return response
