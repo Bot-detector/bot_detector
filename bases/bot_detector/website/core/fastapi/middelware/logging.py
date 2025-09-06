@@ -16,7 +16,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         logger.info(
             {
                 "url": request.url.path,
-                "params": request.query_params,
+                "params": request.query_params._dict,
                 "process_time": f"{process_time:.4f}",
             }
         )
