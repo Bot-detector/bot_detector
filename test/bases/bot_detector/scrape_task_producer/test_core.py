@@ -13,6 +13,8 @@ def make_fetch_params(**overrides) -> FetchParams:
         possible_ban=overrides.get("possible_ban", False),
         player_id=overrides.get("player_id", 0),
         limit=overrides.get("limit", 1),
+        step=overrides.get("step", "normal"),
+        done=overrides.get("done", False),
     )
     return params
 
@@ -53,7 +55,7 @@ def test_sets_player_id_to_last_when_full_page_of_results():
 
 def test_resets_possible_ban_if_confirmed_ban_without_possible():
     # confirmed_ban=True but possible_ban=False → possible_ban forced True
-    fp = make_fetch_params(confirmed_ban=True, possible_ban=False)
+    fp = make_fetch_params(confirmed_ban=True, possible_ban=False, step="confirmed_ban")
     result = determine_fetch_params(fp, players=[make_player()])
     assert result.possible_ban is True
 
@@ -81,25 +83,41 @@ def test_decrements_days_when_no_players_and_both_bans_above_max():
 
 
 def test_switches_to_possible_ban_when_days_at_one_and_no_bans():
-    fp = make_fetch_params(days=1, possible_ban=False, confirmed_ban=False)
+    fp = make_fetch_params(
+        days=1,
+        possible_ban=False,
+        confirmed_ban=False,
+        step="normal",
+    )
     result = determine_fetch_params(fp, players=[], max_days=10)
     # days resets to max_days, possible_ban flips on
     assert result.days == 10
-    assert result.possible_ban is True
-    assert not result.confirmed_ban
+    assert result.step == "possible_ban"
 
 
 def test_advances_to_confirmed_ban_when_possible_cycle_exhausted():
     # days <= max_possible_ban_days (default 2), possible_ban=True, confirmed_ban=False
-    fp = make_fetch_params(days=2, possible_ban=True, confirmed_ban=False)
+    fp = make_fetch_params(
+        days=2,
+        step="possible_ban",
+    )
     result = determine_fetch_params(fp, players=[], max_days=9)
     assert result.days == 9
-    assert result.confirmed_ban is True
+    assert result.step == "confirmed_ban"
 
 
 def test_full_reset_after_confirmed_cycle_exhausted():
     # days <= max_confirmed_ban_days (default 7), both bans True
-    fp = make_fetch_params(days=7, possible_ban=True, confirmed_ban=True)
-    result = determine_fetch_params(fp, players=[], max_days=11)
+    fp = make_fetch_params(
+        days=7,
+        step="confirmed_ban",
+    )
+    result = determine_fetch_params(
+        fp,
+        players=[],
+        max_days=11,
+        max_possible_ban_days=3,
+        max_confirmed_ban_days=7,
+    )
+    assert result.step == "normal"
     assert result.days == 11
-    assert not result.possible_ban and not result.confirmed_ban
