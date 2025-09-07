@@ -11,9 +11,11 @@ class Settings(BaseSettings):
 
 def can_convert_to_json(s: str) -> dict | None:
     try:
+        if not (s.startswith("{") and s.endswith("}")):
+            return None
         result = ast.literal_eval(s)
         return result if isinstance(result, dict) else None
-    except ValueError:
+    except Exception:
         return None
 
 
