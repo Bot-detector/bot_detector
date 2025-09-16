@@ -179,21 +179,18 @@ async def process_players(
             await asyncio.sleep(10)
             continue
 
-        logger.info(f"{fp.player_id=}, {fp.confirmed_ban=}, {fp.days=}, {fp.limit=}")
+        logger.info(f"{asdict(fp)}")
 
         async with async_session() as session:
-            first_date = date.today() - timedelta(days=fp.days - 1)
-            last_date = date.today() - timedelta(days=fp.days)
-
             players = await player_repo.select_player(
                 async_session=session,
                 player_id=fp.player_id,
                 possible_ban=fp.possible_ban,
                 confirmed_ban=fp.confirmed_ban,
                 or_none=fp.step == "normal",
-                first_date=first_date,
-                last_date=last_date,
-                limit=limit,
+                first_date=fp.first_date,
+                last_date=fp.last_date,
+                limit=fp.limit,
             )
 
         await produce_players(players=players, player_producer=player_producer)
