@@ -1,5 +1,6 @@
 import logging
 from dataclasses import asdict
+from datetime import date, datetime
 
 import sqlalchemy as sqla
 from bot_detector.database.interfaces import playerInterface
@@ -23,14 +24,16 @@ class PlayerRepo(playerInterface):
     async def select_player(
         self,
         async_session: AsyncSession,
-        days: int = 7,
+        or_none: bool = False,
+        first_date: date | None = None,
+        last_date: date | None = None,
         confirmed_ban: bool | None = None,
         possible_ban: bool | None = None,
         player_id: int | None = None,
         limit: int = 10_000,
     ) -> list[PlayerStruct]:
         logger.info(
-            f"{player_id=}, {confirmed_ban=}, {possible_ban=}, {days=}, {limit=}"
+            f"{player_id=}, {confirmed_ban=}, {possible_ban=}, {first_date=}, {last_date=}, {limit=}"
         )
 
         sql = sqla.select(PlayersTableStruct)
@@ -38,16 +41,12 @@ class PlayerRepo(playerInterface):
         # length of the name should be <= 13
         sql = sql.where(sqla.func.length(PlayersTableStruct.name) <= 13)
 
-        if days:
-            # If days is set, we want to fetch players that were updated more than 'days' ago
-            # or never updated (updated_at is None)
-            interval_expr = sqla.func.now() - sqla.text("interval :days day")
-            sql = sql.where(
-                sqla.or_(
-                    PlayersTableStruct.updated_at.is_(None),
-                    PlayersTableStruct.updated_at < interval_expr,
-                )
-            )
+        if first_date and last_date:
+            _stmt = PlayersTableStruct.updated_at.between(first_date, last_date)
+            if or_none:
+                _stmt = sqla.or_(_stmt, PlayersTableStruct.updated_at.is_(None))
+
+            sql = sql.where(_stmt)
 
         if player_id:
             sql = sql.where(PlayersTableStruct.id > player_id)
@@ -63,7 +62,7 @@ class PlayerRepo(playerInterface):
 
         sql = sql.order_by(sqla.asc(PlayersTableStruct.id))
 
-        result = await async_session.scalars(sql, params={"days": days})
+        result = await async_session.scalars(sql)
         players = result.all()
         players_dict = [asdict(player) for player in players]
         players_struct = [PlayerStruct(**player_dict) for player_dict in players_dict]

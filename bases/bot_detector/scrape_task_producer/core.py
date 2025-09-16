@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from dataclasses import asdict, dataclass
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 
 from bot_detector.database import Settings as DBSettings
 from bot_detector.database import get_session_factory
@@ -27,11 +27,25 @@ class Settings(BaseSettings):
 class FetchParams:
     step: Literal["normal", "possible_ban", "confirmed_ban"]
     days: int
+    first_date: date | None = None
+    last_date: date | None = None
     confirmed_ban: bool = False
     possible_ban: bool = False
     player_id: int = 0
     limit: int = 10_000
     done: bool = False
+
+    def __post_init__(self):
+        self.first_date = date.today() - timedelta(days=365)
+        self.last_date = date.today() - timedelta(days=self.days - 1)
+
+    def update_date(self, days, infinity: bool = False):
+        self.days = days
+
+        delta = timedelta(days=365) if infinity else timedelta(days=self.days)
+        self.first_date = date.today() - delta
+        self.last_date = date.today() - timedelta(days=self.days - 1)
+        assert self.first_date < self.last_date
 
 
 async def produce_players(
@@ -54,7 +68,8 @@ async def produce_players(
 
 def _reduce_days(fetch_params: FetchParams) -> FetchParams:
     logger.info(f"Reducing days for {asdict(fetch_params)}")
-    fetch_params.days = fetch_params.days - 1 if fetch_params.days > 1 else 1
+    _days = fetch_params.days - 1 if fetch_params.days > 1 else 1
+    fetch_params.update_date(days=_days)
     fetch_params.player_id = 0
     return fetch_params
 
@@ -102,7 +117,7 @@ def determine_fetch_params(
             assert fetch_params.days <= 1
             logger.info("All normal scraped, going to step: possible bans")
             fetch_params.step = "possible_ban"
-            fetch_params.days = max_days
+            fetch_params.update_date(days=max_days, infinity=True)
             return fetch_params
 
         case "possible_ban":
@@ -114,7 +129,7 @@ def determine_fetch_params(
             assert fetch_params.days <= max_possible_ban_days
             logger.info("All possible bans scraped, going to step: confirmed bans")
             fetch_params.step = "confirmed_ban"
-            fetch_params.days = max_days
+            fetch_params.update_date(days=max_days, infinity=True)
             return fetch_params
 
         case "confirmed_ban":
@@ -126,7 +141,7 @@ def determine_fetch_params(
             assert fetch_params.days <= max_confirmed_ban_days
             logger.info("All confirmed bans scraped, going to step: normal")
             fetch_params.step = "normal"
-            fetch_params.days = max_days
+            fetch_params.update_date(days=max_days, infinity=True)
             fetch_params.done = True
             return fetch_params
 
@@ -167,12 +182,17 @@ async def process_players(
         logger.info(f"{fp.player_id=}, {fp.confirmed_ban=}, {fp.days=}, {fp.limit=}")
 
         async with async_session() as session:
+            first_date = date.today() - timedelta(days=fp.days - 1)
+            last_date = date.today() - timedelta(days=fp.days)
+
             players = await player_repo.select_player(
                 async_session=session,
                 player_id=fp.player_id,
                 possible_ban=fp.possible_ban,
                 confirmed_ban=fp.confirmed_ban,
-                days=fp.days,
+                or_none=fp.step == "normal",
+                first_date=first_date,
+                last_date=last_date,
                 limit=limit,
             )
 
@@ -192,7 +212,7 @@ async def process_players(
             time_remaining = end_of_today - now
             sleep_time = int(time_remaining.total_seconds())
             sleep_time = max(sleep_time, 1)  # Ensure at least 1 second sleep
-            logger.info(f"Sleeping for {sleep_time} seconds until end of day (1/4)")
+            logger.info(f"Sleeping for {sleep_time} seconds until end of day")
             await asyncio.sleep(sleep_time)
 
 
