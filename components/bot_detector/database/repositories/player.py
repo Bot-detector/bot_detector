@@ -1,6 +1,6 @@
 import logging
 from dataclasses import asdict
-from datetime import date, datetime
+from datetime import date
 
 import sqlalchemy as sqla
 from bot_detector.database.interfaces import playerInterface
