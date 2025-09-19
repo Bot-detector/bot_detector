@@ -46,10 +46,12 @@ async def lifespan(app: FastAPI):
         print(f"Loading model: {name} from {uri}")
         models[name] = mlflow.pyfunc.load_model(uri)
 
+    logger.info("starting!")
     yield
+    logger.info("stopping")
 
     models.clear()
-    print("Models unloaded.")
+    print("Models unloaded")
 
 
 def create_app() -> FastAPI:

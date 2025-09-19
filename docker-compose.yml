@@ -1,4 +1,5 @@
 services:
+  # KAFKA
   kafka:
     image: apache/kafka:3.7.2
     container_name: kafka
@@ -31,7 +32,6 @@ services:
       retries: 5
     networks:
       - botdetector-network
-
   kafka_setup:
     container_name: kafka_setup
     image: bd/kafka_setup # tags the image if build
@@ -45,7 +45,6 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
-
   kafdrop:
     container_name: kafdrop
     image: obsidiandynamics/kafdrop:latest
@@ -61,7 +60,7 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
-
+  # MYSQL
   mysql:
     container_name: mysql
     image: bd/mysql # tags the image if build
@@ -94,7 +93,43 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
-
+  # MINIO
+  minio:
+    image: minio/minio
+    expose:
+      - "9000"
+      - "9001"
+    ports:
+      - 9001
+    environment:
+      MINIO_ROOT_USER: "minio_user"
+      MINIO_ROOT_PASSWORD: "minio_password"
+    volumes:
+      - ./_minio_data:/data
+    healthcheck:
+      test: timeout 5s bash -c ':> /dev/tcp/127.0.0.1/9000' || exit 1
+      interval: 1s
+      timeout: 10s
+      retries: 5
+    command: server /data --console-address ":9001"
+    networks:
+      - botdetector-network
+  # Create a bucket named "bucket" if it doesn't exist
+  minio-create-bucket:
+    image: minio/mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      bash -c "
+      mc alias set minio http://minio:9000 minio_user minio_password &&
+      if ! mc ls minio/bucket; then
+        mc mb minio/bucket
+      else
+        echo 'bucket already exists'
+      fi
+      "
+  # COMPONENTS
   hiscore_scraper:
     container_name: hiscore_scraper
     image: bd/hiscore_scraper # tags the image if build
@@ -200,7 +235,6 @@ services:
     depends_on:
       mysql_setup:
         condition: service_completed_successfully
-
   api_public:
     container_name: api_public
     image: bd/api_public
@@ -223,7 +257,7 @@ services:
       - ./bases:/bases
       - ./components:/components
     ports:
-      - "5000:5000"
+      - 5000
     networks:
       - botdetector-network
     depends_on:
@@ -237,7 +271,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
-
   wait_for_api_public:
     image: alpine:latest
     container_name: wait_for_api_public
@@ -267,6 +300,39 @@ services:
       - botdetector-network
     healthcheck:
       test: ["CMD-SHELL", "python -c 'import urllib.request,sys; sys.exit(0 if urllib.request.urlopen(\"http://localhost:5000/monitoring\").getcode()==200 else 1)'"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+  api_ml:
+    container_name: api_ml
+    image: bd/api_ml
+    build:
+      context: .
+      dockerfile: ./projects/api_ml/Dockerfile
+      target: builder
+    # command: ["sleep", "infinity"]
+    command: >
+      sh -c "cd ../.. && projects/api_ml/.venv/bin/uvicorn bases.bot_detector.api_ml.core.server:app --host 0.0.0.0 --port 5000 --log-level warning --reload --reload-dir bases/"
+    env_file:
+      - .env
+    environment:
+      - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
+      - AWS_ACCESS_KEY_ID=minio_user
+      - AWS_SECRET_ACCESS_KEY=minio_password
+      - UV_HTTP_TIMEOUT=120
+    volumes:
+      - ./bases:/app/bases
+      - ./components:/app/components
+    ports:
+      - 5001:5000
+    networks:
+      - botdetector-network
+    depends_on:
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request,sys; sys.exit(0 if urllib.request.urlopen(\"http://localhost:5000/\").getcode()==200 else 1)'"]
       interval: 10s
       timeout: 5s
       retries: 3
