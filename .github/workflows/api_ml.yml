@@ -4,8 +4,6 @@ on:
   push:
     paths:
       - bases/bot_detector/api_ml/**
-      - components/bot_detector/kafka/**
-      - components/bot_detector/structs/**
       - components/bot_detector/logfmt/**
       - projects/api_ml/**
   workflow_dispatch:
