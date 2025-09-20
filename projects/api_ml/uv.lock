@@ -52,7 +52,6 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "boto3" },
-    { name = "botocore" },
     { name = "fastapi" },
     { name = "mlflow" },
     { name = "prometheus-client" },
@@ -63,7 +62,6 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "boto3", specifier = ">=1.40.34" },
-    { name = "botocore", specifier = ">=1.40.34" },
     { name = "fastapi", specifier = ">=0.115.12" },
     { name = "mlflow", specifier = ">=3.1.4" },
     { name = "prometheus-client", specifier = ">=0.22.0" },
