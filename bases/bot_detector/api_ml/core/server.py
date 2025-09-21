@@ -44,9 +44,11 @@ def make_middleware() -> list[Middleware]:
 async def lifespan(app: FastAPI):
     for name, uri in SETTINGS.MODEL_URIS.items():
         print(f"Loading model: {name} from {uri}")
-        models[name] = mlflow.pyfunc.load_model(uri)
+        logger.info(f"Loading model: {name} from {uri}")
+        model = mlflow.pyfunc.load_model(uri)
+        models[name] = model
 
-    logger.info("starting!")
+    logger.info("starting")
     yield
     logger.info("stopping")
 

@@ -94,6 +94,26 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+  minio:
+    image: minio/minio
+    expose:
+      - "9000"
+      - "9001"
+    ports:
+      - 9001
+    environment:
+      MINIO_ROOT_USER: "minio_user"
+      MINIO_ROOT_PASSWORD: "minio_password"
+    volumes:
+      - ./_minio_data:/data
+    healthcheck:
+      test: timeout 5s bash -c ':> /dev/tcp/127.0.0.1/9000' || exit 1
+      interval: 1s
+      timeout: 10s
+      retries: 5
+    command: server /data --console-address ":9001"
+    networks:
+      - botdetector-network
   project_debugger:
     container_name: project_debugger
     image: bd/project_debugger # tags the image if build 
@@ -103,19 +123,22 @@ services:
     # command: ["uv", "run", "bases/bot_detector/hiscore_scraper/core.py"]
     # command: uv run uvicorn bases.bot_detector.api_public.src.core.server:app --host 0.0.0.0 --reload --port 5000
     # command: uv run uvicorn bases.bot_detector.website.core.server:app --host 0.0.0.0 --reload --port 5000
+    # command: uv run uvicorn bases.bot_detector.api_ml.core.server:app --host 0.0.0.0 --reload --port 5000
     ports:
       - 5000:5000 # api_publics
     volumes:
       - ./bases:/app/bases
       - ./components:/app/components
       - ./projects:/app/projects
+      # - $HOME/.cache/uv:/root/.cache/uv
     command: ["sleep", "infinity"]
     # network_mode: host # needed if we do any portforwarding from the cluster
-    # networks:
-    #   - botdetector-network
+    networks:
+      - botdetector-network
+    environment:
+      - UV_HTTP_TIMEOUT=120
     env_file:
       - .env
-
 # use host network mode
 networks:
   botdetector-network:

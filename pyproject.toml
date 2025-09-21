@@ -7,7 +7,7 @@ name = "bot-detector"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "aiohttp>=3.11.11",
     "aiokafkaengine>=0.1.0",
@@ -23,7 +23,11 @@ dependencies = [
     "prometheus-client>=0.21.1",
     "python-multipart>=0.0.20",
     "jinja2>=3.1.6",
-    "mlflow>=3.1.4",
+    "mlflow-skinny>=3.4.0",
+    "numpy>=2.3.3",
+    "pandas>=2.3.2",
+    "scikit-learn>=1.7.2",
+    "boto3>=1.40.34",
 ]
 
 [dependency-groups]
@@ -35,7 +39,6 @@ dev = [
     "pytest-asyncio>=0.25.0",
     "pytest-cov>=6.1.1",
 ]
-
 
 
 [tool.hatch.build]

@@ -5,15 +5,18 @@ build-backend = "hatchling.build"
 [project]
 name = "api_ml"
 version = "0.1.0"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 
 dependencies = [
     "fastapi>=0.115.12",
     "pydantic-settings>=2.9.1",
     "uvicorn>=0.34.2",
     "prometheus-client>=0.22.0",
-    "mlflow>=3.1.4",
     "boto3>=1.40.34",
+    "mlflow-skinny>=3.4.0",
+    "scikit-learn>=1.7.2",
+    "numpy>=2.3.3",
+    "pandas>=2.3.2",
 ]
 
 [project.scripts]
