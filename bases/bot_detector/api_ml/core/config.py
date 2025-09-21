@@ -11,8 +11,9 @@ class Settings(BaseSettings):
 
 
 def get_models() -> dict[str, PyFuncModel]:
+    global models
     return models
 
 
-models: dict = {}
+models: dict[str, PyFuncModel] = {}
 SETTINGS = Settings()

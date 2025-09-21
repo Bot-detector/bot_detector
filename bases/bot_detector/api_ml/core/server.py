@@ -43,10 +43,11 @@ def make_middleware() -> list[Middleware]:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     for name, uri in SETTINGS.MODEL_URIS.items():
-        print(f"Loading model: {name} from {uri}")
         logger.info(f"Loading model: {name} from {uri}")
         model = mlflow.pyfunc.load_model(uri)
+        assert model is not None
         models[name] = model
+    logger.info(models.keys())
 
     logger.info("starting")
     yield

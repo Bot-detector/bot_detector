@@ -16,7 +16,7 @@ def list_models(models: dict = Depends(get_models)):
 
 @router.get("/models/{model_name}")
 def get_model_info(model_name: str, models: dict = Depends(get_models)):
-    model: PyFuncModel = models.get(model_name, None)
+    model: PyFuncModel | None = models.get(model_name, None)
 
     if model is None:
         raise HTTPException(status_code=404, detail=f"Model: {model_name} not found")
