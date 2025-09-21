@@ -41,9 +41,11 @@ jobs:
         run: |
           echo "GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")" >> $GITHUB_OUTPUT
 
+      - name: docker version
+        run: docker --version
       - name: Docker Build
         run: |
-          docker build . \
+          DOCKER_BUILDKIT=1 docker build . \
             --file "${{ inputs.DOCKERFILE }}" \
             ${{ inputs.BUILD_ARGS }} \
             -t "${{ inputs.REGISTRY }}:${{ steps.vars.outputs.GIT_HASH }}"\
