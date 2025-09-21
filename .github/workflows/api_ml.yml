@@ -17,7 +17,7 @@ on:
           - test
           - deploy to prd
 env:
-  QUAY_REGISTERY: quay.io/repository/bot_detector/bd-ml
+  QUAY_REGISTERY: quay.io/bot_detector/bd-ml
   DOCKERFILE: ./projects/api_ml/Dockerfile
   DEPLOYMENT_FILE: bd-ml-prd/deployment.yaml
   PROJECT_DIR: projects/api_ml
