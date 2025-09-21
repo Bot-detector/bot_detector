@@ -51,17 +51,13 @@ jobs:
             ${{ inputs.BUILD_ARGS }} \
             -t "${{ inputs.REGISTRY }}:${{ steps.vars.outputs.GIT_HASH }}"\
 
-      - name: Logout of Quay
-        run: docker logout quay.io
-        
-      - name: Login to Quay registry
-        run: echo "${{ secrets.QUAY_REGISTERY_PASSWORD }}" | docker login -u "bot_detector+quay_robot" quay.io --password-stdin
-
       - name: Tag image
         run: |
           docker tag "${{ inputs.REGISTRY }}:${{ steps.vars.outputs.GIT_HASH }}" "${{ inputs.REGISTRY }}:${{ inputs.ENVIRONMENT}}"
 
       - name: Docker Push image to Quay registry
         run: |
+          docker logout quay.io
+          echo "${{ secrets.QUAY_REGISTERY_PASSWORD }}" | docker login -u "bot_detector+quay_robot" quay.io --password-stdin
           docker push "${{ inputs.REGISTRY }}:${{ steps.vars.outputs.GIT_HASH }}"
           docker push "${{ inputs.REGISTRY }}:${{ inputs.ENVIRONMENT }}"
