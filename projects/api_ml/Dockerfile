@@ -18,6 +18,7 @@ ENV UV_HTTP_TIMEOUT=120
 # ENV UV_PYTHON_CACHE_DIR=/root/.cache/uv/python
 # RUN --mount=type=cache,target=/root/.cache/uv \
 #     uv sync --frozen --no-editable
+RUN uv sync --frozen --no-editable
 
 # Production stage: Prepare the final production environment
 FROM python:3.12-slim-bookworm AS production
