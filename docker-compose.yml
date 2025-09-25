@@ -142,6 +142,8 @@ services:
       - botdetector-network
     env_file:
       - .env
+    volumes:
+      - uv_cache:/root/.cache/uv
     depends_on:
       kafka_setup:
         condition: service_completed_successfully
@@ -158,6 +160,8 @@ services:
       - botdetector-network
     env_file:
       - .env
+    volumes:
+      - uv_cache:/root/.cache/uv
     depends_on:
       kafka_setup:
         condition: service_completed_successfully
@@ -174,6 +178,8 @@ services:
       - botdetector-network
     env_file:
       - .env
+    volumes:
+      - uv_cache:/root/.cache/uv
     depends_on:
       kafka:
         condition: service_healthy
@@ -195,6 +201,8 @@ services:
       - botdetector-network
     env_file:
       - .env
+    volumes:
+      - uv_cache:/root/.cache/uv
     depends_on:
       kafka_setup:
         condition: service_completed_successfully
@@ -212,6 +220,8 @@ services:
       - botdetector-network
     env_file:
       - .env
+    volumes:
+      - uv_cache:/root/.cache/uv
     depends_on:
       kafka_setup:
         condition: service_completed_successfully
@@ -232,6 +242,8 @@ services:
       - DATABASE_URL=mysql+asyncmy://job-prune-hs:job_prune_hs_pw@mysql:3306/playerdata
     env_file:
       - .env
+    volumes:
+      - uv_cache:/root/.cache/uv
     depends_on:
       mysql_setup:
         condition: service_completed_successfully
@@ -256,6 +268,7 @@ services:
     volumes:
       - ./bases:/bases
       - ./components:/components
+      - uv_cache:/root/.cache/uv
     ports:
       - 5000
     networks:
@@ -294,6 +307,8 @@ services:
       RELEASE_VERSION: "0.1"
       PATREON_CLIENT_ID: ""
       PATREON_CLIENT_SECRET: ""
+    volumes:
+      - uv_cache:/root/.cache/uv
     ports:
       - 5000
     networks:
@@ -324,6 +339,7 @@ services:
     volumes:
       - ./bases:/app/bases
       - ./components:/app/components
+      - uv_cache:/root/.cache/uv
     ports:
       - 5001:5000
     networks:
@@ -341,3 +357,6 @@ services:
 networks:
   botdetector-network:
     name: bd-network
+
+volumes:
+  uv_cache:

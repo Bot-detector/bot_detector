@@ -130,7 +130,7 @@ services:
       - ./bases:/app/bases
       - ./components:/app/components
       - ./projects:/app/projects
-      # - $HOME/.cache/uv:/root/.cache/uv
+      - uv_cache:/root/.cache/uv
     command: ["sleep", "infinity"]
     # network_mode: host # needed if we do any portforwarding from the cluster
     networks:
@@ -143,3 +143,5 @@ services:
 networks:
   botdetector-network:
     name: bd-network
+volumes:
+  uv_cache:
