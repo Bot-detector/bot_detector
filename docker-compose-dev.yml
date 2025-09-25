@@ -137,6 +137,7 @@ services:
       - botdetector-network
     environment:
       - UV_HTTP_TIMEOUT=120
+      - BASE_URL=http://api_ml:5000
     env_file:
       - .env
 # use host network mode

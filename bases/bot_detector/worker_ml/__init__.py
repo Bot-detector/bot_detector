@@ -1,3 +1,3 @@
-from bot_detector.worker_ml import core
+from bot_detector import logfmt
 
-__all__ = ["core"]
+__all__ = ["logfmt"]
