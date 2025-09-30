@@ -5,6 +5,7 @@ from .hiscore import (
     HighscoreDataWeeklyTableStruct,
 )
 from .player import PlayersTableStruct
+from .prediction import PredictionLatestStruct, PredictionStruct
 
 __all__ = [
     "PlayersTableStruct",
@@ -12,4 +13,6 @@ __all__ = [
     "HighscoreDataMonthlyTableStruct",
     "HighscoreDataWeeklyTableStruct",
     "HighscoreDataLatestTableStruct",
+    "PredictionLatestStruct",
+    "PredictionStruct",
 ]

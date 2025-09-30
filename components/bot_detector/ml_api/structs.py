@@ -91,7 +91,7 @@ class InputData(BaseModel):
     zulrah: int = 0
 
 
-class OutputData(BaseModel):
+class Prediction(BaseModel):
     Real_Player: float
     Fletching_bot: float
     Vorkath_bot: float
@@ -113,3 +113,8 @@ class OutputData(BaseModel):
     Crafting_bot: float
     Thieving_master_farmer_bot: float
     Doom_bot: float
+
+
+class OutputData(BaseModel):
+    model: str
+    prediction: list[Prediction]

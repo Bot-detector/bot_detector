@@ -99,9 +99,9 @@ CREATE TABLE highscore_data_monthly (
   PRIMARY KEY (player_id, scrape_year, scrape_month)
 ) PARTITION BY HASH (player_id) PARTITIONS 10;
 
-CREATE TABLE prediction_data_latest (
+CREATE TABLE prediction_latest (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  player_id INT UNSIGNED NOT NULL,
+  player_id INT NOT NULL,
   model_name VARCHAR(50) NOT NULL,
   prediction VARCHAR(50) NOT NULL,
   confidence DECIMAL(5, 2) NOT NULL,
@@ -110,10 +110,10 @@ CREATE TABLE prediction_data_latest (
   FOREIGN KEY (player_id) REFERENCES Players(id)
 );
 
-CREATE TABLE prediction_data (
+CREATE TABLE prediction (
   prediction_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  player_id INT UNSIGNED NOT NULL,
+  player_id INT NOT NULL,
   model_name VARCHAR(50) NOT NULL,
   prediction VARCHAR(50) NOT NULL,
   confidence DECIMAL(5, 2) NOT NULL,

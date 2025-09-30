@@ -138,6 +138,7 @@ services:
     environment:
       - UV_HTTP_TIMEOUT=120
       - BASE_URL=http://api_ml:5000
+      - MODEL_NAME=multi_model_v1
     env_file:
       - .env
 # use host network mode

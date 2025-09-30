@@ -1,6 +1,12 @@
+import logging
 from typing import Any
 
 import aiohttp
+from pydantic import ValidationError
+
+from .structs import OutputData
+
+logger = logging.getLogger(__name__)
 
 
 class MLApiClient:
@@ -64,9 +70,7 @@ class MLApiClient:
         async with self._session.get(url) as resp:
             return await self._handle_response(resp)
 
-    async def predict(
-        self, model_name: str, data: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
+    async def predict(self, model_name: str, data: list[dict[str, Any]]) -> OutputData:
         """
         POST /v1/models/{model_name}/predict
         Run predictions using a specific model.
@@ -76,4 +80,11 @@ class MLApiClient:
         """
         url = f"{self.base_url}/v1/models/{model_name}/predict"
         async with self._session.post(url, json=data) as resp:
-            return await self._handle_response(resp)
+            data = await self._handle_response(resp)
+
+        try:
+            output = OutputData.model_validate(data)
+        except ValidationError as e:
+            logger.error(f"Validation error: {e}")
+            raise RuntimeError(f"Failed to parse prediction response: {str(e)}")
+        return output
