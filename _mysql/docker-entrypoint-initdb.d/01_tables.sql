@@ -99,6 +99,30 @@ CREATE TABLE highscore_data_monthly (
   PRIMARY KEY (player_id, scrape_year, scrape_month)
 ) PARTITION BY HASH (player_id) PARTITIONS 10;
 
+CREATE TABLE prediction_latest (
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  player_id INT NOT NULL,
+  model_name VARCHAR(50) NOT NULL,
+  prediction VARCHAR(50) NOT NULL,
+  confidence DECIMAL(5, 2) NOT NULL,
+  predictions JSON DEFAULT NULL,
+  PRIMARY KEY (player_id),
+  FOREIGN KEY (player_id) REFERENCES Players(id)
+);
+
+CREATE TABLE prediction (
+  prediction_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  player_id INT NOT NULL,
+  model_name VARCHAR(50) NOT NULL,
+  prediction VARCHAR(50) NOT NULL,
+  confidence DECIMAL(5, 2) NOT NULL,
+  predictions JSON DEFAULT NULL,
+  PRIMARY KEY (prediction_id),
+  FOREIGN KEY (player_id) REFERENCES Players(id),
+  UNIQUE KEY idx_unique_prediction (player_id, model_name)
+);
+
 CREATE TABLE Predictions (
   id INT PRIMARY KEY AUTO_INCREMENT,
   name VARCHAR(12),
@@ -134,6 +158,7 @@ CREATE TABLE Predictions (
   nex_bot DECIMAL(5, 2) DEFAULT 0,
   unknown_bot DECIMAL(5, 2) DEFAULT 0
 );
+
 CREATE TABLE PredictionsFeedback (
   id INT PRIMARY KEY AUTO_INCREMENT,
   ts TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

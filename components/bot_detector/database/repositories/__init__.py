@@ -6,6 +6,7 @@ from .hiscore import (
     HighscoreDataWeeklyRepo,
 )
 from .player import PlayerRepo
+from .prediction import PredictionLatestRepo, PredictionRepo
 from .report import ReportRepo
 
 __all__ = [
@@ -16,4 +17,6 @@ __all__ = [
     "HighscoreDataWeeklyRepo",
     "HighscoreDataMonthlyRepo",
     "HighscoreDataRepo",
+    "PredictionLatestRepo",
+    "PredictionRepo",
 ]

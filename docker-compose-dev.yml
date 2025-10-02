@@ -130,16 +130,20 @@ services:
       - ./bases:/app/bases
       - ./components:/app/components
       - ./projects:/app/projects
-      # - $HOME/.cache/uv:/root/.cache/uv
+      - uv_cache:/root/.cache/uv
     command: ["sleep", "infinity"]
     # network_mode: host # needed if we do any portforwarding from the cluster
     networks:
       - botdetector-network
     environment:
       - UV_HTTP_TIMEOUT=120
+      - BASE_URL=http://api_ml:5000
+      - MODEL_NAME=multi_model_v1
     env_file:
       - .env
 # use host network mode
 networks:
   botdetector-network:
     name: bd-network
+volumes:
+  uv_cache:

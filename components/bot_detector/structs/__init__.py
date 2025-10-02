@@ -9,6 +9,12 @@ from .hiscore import (
 )
 from .kafka import NotFoundStruct, ReportsToInsertStruct, ScrapedStruct, ToScrapeStruct
 from .player import PlayerStruct
+from .prediction import (
+    PredictionBase,
+    PredictionCreate,
+    PredictionLatestRead,
+    PredictionRead,
+)
 from .reports import Detection, Equipment, ParsedDetection
 
 __all__ = [
@@ -27,4 +33,8 @@ __all__ = [
     "Detection",
     "ParsedDetection",
     "Equipment",
+    "PredictionLatestRead",
+    "PredictionBase",
+    "PredictionCreate",
+    "PredictionRead",
 ]
