@@ -164,5 +164,13 @@ async def main():
     await engine.dispose()
 
 
+async def run_async():
+    await main()
+
+
+def run():
+    asyncio.run(run_async())
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    run()
