@@ -47,7 +47,9 @@ def create_prediction_create(
     )
 
 
-def create_parsed_input(player: ScrapedStruct) -> InputData | None:
+def create_parsed_input(
+    player: ScrapedStruct,
+) -> tuple[ScrapedStruct, InputData] | None:
     skills, activities = {}, {}
 
     if player.highscore_data:
@@ -61,7 +63,7 @@ def create_parsed_input(player: ScrapedStruct) -> InputData | None:
     _input = {**skills, **activities}
     if sum(_input.values()) > 0:
         return None
-    return InputData(**_input)
+    return player, InputData(**_input)
 
 
 async def consume_many_task(
@@ -90,31 +92,31 @@ async def consume_many_task(
 
             # send to ml model for inference
             parsed_data = [create_parsed_input(b) for b in batch]
-            parsed_data = [p.model_dump() for p in parsed_data if p is not None]
+            parsed_data = [p for p in parsed_data if p is not None]
+            input_data = [p[1].model_dump() for p in parsed_data if p is not None]
 
-            if not parsed_data:
-                logger.info("No valid highscore data to process.")
+            if not input_data:
+                logger.info("No valid highscore data to process. (input_data is empty)")
                 await player_sc_consumer.commit()
                 continue
 
             try:
                 predictions = await api.predict(
                     model_name=model_name,
-                    data=parsed_data,
+                    data=input_data,
                 )
                 predictions = [
                     Prediction.model_validate(p) for p in predictions.prediction
                 ]
-
                 combined_predictions = [
                     create_prediction_create(player, pred, model_name=model_name)
-                    for player, pred in zip(batch, predictions)
+                    for (player, _), pred in zip(parsed_data, predictions)
                 ]
             except Exception as e:
                 logger.error(
                     {
                         "model": model_name,
-                        "data_sample": parsed_data[:3],
+                        "input_data": input_data[:3],
                         "error": str(e),
                     }
                 )
