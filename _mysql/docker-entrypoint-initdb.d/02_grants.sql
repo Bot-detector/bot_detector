@@ -14,6 +14,12 @@ GRANT SELECT, INSERT, CREATE, DROP ON playerdata.temp_gear TO `report-worker`@`%
 GRANT SELECT, INSERT, CREATE, DROP ON playerdata.temp_location TO `report-worker`@`%`;
 GRANT SELECT, INSERT, CREATE, DROP ON playerdata.temp_report TO `report-worker`@`%`;
 
+/*ml-worker*/
+GRANT CREATE TEMPORARY TABLES ON *.* TO `ml-worker`@`%`;
+GRANT SELECT ON playerdata.Players TO `ml-worker`@`%`;
+GRANT SELECT, INSERT, UPDATE ON playerdata.prediction TO `ml-worker`@`%`;
+GRANT SELECT, INSERT, UPDATE ON playerdata.prediction_latest TO `ml-worker`@`%`;
+
 /*job-prune-hs*/
 GRANT CREATE TEMPORARY TABLES ON *.* TO `job-prune-hs`@`%`;
 GRANT SELECT ON playerdata.Players TO `job-prune-hs`@`%`;

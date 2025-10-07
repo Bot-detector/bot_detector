@@ -208,6 +208,33 @@ services:
         condition: service_completed_successfully
       mysql_setup:
         condition: service_completed_successfully
+  worker_ml:
+    container_name: worker_ml
+    image: bd/worker_ml # tags the image if build
+    build:
+      context: ./
+      dockerfile: ./projects/worker_ml/Dockerfile
+      target: production
+    # command: ["sleep", "infinity"]
+    environment:
+      - DATABASE_URL=mysql+asyncmy://ml-worker:ml_worker_pw@mysql:3306/playerdata
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - BASE_URL=http://api_ml:5000
+      - MAX_MESSAGES=10
+      - MAX_INTERVAL_MS=5000
+      - MODEL_NAME=multi_model_v1
+    networks:
+      - botdetector-network
+    volumes:
+      - uv_cache:/root/.cache/uv
+    depends_on:
+      kafka_setup:
+        condition: service_completed_successfully
+      mysql_setup:
+        condition: service_completed_successfully
+      api_ml:
+        condition: service_healthy
+  
   scrape_task_producer:
     container_name: scrape_task_producer
     image: bd/scrape_task_producer # tags the image if build

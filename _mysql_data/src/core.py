@@ -46,9 +46,20 @@ NAMES = [
 ]
 
 
-def create_player() -> Generator[Player, None, None]:
+async def get_player_count() -> int:
+    sql = sqlalchemy.text("""
+    SELECT COUNT(*) FROM Players;
+    """)
+    async with Session.begin() as session:
+        result = await session.execute(sql)
+        count = result.scalar() or 0
+    print(f"Total players: {count}")
+    return count
+
+
+def create_player(names: list[str]) -> Generator[Player, None, None]:
     """Generates Player objects with random creation timestamps."""
-    for idx, name in enumerate(NAMES, start=1):
+    for idx, name in enumerate(names, start=1):
         yield Player(
             id=idx,
             name=name,
@@ -115,9 +126,15 @@ async def run_sql_file():
 
 def main():
     time.sleep(15)  # Wait for the database to start
-    player_gen = create_player()
+
+    player_gen = create_player(names=NAMES)
 
     async def run():
+        player_count = await get_player_count()
+        if player_count > 100:
+            print("Players already exist, skipping insertion.")
+            return
+
         await asyncio.gather(
             *[insert_player(p.model_copy(deep=True)) for p in player_gen]
         )

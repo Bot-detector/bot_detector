@@ -9,10 +9,10 @@ version = "0.1.0"
 requires-python = ">=3.10"
 
 dependencies = [
-    "asyncmy>=0.2.10",
-    "cryptography>=44.0.0",
-    "pydantic-settings>=2.7.0",
-    "sqlalchemy>=2.0.37",
+    "asyncmy==0.2.10",
+    "cryptography==44.0.0",
+    "pydantic-settings==2.7.0",
+    "sqlalchemy==2.0.37",
 ]
 
 [project.scripts]

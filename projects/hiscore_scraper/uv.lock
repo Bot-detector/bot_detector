@@ -341,12 +341,12 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aiokafkaengine", specifier = ">=0.1.0" },
-    { name = "orjson", specifier = ">=3.10.16" },
-    { name = "osrs", specifier = ">=0.0.15" },
-    { name = "prometheus-client", specifier = ">=0.22.0" },
-    { name = "pydantic", specifier = ">=2.10.4" },
-    { name = "pydantic-settings", specifier = ">=2.7.0" },
+    { name = "aiokafkaengine", specifier = "==0.1.0" },
+    { name = "orjson", specifier = "==3.10.16" },
+    { name = "osrs", specifier = "==0.0.15" },
+    { name = "prometheus-client", specifier = "==0.22.0" },
+    { name = "pydantic", specifier = "==2.10.4" },
+    { name = "pydantic-settings", specifier = "==2.7.0" },
 ]
 
 [[package]]

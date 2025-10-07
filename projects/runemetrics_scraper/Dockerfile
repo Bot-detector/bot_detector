@@ -1,4 +1,4 @@
-FROM python:3.11-slim-bookworm AS builder
+FROM python:3.12-slim-bookworm AS builder
 
 # Copy uv from external repository
 COPY --from=ghcr.io/astral-sh/uv:0.5.13 /uv /uvx /bin/
@@ -17,7 +17,7 @@ WORKDIR /app/projects/runemetrics_scraper
 RUN uv sync --frozen --no-editable
 
 # Production stage: Prepare the final production environment
-FROM python:3.11-slim-bookworm AS production
+FROM python:3.12-slim-bookworm AS production
 
 RUN adduser -u 5678 --disabled-password --gecos "" appuser
 
