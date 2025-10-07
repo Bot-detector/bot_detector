@@ -61,7 +61,7 @@ def create_parsed_input(
     activities = {k.lower(): v for k, v in activities.items()}
 
     _input = {**skills, **activities}
-    if sum(_input.values()) > 0:
+    if sum(_input.values()) == 0:
         return None
     return player, InputData(**_input)
 
