@@ -111,6 +111,8 @@ async def transform_player_stats(
     player: PlayerStruct,
 ) -> tuple[ScrapedStruct | None, Any | None]:
     player.updated_at = datetime.now()
+    player.possible_ban = False
+    player.confirmed_ban = False
 
     skills = {s.name: s.xp for s in player_stats.skills if s.xp > 0}
     activities = {a.name: a.score for a in player_stats.activities if a.score > 0}
@@ -204,6 +206,7 @@ async def work(
             if player_stats is None:
                 not_found_counter.labels(proxy=_proxy).inc()
                 logger.debug(f"[{worker_id}][{player_data.name}]: not found.")
+                player_data.possible_ban = True
                 await player_nf_producer.produce_one(
                     player=NotFoundStruct(
                         metadata=MetaData(version=1, source="hiscore_scraper"),
