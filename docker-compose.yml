@@ -385,6 +385,10 @@ networks:
   botdetector-network:
     name: bd-network
 
+# To create the docker volume for uv cache (run only once)
+# docker volume create uv_cache
+
+# To copy existing cache from host to docker volume (run only once)
 # docker run --rm \
 #   -v uv_cache:/data \
 #   -v ~/.cache/uv:/source \
