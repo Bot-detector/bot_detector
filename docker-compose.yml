@@ -385,5 +385,10 @@ networks:
   botdetector-network:
     name: bd-network
 
+# docker run --rm \
+#   -v uv_cache:/data \
+#   -v ~/.cache/uv:/source \
+#   alpine sh -c "cp -r /source/* /data/"
 volumes:
   uv_cache:
+    external: true

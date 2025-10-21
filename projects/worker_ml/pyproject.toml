@@ -12,7 +12,7 @@ dependencies = [
     "cryptography==44.0.1",
     "pydantic-settings==2.7.0",
     "pydantic==2.10.4",
-    "sqlalchemy==2.0.37",
+    "sqlalchemy==2.0.44",
     "orjson==3.10.16",
     "aiokafka==0.12.0",
     "aiohttp==3.12.14",

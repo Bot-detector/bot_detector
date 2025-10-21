@@ -12,9 +12,9 @@ dependencies = [
     "aiokafkaengine==0.0.4",
     "fastapi==0.115.12",
     "pydantic-settings==2.9.1",
-    "sqlalchemy==2.0.40",
+    "sqlalchemy==2.0.44",
     "uvicorn==0.34.2",
-    "asyncmy==0.2.9",
+    "asyncmy==0.2.10",
     "orjson==3.10.16",
     "prometheus-client==0.22.0",
 ]
