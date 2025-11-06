@@ -1,6 +1,15 @@
-from pydantic import Field
-from pydantic_settings import BaseSettings
+from .core import ConsumerInterface, ProducerInterface, Settings
+from .data_to_predict import (
+    DataToPredictConsumer,
+    DataToPredictProducer,
+    DataToPredictStruct,
+)
 
-
-class Settings(BaseSettings):
-    KAFKA_BOOTSTRAP_SERVERS: str = Field(default=...)
+__all__ = [
+    "Settings",
+    "ConsumerInterface",
+    "ProducerInterface",
+    "DataToPredictConsumer",
+    "DataToPredictProducer",
+    "DataToPredictStruct",
+]
