@@ -34,7 +34,8 @@ class BaseConsumer(ConsumerInterface):
         return self._consumer
 
     def _validate_value(self, value) -> tuple[dict | None, str | None]:
-        """Override in child classes"""
+        if not isinstance(value, dict):
+            return None, "Message value is not a dict"
         return value, None
 
     async def _consume_one(self) -> tuple[dict | None, str | None]:

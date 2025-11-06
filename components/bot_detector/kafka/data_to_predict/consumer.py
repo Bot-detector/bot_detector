@@ -42,12 +42,8 @@ class DataToPredictConsumer(BaseConsumer):
     ) -> tuple[list[dict | None], list[str | None]]:
         return await super()._consume_many(max_messages, timeout_ms)
 
-    # async def get_lag(self) -> int: ...
-
-    # override
-    def _validate_value(self, value) -> tuple[dict | None, str | None]:
-        """Override in child classes"""
-        return value, None
+    async def get_lag(self) -> int:
+        return await super().get_lag()
 
     async def consume_one(self) -> DataToPredictStruct | None:
         value, error = await super()._consume_one()
