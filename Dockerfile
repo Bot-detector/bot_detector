@@ -13,10 +13,6 @@ COPY ./README.md .
 
 # RUN uv cache dir
 # RUN uv sync
-ENV UV_PYTHON_CACHE_DIR=/root/.cache/uv/python
-RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --locked --no-install-project --no-editable
+
 
 CMD [ "sleep", "infinity" ]
