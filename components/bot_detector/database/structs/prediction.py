@@ -15,7 +15,7 @@ class PredictionLatestStruct(Base):
     )
     model_name: Mapped[str] = mapped_column(String(50), nullable=False)
     prediction: Mapped[str] = mapped_column(String(50), nullable=False)
-    confidence: Mapped[float] = mapped_column(DECIMAL(5, 2), nullable=False)
+    confidence: Mapped[float] = mapped_column(DECIMAL(5, 4), nullable=False)
     predictions: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, default=None)
 
 
@@ -33,5 +33,5 @@ class PredictionStruct(Base):
     )
     model_name: Mapped[str] = mapped_column(String(50), nullable=False)
     prediction: Mapped[str] = mapped_column(String(50), nullable=False)
-    confidence: Mapped[float] = mapped_column(DECIMAL(5, 2), nullable=False)
+    confidence: Mapped[float] = mapped_column(DECIMAL(5, 4), nullable=False)
     predictions: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, default=None)
