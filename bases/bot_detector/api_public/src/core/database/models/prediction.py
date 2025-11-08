@@ -1,8 +1,8 @@
 from bot_detector.api_public.src.core.database.database import Base
-from sqlalchemy import DECIMAL, TIMESTAMP, Column, Integer, String
+from sqlalchemy import DECIMAL, JSON, TIMESTAMP, Column, Integer, String
 
 
-class Prediction(Base):
+class Prediction_v1(Base):
     __tablename__ = "Predictions"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -38,3 +38,14 @@ class Prediction(Base):
     gauntlet_bot = Column(DECIMAL(5, 2), default=0)
     nex_bot = Column(DECIMAL(5, 2), default=0)
     unknown_bot = Column(DECIMAL(5, 2), default=0)
+
+
+class Prediction_v2(Base):
+    __tablename__ = "prediction_latest"
+
+    created_at = Column(TIMESTAMP)
+    player_id = Column(Integer, primary_key=True)
+    model_name = Column(String(50))
+    prediction = Column(String(50))
+    confidence = Column(DECIMAL(5, 2))
+    predictions = Column(JSON)

@@ -10,6 +10,7 @@ engine = create_async_engine(
     max_overflow=90,
     pool_timeout=settings.POOL_TIMEOUT,
     pool_recycle=settings.POOL_RECYCLE,
+    echo=True,
     # echo=(settings.ENV != "PRD"),
 )
 

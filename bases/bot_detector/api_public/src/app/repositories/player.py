@@ -8,7 +8,7 @@ from bot_detector.api_public.src.core.database.models.feedback import (
 )
 from bot_detector.api_public.src.core.database.models.player import Player as dbPlayer
 from bot_detector.api_public.src.core.database.models.prediction import (
-    Prediction as dbPrediction,
+    Prediction_v2 as dbPrediction,
 )
 from fastapi.encoders import jsonable_encoder
 from pydantic import ValidationError
@@ -93,12 +93,21 @@ class Player:
         return tuple(result.mappings())
 
     async def get_prediction(self, player_names: list[str]):
-        query: Select = select(dbPrediction)
+        query: Select = select(
+            dbPlayer.id.label("player_id"),
+            dbPlayer.name,
+            dbPrediction.created_at,
+            dbPrediction.model_name,
+            dbPrediction.prediction,
+            dbPrediction.confidence,
+            dbPrediction.predictions,
+        )
         query = query.select_from(dbPrediction)
-        query = query.where(dbPrediction.name.in_(player_names))
+        query = query.join(dbPlayer, dbPrediction.player_id == dbPlayer.id)
+        query = query.where(dbPlayer.name.in_(player_names))
 
         result: AsyncResult = await self.session.execute(query)
-        result = result.scalars().all()
+        result = result.mappings().all()
         return jsonable_encoder(result)
 
     async def get(self, player_name: str) -> PlayerInDB:
