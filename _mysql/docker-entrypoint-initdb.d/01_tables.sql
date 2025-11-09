@@ -110,6 +110,17 @@ CREATE TABLE prediction_latest (
   FOREIGN KEY (player_id) REFERENCES Players(id)
 );
 
+DELIMITER $$
+
+CREATE TRIGGER trg_prediction_latest_update_timestamp
+BEFORE UPDATE ON prediction_latest
+FOR EACH ROW
+BEGIN
+  SET NEW.created_at = CURRENT_TIMESTAMP;
+END$$
+
+DELIMITER ;
+
 CREATE TABLE prediction (
   prediction_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
