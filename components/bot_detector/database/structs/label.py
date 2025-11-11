@@ -1,8 +1,8 @@
-from bot_detector.api_public.src.core.database.database import Base
+from bot_detector.database import Base
 from sqlalchemy import Column, Integer, Text
 
 
-class Label(Base):
+class LabelsTableStruct(Base):
     __tablename__ = "Labels"
 
     id = Column(Integer, primary_key=True, autoincrement=True)

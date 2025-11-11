@@ -1,4 +1,4 @@
-from bot_detector.api_public.src.core.database.database import Base
+from bot_detector.database import Base
 from sqlalchemy import (
     TIMESTAMP,
     Column,
@@ -11,7 +11,7 @@ from sqlalchemy import (
 )
 
 
-class PredictionFeedback(Base):
+class PredictionsFeedbackTableStruct(Base):
     __tablename__ = "PredictionsFeedback"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
