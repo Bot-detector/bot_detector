@@ -1,7 +1,9 @@
 from bot_detector.api_public.src.core.config import DB_SEMAPHORE, settings
-from bot_detector.database import Settings as DBSettings, get_session_factory
+from bot_detector.database import Settings as DBSettings
+from bot_detector.database import get_session_factory
 from sqlalchemy.ext.asyncio import AsyncSession
 
+# Reuse the shared database component instead of maintaining copy
 _db_settings = DBSettings(
     DATABASE_URL=settings.DATABASE_URL,
     POOL_TIMEOUT=settings.POOL_TIMEOUT,
