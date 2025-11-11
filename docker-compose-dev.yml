@@ -121,7 +121,7 @@ services:
       context: ./
       dockerfile: Dockerfile
     # command: ["uv", "run", "bases/bot_detector/hiscore_scraper/core.py"]
-    # command: uv run uvicorn bases.bot_detector.api_public.src.core.server:app --host 0.0.0.0 --reload --port 5000
+    # command: uv run uvicorn bases.api_public.core.server:app --host 0.0.0.0 --reload --port 5000
     # command: uv run uvicorn bases.bot_detector.website.core.server:app --host 0.0.0.0 --reload --port 5000
     # command: uv run uvicorn bases.bot_detector.api_ml.core.server:app --host 0.0.0.0 --reload --port 5000
     ports:

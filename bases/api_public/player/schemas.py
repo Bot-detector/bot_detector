@@ -46,3 +46,56 @@ class PlayerInDB(PlayerCreate):
 
 class Player(PlayerInDB):
     pass
+
+
+class PlayerResponse(BaseModel):
+    id: int
+    name: str
+    created_at: datetime
+    updated_at: datetime
+    possible_ban: bool
+    confirmed_ban: bool
+    confirmed_player: bool
+    label_id: int
+    label_jagex: int
+    ironman: bool
+    hardcore_ironman: bool
+    ultimate_ironman: bool
+    normalized_name: str
+
+
+class ReportScoreResponse(BaseModel):
+    count: int
+    possible_ban: bool
+    confirmed_ban: bool
+    confirmed_player: bool
+    manual_detect: bool
+
+
+class FeedbackScoreResponse(BaseModel):
+    count: int
+    possible_ban: bool
+    confirmed_ban: bool
+    confirmed_player: bool
+
+
+class PredictionResponse(BaseModel):
+    player_id: int
+    player_name: str
+    prediction_label: str
+    prediction_confidence: float
+    created: datetime
+    predictions_breakdown: dict
+
+    @classmethod
+    def from_data(cls, data: dict, breakdown: bool):
+        prediction_data: dict = data.pop("predictions", {})
+        player_data = {
+            "player_id": data.pop("player_id"),
+            "player_name": data.pop("name"),
+            "created": data.pop("created_at"),
+            "prediction_label": data.pop("prediction").lower(),
+            "prediction_confidence": data.pop("confidence"),
+            "predictions_breakdown": prediction_data if breakdown else {},
+        }
+        return cls(**player_data)

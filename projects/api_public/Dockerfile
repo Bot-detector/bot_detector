@@ -27,4 +27,4 @@ COPY --from=builder --chown=appuser /app/projects/api_public/.venv /app/projects
 
 USER appuser
 
-CMD [".venv/bin/uvicorn", "bot_detector.api_public.src.core.server:app", "--proxy-headers", "--host", "0.0.0.0", "--port", "5000", "--log-level", "warning"]
+CMD [".venv/bin/uvicorn", "bases.api_public.core.server:app", "--proxy-headers", "--host", "0.0.0.0", "--port", "5000", "--log-level", "warning"]

@@ -1,9 +1,11 @@
 import time
 from typing import Optional
 
-from bot_detector.api_public.src.app.views.input._metadata import Metadata
-from pydantic import BaseModel
-from pydantic.fields import Field
+from pydantic import BaseModel, Field
+
+
+class Metadata(BaseModel):
+    version: str
 
 
 class Equipment(BaseModel):

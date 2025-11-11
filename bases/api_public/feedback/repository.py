@@ -1,6 +1,6 @@
 import logging
 
-from bot_detector.api_public.src.app.views.input.feedback import FeedbackInput
+from bases.api_public.feedback.schemas import FeedbackInput
 from bot_detector.database.api_public import (
     Player as dbPlayer,
     PredictionFeedback as dbFeedback,
