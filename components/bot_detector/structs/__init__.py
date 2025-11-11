@@ -8,7 +8,15 @@ from .hiscore import (
     HighscoreDataWeeklyStruct,
 )
 from .kafka import NotFoundStruct, ReportsToInsertStruct, ScrapedStruct, ToScrapeStruct
-from .player import PlayerStruct
+from .player import (
+    FeedbackScoreResponse,
+    PlayerCreate,
+    PlayerInDB,
+    PlayerResponse,
+    PlayerStruct,
+    PredictionResponse,
+    ReportScoreResponse,
+)
 from .prediction import (
     PredictionBase,
     PredictionCreate,
@@ -26,7 +34,13 @@ __all__ = [
     "HighscoreDataWeeklyStruct",
     "HighscoreDataMonthlyStruct",
     "NotFoundStruct",
+    "PlayerCreate",
+    "PlayerInDB",
+    "PlayerResponse",
     "PlayerStruct",
+    "PredictionResponse",
+    "ReportScoreResponse",
+    "FeedbackScoreResponse",
     "ToScrapeStruct",
     "ScrapedStruct",
     "ReportsToInsertStruct",

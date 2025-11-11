@@ -30,3 +30,5 @@ packages = ["bot_detector"]
 "../../components/bot_detector/kafka" = "bot_detector/kafka"
 "../../components/bot_detector/structs" = "bot_detector/structs"
 "../../components/bot_detector/logfmt" = "bot_detector/logfmt"
+"../../components/bot_detector/player_services" = "bot_detector/player_services"
+"../../components/bot_detector/reporting" = "bot_detector/reporting"

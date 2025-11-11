@@ -1,10 +1,10 @@
 import logging
 
 from bot_detector.api_public.src.app.views.input.feedback import FeedbackInput
-from bot_detector.api_public.src.core.database.models.feedback import (
-    PredictionFeedback as dbFeedback,
+from bot_detector.database.structs import (
+    PlayersTableStruct,
+    PredictionsFeedbackTableStruct,
 )
-from bot_detector.api_public.src.core.database.models.player import Player as dbPlayer
 from sqlalchemy import and_, insert, select
 from sqlalchemy.ext.asyncio import AsyncResult, AsyncSession
 from sqlalchemy.sql.expression import Insert, Select
@@ -17,18 +17,20 @@ class Feedback:
         self.session = session
 
     async def insert_feedback(self, feedback: FeedbackInput) -> tuple[bool, str]:
-        sql_select: Select = select(dbPlayer.id)
-        sql_select = sql_select.where(dbPlayer.name == feedback.player_name)
+        sql_select: Select = select(PlayersTableStruct.id)
+        sql_select = sql_select.where(
+            PlayersTableStruct.name == feedback.player_name
+        )
 
-        sql_dupe_check: Select = select(dbFeedback)
+        sql_dupe_check: Select = select(PredictionsFeedbackTableStruct)
         sql_dupe_check = sql_dupe_check.where(
             and_(
-                dbFeedback.prediction == feedback.prediction,
-                dbFeedback.subject_id == feedback.subject_id,
+                PredictionsFeedbackTableStruct.prediction == feedback.prediction,
+                PredictionsFeedbackTableStruct.subject_id == feedback.subject_id,
             )
         )
 
-        sql_insert: Insert = insert(dbFeedback)
+        sql_insert: Insert = insert(PredictionsFeedbackTableStruct)
         data = {
             "voter_id": None,
             "subject_id": feedback.subject_id,
@@ -50,7 +52,9 @@ class Feedback:
                 return False, "voter_does_not_exist"
 
             voter_id = result["id"]
-            sql_dupe_check = sql_dupe_check.where(dbFeedback.voter_id == voter_id)
+            sql_dupe_check = sql_dupe_check.where(
+                PredictionsFeedbackTableStruct.voter_id == voter_id
+            )
 
             result: AsyncResult = await self.session.execute(sql_dupe_check)
             result = result.first()

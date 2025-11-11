@@ -1,11 +1,11 @@
 import logging
 
-from bot_detector.api_public.src.app.repositories.player import Player
-from bot_detector.api_public.src.app.repositories.report import CustomError, Report
 from bot_detector.api_public.src.app.views.response.ok import Ok
-from bot_detector.api_public.src.core._cache import SimpleALRUCache
+from bot_detector.api_public.src.core.fastapi.dependencies.kafka import kafka_manager
 from bot_detector.api_public.src.core.fastapi.dependencies.session import get_session
-from bot_detector.structs import Detection, ParsedDetection
+from bot_detector.player_services import PlayerService, SimpleALRUCache
+from bot_detector.reporting import ReportProcessingError, ReportService
+from bot_detector.structs import Detection
 from fastapi import APIRouter, Depends, status
 from fastapi.exceptions import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Report"])
 
 player_cache = SimpleALRUCache(max_size=100_000)
+report_service = ReportService(source="api_public")
 
 
 @router.post("/report", status_code=status.HTTP_201_CREATED, response_model=Ok)
@@ -21,48 +22,21 @@ async def post_reports(
     detections: list[Detection],
     session: AsyncSession = Depends(get_session),
 ):
-    global player_cache
-    report_repo = Report()
-    player_repo = Player(session=session, cache=player_cache)
+    player_service = PlayerService(session=session, cache=player_cache)
 
-    data, error = await report_repo.parse_data(detections)
-    if error:
+    data, error = report_service.validate(detections)
+    if error or not data:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=error)
 
-    logger.debug(f"Received: {len(data)}, Reporter: {data[0].reporter}")
+    logger.debug("Received: %s, Reporter: %s", len(data), data[0].reporter)
 
-    # get unique list of names
-    player_names = list(set([d.reported for d in data] + [d.reporter for d in data]))
-    players = [await player_repo.get_or_insert(player_name=p) for p in player_names]
-    players = {p.name: p.id for p in players if p}
-
-    _data = []
-    for d in data:
-        _d = d.model_dump()
-        # get reported_id from name
-        reported = player_repo.sanitize_name(_d.pop("reported"))
-        reported_id = players.get(reported)
-
-        # get reporter_id from name
-        reporter = player_repo.sanitize_name(_d.pop("reporter"))
-        reporter_id = players.get(reporter)
-
-        # some validation
-        if reporter_id is None or reported_id is None:
-            logger.warning(msg=f"{reported_id=}, {reporter_id=}, {d}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="something went wrong",
-            )
-        _d["reported_id"] = reported_id
-        _d["reporter_id"] = reporter_id
-
-        _data.append(ParsedDetection(**_d))
-
-    # print(_data)
     try:
-        await report_repo.send_to_kafka(data=_data)
-    except CustomError:
+        parsed = await report_service.build_parsed_detections(
+            detections=data, player_service=player_service
+        )
+        producer = kafka_manager.get_producer(key="reports_to_insert")
+        await report_service.send_to_kafka(parsed=parsed, producer=producer)
+    except ReportProcessingError:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal error",
