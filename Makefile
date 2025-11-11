@@ -37,11 +37,14 @@ clean-test: ## cleanup pytests leftovers
 	rm -f test-results.html
 	rm -f output.xml
 
+uv-cache:
+	docker volume inspect uv_cache >/dev/null 2>&1 || docker volume create uv_cache
+
 dev-restart: ## restart containers
 	$(DOCKER_ENV) docker compose -f 'docker-compose-dev.yml' down
 	$(DOCKER_ENV) docker compose -f 'docker-compose-dev.yml' up -d --build
 
-restart: ## restart containers
+restart: uv-cache## restart containers
 	$(DOCKER_ENV) docker compose -f 'docker-compose.yml' down
 	$(DOCKER_ENV) docker compose -f 'docker-compose.yml' up -d --build
 
