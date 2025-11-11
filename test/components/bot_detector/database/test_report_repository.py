@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from bot_detector.database.repositories import ReportRepo
+from bot_detector.database.report import ReportRepo
 from bot_detector.structs import Equipment, ParsedDetection
 
 

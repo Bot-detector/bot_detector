@@ -2,7 +2,11 @@
 API Public specific database models and helpers.
 """
 
-from .models import Label, PredictionFeedback, Prediction_v1, Prediction_v2, Player, Report
+from .feedback import PredictionFeedback
+from .label import Label
+from .player import Player
+from .prediction import Prediction_v1, Prediction_v2
+from .report import Report
 
 __all__ = [
     "Player",

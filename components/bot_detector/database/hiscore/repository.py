@@ -3,13 +3,13 @@ import logging
 
 import sqlalchemy as sqla
 import sqlalchemy.dialects.mysql as sqla_mysql
-from bot_detector.database.interfaces import (
+from .interface import (
     HighscoreDataDailyInterface,
     HighscoreDataLatestInterface,
     HighscoreDataMonthlyInterface,
     HighscoreDataWeeklyInterface,
 )
-from bot_detector.database.structs import (
+from .structs import (
     HighscoreDataDailyTableStruct,
     HighscoreDataLatestTableStruct,
     HighscoreDataMonthlyTableStruct,

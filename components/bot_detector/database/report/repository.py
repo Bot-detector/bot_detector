@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 
 import sqlalchemy as sqla
-from bot_detector.database.interfaces import ReportInterface
+from .interface import ReportInterface
 from bot_detector.structs import ParsedDetection
 from sqlalchemy import TextClause
 from sqlalchemy.ext.asyncio import AsyncSession

@@ -3,8 +3,8 @@ from dataclasses import asdict
 from datetime import date
 
 import sqlalchemy as sqla
-from bot_detector.database.interfaces import playerInterface
-from bot_detector.database.structs import PlayersTableStruct
+from .interface import playerInterface
+from .structs import PlayersTableStruct
 from bot_detector.structs import PlayerStruct
 from sqlalchemy import TextClause
 from sqlalchemy.ext.asyncio import AsyncSession

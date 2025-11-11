@@ -1,6 +1,6 @@
 import logging
 
-from bot_detector.database.api_public.models import Label as dbLabel
+from bot_detector.database.api_public import Label as dbLabel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncResult, AsyncSession
 from sqlalchemy.sql.expression import Select

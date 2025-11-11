@@ -5,7 +5,7 @@ from datetime import date, datetime, time, timedelta
 
 from bot_detector.database import Settings as DBSettings
 from bot_detector.database import get_session_factory
-from bot_detector.database.repositories import PlayerRepo
+from bot_detector.database.player import PlayerRepo
 from bot_detector.kafka import Settings as KafkaSettings
 from bot_detector.kafka.repositories import (
     RepoPlayersToScrapeConsumer,
