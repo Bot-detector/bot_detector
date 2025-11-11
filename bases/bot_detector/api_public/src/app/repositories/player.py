@@ -3,11 +3,9 @@ import logging
 import sqlalchemy as sqla
 from bot_detector.api_public.src.app.views.player import PlayerCreate, PlayerInDB
 from bot_detector.api_public.src.core._cache import SimpleALRUCache
-from bot_detector.api_public.src.core.database.models.feedback import (
+from bot_detector.database.api_public.models import (
+    Player as dbPlayer,
     PredictionFeedback as dbFeedback,
-)
-from bot_detector.api_public.src.core.database.models.player import Player as dbPlayer
-from bot_detector.api_public.src.core.database.models.prediction import (
     Prediction_v2 as dbPrediction,
 )
 from fastapi.encoders import jsonable_encoder
@@ -17,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncResult, AsyncSession
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql.expression import Select
 
-# from bot_detector.api_public.src.core.database.models.report import Report as dbReport
+# from bot_detector.database.api_public.models import Report as dbReport
 
 logger = logging.getLogger(__name__)
 

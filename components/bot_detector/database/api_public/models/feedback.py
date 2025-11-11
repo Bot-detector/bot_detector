@@ -1,4 +1,4 @@
-from bot_detector.api_public.src.core.database.database import Base
+from bot_detector.database import Base
 from sqlalchemy import (
     TIMESTAMP,
     Column,
