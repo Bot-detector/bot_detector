@@ -4,7 +4,9 @@ from bot_detector.database.report import ReportRepo
 from bot_detector.structs import Equipment, ParsedDetection
 
 
-def _sample_detection(ts: int | None = None, equip_weapon_id: int = 18) -> ParsedDetection:
+def _sample_detection(
+    ts: int | None = None, equip_weapon_id: int = 18
+) -> ParsedDetection:
     equipment = Equipment(
         equip_head_id=10,
         equip_amulet_id=11,
