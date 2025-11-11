@@ -1,9 +1,9 @@
 import logging
 from contextlib import asynccontextmanager
 
-from bases.api_public import routes as routes_pkg
-from bases.api_public.core.fastapi.dependencies.kafka import kafka_manager
-from bases.api_public.core.fastapi.middleware import (
+from bases.bot_detector.api_public import routes as routes_pkg
+from bases.bot_detector.api_public.core.fastapi.dependencies.kafka import kafka_manager
+from bases.bot_detector.api_public.core.fastapi.middleware import (
     LoggingMiddleware,
     PrometheusMiddleware,
 )

@@ -1,6 +1,6 @@
 from fastapi.routing import APIRoute
 
-from bases.api_public import routes
+from bases.bot_detector.api_public import routes
 
 
 def _api_paths() -> set[str]:

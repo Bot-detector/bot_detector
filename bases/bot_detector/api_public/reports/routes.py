@@ -1,10 +1,10 @@
 import logging
 
-from bases.api_public.player.repository import Player
-from bases.api_public.reports.repository import CustomError, Report
-from bases.api_public.shared.responses import Ok
-from bases.api_public.core._cache import SimpleALRUCache
-from bases.api_public.core.fastapi.dependencies.session import get_session
+from bases.bot_detector.api_public.player.repository import Player
+from bases.bot_detector.api_public.reports.repository import CustomError, Report
+from bases.bot_detector.api_public.shared.responses import Ok
+from bases.bot_detector.api_public.core._cache import SimpleALRUCache
+from bases.bot_detector.api_public.core.fastapi.dependencies.session import get_session
 from bot_detector.structs import Detection, ParsedDetection
 from fastapi import APIRouter, Depends, status
 from fastapi.exceptions import HTTPException

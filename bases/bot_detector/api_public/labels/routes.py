@@ -1,8 +1,8 @@
 import logging
 
-from bases.api_public.labels.repository import LabelRepository
-from bases.api_public.labels.schemas import LabelResponse
-from bases.api_public.core.fastapi.dependencies.session import get_session
+from bases.bot_detector.api_public.labels.repository import LabelRepository
+from bases.bot_detector.api_public.labels.schemas import LabelResponse
+from bases.bot_detector.api_public.core.fastapi.dependencies.session import get_session
 from fastapi import APIRouter, Depends, status
 
 router = APIRouter(tags=["Labels"])

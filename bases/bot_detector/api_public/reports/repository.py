@@ -2,7 +2,7 @@ import asyncio
 import logging
 import time
 
-from bases.api_public.core.fastapi.dependencies.kafka import kafka_manager
+from bases.bot_detector.api_public.core.fastapi.dependencies.kafka import kafka_manager
 from bot_detector.kafka.repositories.reports_to_insert import (
     RepoReportsToInsertProducer,
 )

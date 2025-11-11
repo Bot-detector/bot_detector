@@ -1,6 +1,6 @@
 import pytest
 
-from bases.api_public.feedback.schemas import FeedbackInput
+from bases.bot_detector.api_public.feedback.schemas import FeedbackInput
 
 
 def _base_feedback_kwargs() -> dict:

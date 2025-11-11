@@ -2,14 +2,14 @@ import asyncio
 import logging
 from typing import Annotated
 
-from bases.api_public.player.repository import Player as repoPlayer
-from bases.api_public.player.schemas import (
+from bases.bot_detector.api_public.player.repository import Player as repoPlayer
+from bases.bot_detector.api_public.player.schemas import (
     FeedbackScoreResponse,
     PredictionResponse,
     ReportScoreResponse,
 )
-from bases.api_public.core.fastapi.dependencies.session import get_session
-from bases.api_public.core.fastapi.dependencies.to_jagex_name import (
+from bases.bot_detector.api_public.core.fastapi.dependencies.session import get_session
+from bases.bot_detector.api_public.core.fastapi.dependencies.to_jagex_name import (
     to_jagex_name,
 )
 from fastapi import APIRouter, Depends, HTTPException, Query, status

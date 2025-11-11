@@ -4,9 +4,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import FastAPI
 
-from bases.api_public.core import server
-from bases.api_public.core.fastapi.dependencies import session as session_dep
-from bases.api_public.core.fastapi.dependencies import kafka as kafka_dep
+from bases.bot_detector.api_public.core import server
+from bases.bot_detector.api_public.core.fastapi.dependencies import session as session_dep
+from bases.bot_detector.api_public.core.fastapi.dependencies import kafka as kafka_dep
 
 
 def test_create_app_wires_routes_and_middleware():

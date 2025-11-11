@@ -20,13 +20,13 @@ dependencies = [
 ]
 
 [project.scripts]
-scrape_task_producer = "bases.api_public.core.server:run"
+scrape_task_producer = "bases.bot_detector.api_public.core.server:run"
 
 [tool.hatch.build.hooks.polylith-bricks]
 packages = ["bot_detector"]
 
 [tool.polylith.bricks]
-"../../bases/api_public" = "bot_detector/api_public"
+"../../bases/bot_detector/api_public" = "bot_detector/api_public"
 "../../components/bot_detector/database" = "bot_detector/database"
 "../../components/bot_detector/kafka" = "bot_detector/kafka"
 "../../components/bot_detector/structs" = "bot_detector/structs"

@@ -1,10 +1,10 @@
 import logging
 
-from bases.api_public.feedback.repository import Feedback
-from bases.api_public.feedback.schemas import FeedbackInput
-from bases.api_public.shared.responses import Ok
-from bases.api_public.core.fastapi.dependencies.session import get_session
-from bases.api_public.core.fastapi.dependencies.to_jagex_name import (
+from bases.bot_detector.api_public.feedback.repository import Feedback
+from bases.bot_detector.api_public.feedback.schemas import FeedbackInput
+from bases.bot_detector.api_public.shared.responses import Ok
+from bases.bot_detector.api_public.core.fastapi.dependencies.session import get_session
+from bases.bot_detector.api_public.core.fastapi.dependencies.to_jagex_name import (
     to_jagex_name,
 )
 from fastapi import APIRouter, Depends, HTTPException, status

@@ -1,10 +1,10 @@
 from fastapi.testclient import TestClient
 
-from bases.api_public.core import server
-from bases.api_public.core.fastapi.dependencies.session import get_session
-from bases.api_public.player.repository import Player as PlayerRepo
-from bases.api_public.feedback.repository import Feedback as FeedbackRepo
-from bases.api_public.reports.repository import Report as ReportRepo, CustomError
+from bases.bot_detector.api_public.core import server
+from bases.bot_detector.api_public.core.fastapi.dependencies.session import get_session
+from bases.bot_detector.api_public.player.repository import Player as PlayerRepo
+from bases.bot_detector.api_public.feedback.repository import Feedback as FeedbackRepo
+from bases.bot_detector.api_public.reports.repository import Report as ReportRepo, CustomError
 
 
 async def _dummy_session():

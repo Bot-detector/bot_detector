@@ -1,4 +1,4 @@
-from bases.api_public.core.config import DB_SEMAPHORE, settings
+from bases.bot_detector.api_public.core.config import DB_SEMAPHORE, settings
 from bot_detector.database import Settings as DBSettings
 from bot_detector.database import get_session_factory
 from sqlalchemy.ext.asyncio import AsyncSession

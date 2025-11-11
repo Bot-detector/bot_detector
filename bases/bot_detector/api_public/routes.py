@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from bases.api_public import feedback, labels, player, reports
+from bases.bot_detector.api_public import feedback, labels, player, reports
 
 router = APIRouter()
 v2_router = APIRouter(prefix="/v2")
