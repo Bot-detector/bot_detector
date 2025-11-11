@@ -1,7 +1,7 @@
-FROM python:3.11-slim-bookworm AS builder
+FROM python:3.12-slim-bookworm AS builder
 
 # Copy uv from external repository
-COPY --from=ghcr.io/astral-sh/uv:0.5.13 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.5.4 /uv /uvx /bin/
 
 # Set the working directory for the build stage
 WORKDIR /app

@@ -119,6 +119,10 @@ flowchart TD
     end
 ```
 # intersting commands
-```
+```sh
 find . -type f -name "pyproject.toml" -not -path "*/.venv/*" -execdir sh -c 'echo "🔄 Updating lock in $(pwd)"; uv lock' \;
+```
+# syncing in all directories, so uv cache is setup
+```sh
+find . -type f -name "pyproject.toml" -not -path "*/.venv/*" -execdir sh -c 'echo "🔄 syncing in $(pwd)"; uv sync' \;
 ```
