@@ -2,11 +2,24 @@ import ast
 import json
 import logging
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
     DEBUG: bool = False
+
+    @field_validator("DEBUG", mode="before")
+    @classmethod
+    def _coerce_debug(cls, value):
+        if isinstance(value, str):
+            lowered = value.lower()
+            if lowered in {"1", "true", "yes", "on", "debug"}:
+                return True
+            if lowered in {"0", "false", "no", "off"}:
+                return False
+            return False
+        return value
 
 
 def can_convert_to_json(s: str) -> dict | None:
