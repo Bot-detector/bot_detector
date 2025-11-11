@@ -2,15 +2,9 @@ import logging
 from dataclasses import asdict
 
 import sqlalchemy as sqla
-from bot_detector.database.interfaces import (
-    PredictionInterface,
-    PredictionLatestInterface,
-)
-from bot_detector.database.structs import (
-    PlayersTableStruct,
-    PredictionLatestStruct,
-    PredictionStruct,
-)
+from bot_detector.database.player.structs import PlayersTableStruct
+from .interface import PredictionInterface, PredictionLatestInterface
+from .structs import PredictionLatestStruct, PredictionStruct
 from bot_detector.structs import (
     PredictionCreate,
     PredictionLatestRead,

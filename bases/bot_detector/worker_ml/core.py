@@ -5,7 +5,7 @@ import traceback
 import aiohttp
 from bot_detector.database import Settings as DBSettings
 from bot_detector.database import get_session_factory
-from bot_detector.database.repositories import PredictionLatestRepo, PredictionRepo
+from bot_detector.database.prediction import PredictionLatestRepo, PredictionRepo
 from bot_detector.kafka import Settings as KafkaSettings
 from bot_detector.kafka.repositories import (
     RepoPlayerScrapedConsumer,

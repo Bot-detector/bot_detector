@@ -5,7 +5,7 @@ from asyncio import Queue
 
 from bot_detector import database as db
 from bot_detector.database import Settings as DBSettings
-from bot_detector.database.repositories import ReportRepo
+from bot_detector.database.report import ReportRepo
 from bot_detector.kafka import Settings as KafkaSettings
 from bot_detector.kafka.repositories import (
     RepoReportsToInsertConsumer,
