@@ -2,8 +2,8 @@ import asyncio
 import logging
 from typing import Annotated
 
-from components.bot_detector.api_public.services import PlayerService
-from components.bot_detector.api_public.structs.player import (
+from bot_detector.player.services import PlayerService
+from bot_detector.player.structs import (
     FeedbackScoreResponse,
     PredictionResponse,
     ReportScoreResponse,

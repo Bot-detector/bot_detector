@@ -2,7 +2,7 @@ import datetime
 
 import pytest
 from bot_detector.scrape_task_producer.core import FetchParams, determine_fetch_params
-from bot_detector.structs import PlayerStruct
+from bot_detector.player.structs import PlayerStruct
 
 
 def make_fetch_params(**overrides) -> FetchParams:

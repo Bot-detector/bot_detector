@@ -27,8 +27,12 @@ packages = ["bot_detector"]
 
 [tool.polylith.bricks]
 "../../bases/bot_detector/api_public" = "bot_detector/api_public"
-"../../components/bot_detector/database" = "bot_detector/database"
+"../../components/bot_detector/core" = "bot_detector/core"
 "../../components/bot_detector/kafka" = "bot_detector/kafka"
-"../../components/bot_detector/structs" = "bot_detector/structs"
 "../../components/bot_detector/logfmt" = "bot_detector/logfmt"
-"../../components/bot_detector/cache" = "bot_detector/cache"
+"../../components/bot_detector/player" = "bot_detector/player"
+"../../components/bot_detector/feedback" = "bot_detector/feedback"
+"../../components/bot_detector/labels" = "bot_detector/labels"
+"../../components/bot_detector/report" = "bot_detector/report"
+"../../components/bot_detector/prediction" = "bot_detector/prediction"
+"../../components/bot_detector/highscore_worker" = "bot_detector/highscore_worker"

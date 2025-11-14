@@ -1,8 +1,8 @@
 import logging
 
-from components.bot_detector.api_public.services import FeedbackService
-from components.bot_detector.api_public.structs.feedback import FeedbackInput
-from components.bot_detector.api_public.structs.responses import Ok
+from bot_detector.feedback.services import FeedbackService
+from bot_detector.feedback.structs import FeedbackInput
+from bot_detector.core.structs.responses import Ok
 from bases.bot_detector.api_public.core.fastapi.dependencies.session import get_session
 from bases.bot_detector.api_public.core.fastapi.dependencies.to_jagex_name import to_jagex_name
 from fastapi import APIRouter, Depends, HTTPException, status

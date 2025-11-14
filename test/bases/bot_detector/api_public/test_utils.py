@@ -1,10 +1,12 @@
 import asyncio
 
 import pytest
+from bot_detector.core.cache import SimpleALRUCache
+from bot_detector.player.services import PlayerService
 
-from bases.bot_detector.api_public.core.fastapi.dependencies.to_jagex_name import to_jagex_name
-from components.bot_detector.api_public.services import PlayerService
-from bot_detector.cache.simple import SimpleALRUCache
+from bases.bot_detector.api_public.core.fastapi.dependencies.to_jagex_name import (
+    to_jagex_name,
+)
 
 
 class _DummySession:

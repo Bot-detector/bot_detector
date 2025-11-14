@@ -1,17 +1,18 @@
 import logging
 
-from components.bot_detector.api_public.services import PlayerService, ReportsService
-from components.bot_detector.api_public.services.reports import CustomError
-from components.bot_detector.api_public.structs.reports import (
+from bot_detector.core.cache import SimpleALRUCache
+from bot_detector.core.structs.responses import Ok
+from bot_detector.player.services import PlayerService
+from bot_detector.report.services.reports import CustomError, ReportsService
+from bot_detector.report.structs import (
     Detection,
     ParsedDetection,
 )
-from components.bot_detector.api_public.structs.responses import Ok
-from bot_detector.cache.simple import SimpleALRUCache
-from bases.bot_detector.api_public.core.fastapi.dependencies.session import get_session
 from fastapi import APIRouter, Depends, status
 from fastapi.exceptions import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from bases.bot_detector.api_public.core.fastapi.dependencies.session import get_session
 
 router = APIRouter(tags=["Report"])
 logger = logging.getLogger(__name__)

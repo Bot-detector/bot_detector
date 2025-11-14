@@ -1,7 +1,7 @@
 import logging
 
-from components.bot_detector.api_public.services import LabelService
-from components.bot_detector.api_public.structs.labels import LabelResponse
+from bot_detector.labels.services import LabelService
+from bot_detector.labels.structs import LabelResponse
 from bases.bot_detector.api_public.core.fastapi.dependencies.session import get_session
 from fastapi import APIRouter, Depends, status
 

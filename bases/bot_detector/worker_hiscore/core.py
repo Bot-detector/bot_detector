@@ -2,16 +2,15 @@ import asyncio
 import logging
 import traceback
 
-from bot_detector import database as db
-from bot_detector.database import Settings as DBSettings
-from bot_detector.database.hiscore import HighscoreDataRepo
-from bot_detector.database.player import PlayerRepo
+from bot_detector.core.database import Settings as DBSettings, get_session_factory
+from bot_detector.highscore_worker.database.repository import HighscoreDataRepo
+from bot_detector.player.database.repository import PlayerRepo
 from bot_detector.kafka import Settings as KafkaSettings
 from bot_detector.kafka.repositories import (
     RepoPlayerScrapedConsumer,
     RepoPlayerScrapedProducer,
 )
-from bot_detector.structs import ScrapedStruct
+from bot_detector.core.structs import ScrapedStruct
 from pydantic_settings import BaseSettings
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -108,7 +107,7 @@ async def consume_many_task(
 
 
 async def main():
-    session_factory, async_engine = db.get_session_factory(SETTINGS=DBSettings())
+    session_factory, async_engine = get_session_factory(SETTINGS=DBSettings())
 
     player_repo = PlayerRepo()
     highscore_repo = HighscoreDataRepo()

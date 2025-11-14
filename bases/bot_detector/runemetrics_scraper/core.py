@@ -15,7 +15,8 @@ from bot_detector.proxy_manager import ProxyManager
 from bot_detector.proxy_manager import Settings as ProxySettings
 from bot_detector.runemetrics_api import RuneMetrics, RuneMetricsResponse
 from bot_detector.runemetrics_api.exceptions import UnexpectedRedirection
-from bot_detector.structs import MetaData, PlayerStruct, ScrapedStruct
+from bot_detector.core.structs import MetaData, ScrapedStruct
+from bot_detector.player.structs import PlayerStruct
 from osrs.utils import RateLimiter
 from prometheus_client import Counter, Histogram, start_http_server
 from pydantic import ValidationError

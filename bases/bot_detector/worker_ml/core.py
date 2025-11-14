@@ -3,9 +3,11 @@ import logging
 import traceback
 
 import aiohttp
-from bot_detector.database import Settings as DBSettings
-from bot_detector.database import get_session_factory
-from bot_detector.database.prediction import PredictionLatestRepo, PredictionRepo
+from bot_detector.core.database import Settings as DBSettings, get_session_factory
+from bot_detector.prediction.database.repository import (
+    PredictionLatestRepo,
+    PredictionRepo,
+)
 from bot_detector.kafka import Settings as KafkaSettings
 from bot_detector.kafka.repositories import (
     RepoPlayerScrapedConsumer,
@@ -13,7 +15,8 @@ from bot_detector.kafka.repositories import (
 )
 from bot_detector.ml_api.core import MLApiClient
 from bot_detector.ml_api.structs import InputData, Prediction
-from bot_detector.structs import PredictionCreate, ScrapedStruct
+from bot_detector.prediction.structs import PredictionCreate
+from bot_detector.core.structs import ScrapedStruct
 from bot_detector.worker_ml.settings import Settings
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 

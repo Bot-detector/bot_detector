@@ -30,7 +30,6 @@ packages = ["bot_detector"]
 [tool.polylith.bricks]
 "../../bases/bot_detector/worker_ml" = "bot_detector/worker_ml"
 "../../components/bot_detector/ml_api" = "bot_detector/ml_api"
-"../../components/bot_detector/database" = "bot_detector/database"
+"../../components/bot_detector/core" = "bot_detector/core"
 "../../components/bot_detector/kafka" = "bot_detector/kafka"
-"../../components/bot_detector/structs" = "bot_detector/structs"
-"../../components/bot_detector/logfmt" = "bot_detector/logfmt"
+"../../components/bot_detector/prediction" = "bot_detector/prediction"

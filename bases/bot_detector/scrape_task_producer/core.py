@@ -3,15 +3,15 @@ import logging
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, time, timedelta
 
-from bot_detector.database import Settings as DBSettings
-from bot_detector.database import get_session_factory
-from bot_detector.database.player import PlayerRepo
+from bot_detector.core.database import Settings as DBSettings, get_session_factory
+from bot_detector.player.database.repository import PlayerRepo
 from bot_detector.kafka import Settings as KafkaSettings
 from bot_detector.kafka.repositories import (
     RepoPlayersToScrapeConsumer,
     RepoPlayersToScrapeProducer,
 )
-from bot_detector.structs import MetaData, PlayerStruct, ToScrapeStruct
+from bot_detector.core.structs import MetaData, ToScrapeStruct
+from bot_detector.player.structs import PlayerStruct
 from pydantic_settings import BaseSettings
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from typing_extensions import Literal

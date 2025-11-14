@@ -33,8 +33,8 @@
 - **Business logic**: the rules that determine how the domain behaves; validations, decisions, orchestration of use-cases, state transitions, etc.
 - **Plumbing**: transport/infrastructure glue (HTTP routing, request parsing, wiring dependencies) that carries inputs to the correct business logic and returns the result.
 - **Feature**: a cohesive capability (feedback reporting, player scraping, proxy rotation, etc.) that owns its domain rules, ~~DTOs~~ structs, ports, and integrations. Each feature lives inside a component so it can be reused by multiple bases/projects without duplication.
-- **Models** = SQLAlchemy ORM classes mapped to concrete tables (live under `components/bot_detector/database/**/models`). Only the persistence layer (repositories/adapters that talk to storage) should touch them.
-- **Structs** = Pydantic data shapes (requests/responses/contracts) shared across components/bases; they live under `components/bot_detector/structs` and replace the old “DTO” term.
+- **Models** = SQLAlchemy ORM classes mapped to concrete tables (each feature owns its models under `components/bot_detector/<feature>/database*.py`). Only the persistence layer (repositories/adapters that talk to storage) should touch them.
+- **Structs** = Pydantic data shapes (requests/responses/contracts) shared across components/bases; each feature owns its structs (e.g., `components/bot_detector/player/structs.py`) and shared ones live under `bot_detector.core.structs`. They replace the old “DTO” term.
 - **Service**: the domain façade exposed by a component (e.g., `PlayerService`). A service orchestrates one cohesive use-case—validation, repositories, messaging, caching—and is what bases call once they finish plumbing work.
 - **Repository**: a persistence/adapter layer focused solely on talking to infrastructure (SQLAlchemy, Kafka, S3, HTTP APIs, etc.). Repositories are consumed by services and do not contain orchestration or HTTP-specific logic.
 - **Manager**: an infrastructure helper that owns shared resources (Kafka producers, sessions, caches). Managers live alongside plumbing or support libraries and keep long-lived connections healthy.
@@ -44,7 +44,7 @@
 - **Components** encapsulate each feature’s business logic plus adapters, and may depend on other components/libraries only. Services may call repositories/adapters but never import FastAPI or base code.
 - **Bases** expose public APIs and must stay thin: they handle routing, validation, dependency wiring, and immediately delegate to services. Bases never import ORM models or implement business rules.
 - **Projects** only compose bricks + libraries into deployable artifacts; they hold wiring/config, never feature code.
-- **Shared structs** (DTOs, interfaces) and persistence code live in reusable components such as `components/bot_detector/structs` and `components/bot_detector/database`, so every base/project imports the same contracts and models without circular dependencies. Use the `structs` naming everywhere (no `schemas` leftovers) and suffix types consistently (`FooInput`, `FooResponse`, etc.).
+- **Shared structs** (DTOs, interfaces) live in reusable modules such as `bot_detector.core.structs`, while feature-specific structs stay within their feature packages. Use the `structs` naming everywhere (no `schemas` leftovers) and suffix types consistently (`FooInput`, `FooResponse`, etc.).
 - **Tests** live under the workspace-level `test/` directory via `[tool.polylith.test]`, so base/component fixtures and contract tests should be added there rather than inside each brick folder. Add per-base `resources/` directories only when a base needs static assets or config that isn’t shared elsewhere.
 
 # The Polylith Architecture
