@@ -7,7 +7,7 @@ from bot_detector.kafka.interface import (
     ConsumerInterface,
     ProducerInterface,
 )
-from bot_detector.structs import ScrapedStruct
+from bot_detector.core.structs import ScrapedStruct
 
 logger = logging.getLogger(__name__)
 

@@ -2,8 +2,7 @@ import asyncio
 import logging
 
 import sqlalchemy as sqla
-from bot_detector.database import Settings as DBSettings
-from bot_detector.database import get_session_factory
+from bot_detector.core.database import Settings as DBSettings, get_session_factory
 from pydantic_settings import BaseSettings
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 

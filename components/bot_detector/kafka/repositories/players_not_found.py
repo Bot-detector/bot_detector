@@ -6,7 +6,7 @@ from bot_detector.kafka.interface import (
     ConsumerInterface,
     ProducerInterface,
 )
-from bot_detector.structs import NotFoundStruct
+from bot_detector.core.structs import NotFoundStruct
 
 logger = logging.getLogger(__name__)
 

@@ -1,1 +1,0 @@
-the api folder can be considered the controller in the MVC approach

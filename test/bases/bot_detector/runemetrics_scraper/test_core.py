@@ -7,7 +7,7 @@ from bot_detector.runemetrics_api.core import (
     RuneMetricsResponse,
 )
 from bot_detector.runemetrics_scraper import core
-from bot_detector.structs import PlayerStruct
+from bot_detector.player.structs import PlayerStruct
 from pydantic import BaseModel
 
 os.environ["ENVIRONMENT"] = "test"

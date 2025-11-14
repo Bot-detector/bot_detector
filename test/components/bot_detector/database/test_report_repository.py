@@ -1,7 +1,7 @@
 from datetime import datetime
 
-from bot_detector.database.report import ReportRepo
-from bot_detector.structs import Equipment, ParsedDetection
+from bot_detector.report.database.repository import ReportRepo
+from bot_detector.report.structs import Equipment, ParsedDetection
 
 
 def _sample_detection(

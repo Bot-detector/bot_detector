@@ -3,15 +3,15 @@ import logging
 import traceback
 from asyncio import Queue
 
-from bot_detector import database as db
-from bot_detector.database import Settings as DBSettings
-from bot_detector.database.report import ReportRepo
+from bot_detector.core.database import Settings as DBSettings, get_session_factory
+from bot_detector.report.database.repository import ReportRepo
 from bot_detector.kafka import Settings as KafkaSettings
 from bot_detector.kafka.repositories import (
     RepoReportsToInsertConsumer,
     RepoReportsToInsertProducer,
 )
-from bot_detector.structs import ParsedDetection, ReportsToInsertStruct
+from bot_detector.report.structs import ParsedDetection
+from bot_detector.core.structs import ReportsToInsertStruct
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -120,7 +120,7 @@ async def error_task(error_queue: Queue, report_producer: RepoReportsToInsertPro
 
 
 async def main():
-    session_factory, async_engine = db.get_session_factory(SETTINGS=DBSettings())
+    session_factory, async_engine = get_session_factory(SETTINGS=DBSettings())
     report_repo = ReportRepo()
     MAX_BATCH_SIZE = 10_000  # TODO: env variable?
     MAX_INTERVAL_MS = 1_000  # TODO: env variable?
