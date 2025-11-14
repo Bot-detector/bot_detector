@@ -1,12 +1,6 @@
 import logging
 from contextlib import asynccontextmanager
 
-from bases.bot_detector.api_public import routes as routes_pkg
-from bases.bot_detector.api_public.core.fastapi.dependencies.kafka import kafka_manager
-from bases.bot_detector.api_public.core.fastapi.middleware import (
-    LoggingMiddleware,
-    PrometheusMiddleware,
-)
 from bot_detector.kafka import Settings as KafkaSettings
 from bot_detector.kafka.repositories import RepoReportsToInsertProducer
 from fastapi import FastAPI
@@ -14,11 +8,18 @@ from fastapi.middleware import Middleware
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import start_http_server
 
+from bases.bot_detector.api_public import routes
+from bases.bot_detector.api_public.core.fastapi.dependencies.kafka import kafka_manager
+from bases.bot_detector.api_public.core.fastapi.middleware import (
+    LoggingMiddleware,
+    PrometheusMiddleware,
+)
+
 logger = logging.getLogger(__name__)
 
 
 def init_routers(_app: FastAPI) -> None:
-    _app.include_router(routes_pkg.router)
+    _app.include_router(routes.router)
 
 
 def make_middleware() -> list[Middleware]:

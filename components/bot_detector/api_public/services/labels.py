@@ -8,7 +8,7 @@ from sqlalchemy.sql.expression import Select
 logger = logging.getLogger(__name__)
 
 
-class LabelRepository:
+class LabelService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 

@@ -2,8 +2,8 @@ import asyncio
 import logging
 from typing import Annotated
 
-from bases.bot_detector.api_public.player.repository import Player as repoPlayer
-from bases.bot_detector.api_public.player.schemas import (
+from components.bot_detector.api_public.services import PlayerService
+from components.bot_detector.api_public.structs.player import (
     FeedbackScoreResponse,
     PredictionResponse,
     ReportScoreResponse,
@@ -29,19 +29,9 @@ async def get_players_kc(
     ),
     session=Depends(get_session),
 ):
-    """
-    Get the report score for one or multiple players.
-
-    Args:
-        name (str): can be provided multiple times
-
-    Returns:
-        list[ReportScoreResponse]: A list of dictionaries containing KC data for each player.
-    """
-    repo = repoPlayer(session)
+    repo = PlayerService(session)
     names = await asyncio.gather(*[to_jagex_name(n) for n in name])
-    data = await repo.get_report_score(player_names=tuple(names))
-    return data
+    return await repo.get_report_score(player_names=tuple(names))
 
 
 @router.get("/player/feedback/score", response_model=list[FeedbackScoreResponse])
@@ -54,19 +44,9 @@ async def get_feedback_score(
     ),
     session=Depends(get_session),
 ):
-    """
-    Get the feedback score for one or multiple players.
-
-    Args:
-        name (str): can be provided multiple times
-
-    Returns:
-        list[FeedbackScoreResponse]: A list of dictionaries containing KC data for each player.
-    """
-    repo = repoPlayer(session)
+    repo = PlayerService(session)
     names = await asyncio.gather(*[to_jagex_name(n) for n in name])
-    data = await repo.get_feedback_score(player_names=names)
-    return data
+    return await repo.get_feedback_score(player_names=names)
 
 
 @router.get("/player/prediction", response_model=list[PredictionResponse])
@@ -81,21 +61,7 @@ async def get_prediction(
     breakdown: bool = Query(...),
     session=Depends(get_session),
 ):
-    """
-    Get prediction data for one or multiple users.
-
-    Args:
-        name (str): The username of the user for whom predictions are requested.
-        breakdown (bool): A flag indicating whether to include a breakdown of predictions.
-
-    Returns:
-        List[PredictionResponse]: A list of PredictionResponse objects containing prediction data.
-
-    Raises:
-        HTTPException: Returns a 404 error with the message "Player not found" if no data is found for the user.
-
-    """
-    repo = repoPlayer(session)
+    repo = PlayerService(session)
     names = await asyncio.gather(*[to_jagex_name(n) for n in name])
     data = await repo.get_prediction(player_names=names)
     if not data:

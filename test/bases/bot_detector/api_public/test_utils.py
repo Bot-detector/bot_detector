@@ -3,8 +3,8 @@ import asyncio
 import pytest
 
 from bases.bot_detector.api_public.core.fastapi.dependencies.to_jagex_name import to_jagex_name
-from bases.bot_detector.api_public.player.repository import Player
-from bases.bot_detector.api_public.core._cache import SimpleALRUCache
+from components.bot_detector.api_public.services import PlayerService
+from bot_detector.cache.simple import SimpleALRUCache
 
 
 class _DummySession:
@@ -19,5 +19,5 @@ async def test_to_jagex_name_normalizes_variants():
 
 
 def test_player_sanitize_name_is_consistent():
-    repo = Player(session=_DummySession(), cache=SimpleALRUCache())
+    repo = PlayerService(session=_DummySession(), cache=SimpleALRUCache())
     assert repo.sanitize_name("My_Name-Here  ") == "my name here"

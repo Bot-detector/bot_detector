@@ -1,8 +1,8 @@
 import logging
 
 import sqlalchemy as sqla
-from bases.bot_detector.api_public.player.schemas import PlayerCreate, PlayerInDB
-from bases.bot_detector.api_public.core._cache import SimpleALRUCache
+from components.bot_detector.api_public.structs.player import PlayerCreate, PlayerInDB
+from bot_detector.cache.simple import SimpleALRUCache
 from bot_detector.database.api_public import (
     Player as dbPlayer,
     PredictionFeedback as dbFeedback,
@@ -25,7 +25,7 @@ def model_to_dict(model):
     return {c.name: getattr(model, c.name) for c in model.__table__.columns}
 
 
-class Player:
+class PlayerService:
     def __init__(
         self,
         session: AsyncSession,

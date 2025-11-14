@@ -2,16 +2,12 @@ import asyncio
 import logging
 import time
 
-from bases.bot_detector.api_public.core.fastapi.dependencies.kafka import kafka_manager
+from bot_detector.kafka import kafka_manager
 from bot_detector.kafka.repositories.reports_to_insert import (
     RepoReportsToInsertProducer,
 )
-from bot_detector.structs import (
-    Detection,
-    MetaData,
-    ParsedDetection,
-    ReportsToInsertStruct,
-)
+from components.bot_detector.api_public.structs.reports import Detection, ParsedDetection
+from bot_detector.structs import MetaData, ReportsToInsertStruct
 from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
@@ -20,7 +16,7 @@ logger = logging.getLogger(__name__)
 class CustomError(Exception): ...
 
 
-class Report:
+class ReportsService:
     def __init__(self) -> None:
         pass
 

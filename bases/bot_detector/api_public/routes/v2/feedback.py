@@ -1,12 +1,10 @@
 import logging
 
-from bases.bot_detector.api_public.feedback.repository import Feedback
-from bases.bot_detector.api_public.feedback.schemas import FeedbackInput
-from bases.bot_detector.api_public.shared.responses import Ok
+from components.bot_detector.api_public.services import FeedbackService
+from components.bot_detector.api_public.structs.feedback import FeedbackInput
+from components.bot_detector.api_public.structs.responses import Ok
 from bases.bot_detector.api_public.core.fastapi.dependencies.session import get_session
-from bases.bot_detector.api_public.core.fastapi.dependencies.to_jagex_name import (
-    to_jagex_name,
-)
+from bases.bot_detector.api_public.core.fastapi.dependencies.to_jagex_name import to_jagex_name
 from fastapi import APIRouter, Depends, HTTPException, status
 
 router = APIRouter(tags=["Feedback"])
@@ -18,12 +16,9 @@ async def post_feedback(
     feedback: FeedbackInput,
     session=Depends(get_session),
 ):
-    """ """
-    _feedback = Feedback(session)
-
+    repo = FeedbackService(session)
     feedback.player_name = await to_jagex_name(feedback.player_name)
-
-    success, detail = await _feedback.insert_feedback(feedback=feedback)
+    success, detail = await repo.insert_feedback(feedback=feedback)
     if not success:
         raise HTTPException(status_code=422, detail=detail)
     return Ok(detail=detail)

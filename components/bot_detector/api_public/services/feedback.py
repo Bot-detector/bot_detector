@@ -1,6 +1,6 @@
 import logging
 
-from bases.bot_detector.api_public.feedback.schemas import FeedbackInput
+from components.bot_detector.api_public.structs.feedback import FeedbackInput
 from bot_detector.database.api_public import (
     Player as dbPlayer,
     PredictionFeedback as dbFeedback,
@@ -12,7 +12,7 @@ from sqlalchemy.sql.expression import Insert, Select
 logger = logging.getLogger(__name__)
 
 
-class Feedback:
+class FeedbackService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 

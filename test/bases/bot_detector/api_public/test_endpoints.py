@@ -2,9 +2,12 @@ from fastapi.testclient import TestClient
 
 from bases.bot_detector.api_public.core import server
 from bases.bot_detector.api_public.core.fastapi.dependencies.session import get_session
-from bases.bot_detector.api_public.player.repository import Player as PlayerRepo
-from bases.bot_detector.api_public.feedback.repository import Feedback as FeedbackRepo
-from bases.bot_detector.api_public.reports.repository import Report as ReportRepo, CustomError
+from components.bot_detector.api_public.services import (
+    FeedbackService,
+    PlayerService,
+    ReportsService,
+)
+from components.bot_detector.api_public.services.reports import CustomError
 
 
 async def _dummy_session():
@@ -21,7 +24,7 @@ def test_player_prediction_not_found(monkeypatch):
     async def fake_prediction(*args, **kwargs):
         return []
 
-    monkeypatch.setattr(PlayerRepo, "get_prediction", fake_prediction)
+    monkeypatch.setattr(PlayerService, "get_prediction", fake_prediction)
     client = _client(monkeypatch)
     resp = client.get(
         "/v2/player/prediction",
@@ -35,7 +38,7 @@ def test_feedback_duplicate_returns_422(monkeypatch):
     async def fake_insert(*args, **kwargs):
         return False, "duplicate_record"
 
-    monkeypatch.setattr(FeedbackRepo, "insert_feedback", fake_insert)
+    monkeypatch.setattr(FeedbackService, "insert_feedback", fake_insert)
     client = _client(monkeypatch)
     payload = {
         "player_name": "abc",
@@ -53,7 +56,7 @@ def test_report_validation_error(monkeypatch):
     async def fake_parse(self, data):
         return None, "invalid data size"
 
-    monkeypatch.setattr(ReportRepo, "parse_data", fake_parse)
+    monkeypatch.setattr(ReportsService, "parse_data", fake_parse)
     client = _client(monkeypatch)
     resp = client.post("/v2/report", json=[])
     assert resp.status_code == 400
@@ -106,10 +109,10 @@ def test_report_producer_failure(monkeypatch):
     async def fake_send(self, *args, **kwargs):
         raise CustomError("boom")
 
-    monkeypatch.setattr(ReportRepo, "parse_data", fake_parse)
-    monkeypatch.setattr(PlayerRepo, "get_or_insert", fake_get_or_insert)
-    monkeypatch.setattr(PlayerRepo, "sanitize_name", lambda self, n: n)
-    monkeypatch.setattr(ReportRepo, "send_to_kafka", fake_send)
+    monkeypatch.setattr(ReportsService, "parse_data", fake_parse)
+    monkeypatch.setattr(PlayerService, "get_or_insert", fake_get_or_insert)
+    monkeypatch.setattr(PlayerService, "sanitize_name", lambda self, n: n)
+    monkeypatch.setattr(ReportsService, "send_to_kafka", fake_send)
 
     client = _client(monkeypatch)
     resp = client.post(
