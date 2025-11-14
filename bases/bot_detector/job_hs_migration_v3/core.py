@@ -5,13 +5,14 @@ import time
 from datetime import timedelta
 
 import sqlalchemy as sqla
-from bot_detector.core.database import Settings as DBSettings, get_session_factory
+from bot_detector.core.database import Settings as DBSettings
+from bot_detector.core.database import get_session_factory
+from bot_detector.core.structs import MetaData, ScrapedStruct
+from bot_detector.highscore.structs import HighscoreBaseStruct
 from bot_detector.kafka import Settings as KafkaSettings
 from bot_detector.kafka.repositories import (
     RepoPlayerScrapedProducer,
 )
-from bot_detector.highscore_worker.structs import HighscoreBaseStruct
-from bot_detector.core.structs import MetaData, ScrapedStruct
 from bot_detector.player.structs import PlayerStruct
 from pydantic_settings import BaseSettings
 from sqlalchemy import TextClause

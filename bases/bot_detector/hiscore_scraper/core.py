@@ -7,6 +7,8 @@ from typing import Any
 
 import aiohttp
 from aiohttp import ClientSession
+from bot_detector.core.structs import MetaData, NotFoundStruct, ScrapedStruct
+from bot_detector.highscore.structs import HighscoreBaseStruct
 from bot_detector.kafka import Settings as KafkaSettings
 from bot_detector.kafka.repositories import (
     RepoPlayerScrapedProducer,
@@ -14,11 +16,9 @@ from bot_detector.kafka.repositories import (
     RepoPlayersToScrapeConsumer,
     RepoPlayersToScrapeProducer,
 )
+from bot_detector.player.structs import PlayerStruct
 from bot_detector.proxy_manager import ProxyManager
 from bot_detector.proxy_manager import Settings as ProxySettings
-from bot_detector.highscore_worker.structs import HighscoreBaseStruct
-from bot_detector.core.structs import MetaData, NotFoundStruct, ScrapedStruct
-from bot_detector.player.structs import PlayerStruct
 from osrs.asyncio import Hiscore, HSMode
 from osrs.asyncio.osrs.hiscores import PlayerStats
 from osrs.exceptions import PlayerDoesNotExist, UnexpectedRedirection
