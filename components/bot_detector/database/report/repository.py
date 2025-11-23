@@ -29,12 +29,17 @@ class ReportRepo(ReportInterface):
             report_dict = report.model_dump()
             # flatten nested equiment
             equipment: dict = report_dict.pop("equipment", {})
-            ## correct for NONE values
-            equipment = {k: v for k, v in equipment.items() if v is not None}
-            ## correct for item bug
-            equipment = {k: 0 if v > 32767 else v for k, v in equipment.items()}
 
-            report_dict.update(equipment)
+            _equipment = {}
+            for k, v in equipment.items():
+                if v is None:
+                    _equipment[k] = None
+                    continue
+                if isinstance(v, int):
+                    _equipment[k] = 0 if v > 32767 else v
+                    continue
+
+            report_dict.update(_equipment)
 
             # epoch timestamp to datetime value
             ts = report_dict.pop("ts")
