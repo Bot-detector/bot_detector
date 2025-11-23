@@ -43,6 +43,7 @@ async def insert_batch(
                 await report_repo.insert(async_session=session, reports=batch)
                 await session.commit()
     except OperationalError as e:
+        logger.error(f"OperationalError during batch insert: {str(e)}")
         return None, str(e)
     logger.info(f"inserted: {len(batch)}")
     return None, None
@@ -105,7 +106,17 @@ async def consume_many_task(
                 await asyncio.sleep(15)
             await report_consumer.commit()
         except Exception as e:
-            logger.error(f"Error consuming reports: {e}")
+            tb = e.__traceback__
+            if tb is not None:
+                logger.error(
+                    {
+                        "result_msg": "Error consuming reports",
+                        "message": str(e),
+                        "filename": tb.tb_frame.f_code.co_filename,
+                        "line": tb.tb_lineno,
+                        "name": tb.tb_frame.f_code.co_name,
+                    }
+                )
             logger.debug(f"Traceback: \n{traceback.format_exc()}")
             await asyncio.sleep(5)
 

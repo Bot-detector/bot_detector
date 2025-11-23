@@ -19,7 +19,8 @@ def create_kafka_producer(kafka_broker: str | list):
     return producer
 
 
-def insert_data(producer: KafkaProducer):
+def insert_player(producer: KafkaProducer):
+    players = []
     player_generator = kafka_data.create_player()
     for player in player_generator:
         print(player.name)
@@ -31,7 +32,14 @@ def insert_data(producer: KafkaProducer):
             topic="players.to_scrape",
             value=player_to_scrape.model_dump(mode="json"),
         )
+        players.append(player)
+    return players
 
+
+def insert_scraped_data(
+    producer: KafkaProducer, players: list[kafka_data.PlayerStruct]
+):
+    for player in players:
         scrape_gen = kafka_data.create_scraped_data(player, n_records=30)
         scraped_data = list()
         scraped_data = [d.model_copy(deep=True) for d in scrape_gen]
@@ -45,6 +53,16 @@ def insert_data(producer: KafkaProducer):
             print("\t", scrape_data.player_data.updated_at)
 
 
+def insert_report(producer: KafkaProducer):
+    report_generator = kafka_data.create_report()
+    for report in report_generator:
+        report_to_insert = kafka_data.ReportsToInsertStruct(**report)
+        producer.send(
+            topic="reports.to_insert",
+            value=report_to_insert.model_dump(mode="json"),
+        )
+
+
 def main():
     random.seed(43)
 
@@ -53,7 +71,9 @@ def main():
     kafka_topics.create_topics(kafka_broker=kafka_broker)
 
     producer = create_kafka_producer(kafka_broker=kafka_broker)
-    insert_data(producer=producer)
+    players = insert_player(producer=producer)
+    insert_scraped_data(producer=producer, players=players)
+    insert_report(producer=producer)
 
 
 if __name__ == "__main__":

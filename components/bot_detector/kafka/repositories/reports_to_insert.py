@@ -39,7 +39,18 @@ class RepoReportsToInsertConsumer(ConsumerInterface):
     async def get_consumer(self):
         return self.consumer
 
+    def set_consumer(self, consumer):
+        """
+        Set a custom consumer instance for testing purposes.
+        """
+        self.consumer = consumer
+
     def _validate_value(self, value) -> tuple[dict | None, str | None]:
+        if isinstance(value, bytes):
+            try:
+                value = orjson.loads(value)
+            except orjson.JSONDecodeError as e:
+                return None, f"Failed to decode JSON: {str(e)}"
         if not isinstance(value, dict):
             return None, "Message value is not a dict"
         if "metadata" not in value:

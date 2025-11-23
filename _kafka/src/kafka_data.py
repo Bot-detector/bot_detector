@@ -1,8 +1,56 @@
 import random
+import time
 from datetime import date, datetime, timedelta
 from typing import Generator, Optional
 
 from pydantic import BaseModel
+from pydantic.fields import Field
+
+
+class MetaData(BaseModel):
+    version: int
+    source: str
+
+
+class Equipment(BaseModel):
+    equip_head_id: Optional[int] = Field(None, ge=0)
+    equip_amulet_id: Optional[int] = Field(None, ge=0)
+    equip_torso_id: Optional[int] = Field(None, ge=0)
+    equip_legs_id: Optional[int] = Field(None, ge=0)
+    equip_boots_id: Optional[int] = Field(None, ge=0)
+    equip_cape_id: Optional[int] = Field(None, ge=0)
+    equip_hands_id: Optional[int] = Field(None, ge=0)
+    equip_weapon_id: Optional[int] = Field(None, ge=0)
+    equip_shield_id: Optional[int] = Field(None, ge=0)
+
+
+class BaseDetection(BaseModel):
+    region_id: int = Field(0, ge=0, le=100_000)
+    x_coord: int = Field(0, ge=0)
+    y_coord: int = Field(0, ge=0)
+    z_coord: int = Field(0, ge=0)
+    ts: int = Field(int(time.time()), ge=0)
+    manual_detect: int = Field(0, ge=0, le=1)
+    on_members_world: int = Field(0, ge=0, le=1)
+    on_pvp_world: int = Field(0, ge=0, le=1)
+    world_number: int = Field(0, ge=300, le=1_000)
+    equipment: Equipment
+    equip_ge_value: int = Field(0, ge=0)
+
+
+class Detection(BaseDetection):
+    reporter: str = Field(..., min_length=1, max_length=13)
+    reported: str = Field(..., min_length=1, max_length=12)
+
+
+class ParsedDetection(BaseDetection):
+    reporter_id: int = Field(..., ge=0)
+    reported_id: int = Field(..., ge=0)
+
+
+class ReportsToInsertStruct(BaseModel):
+    metadata: MetaData
+    report: ParsedDetection
 
 
 class PlayerStruct(BaseModel):
@@ -23,11 +71,6 @@ class ScraperHiscoreData(BaseModel):
     time_to_live: date
     skills: Optional[dict[str, int]] = None
     activities: Optional[dict[str, int]] = None
-
-
-class MetaData(BaseModel):
-    version: int
-    source: str
 
 
 class ScrapedStruct(BaseModel):
@@ -142,6 +185,38 @@ def create_scraped_data(
             else value
             for activity, value in activities.items()
         }
+
+
+def create_report() -> Generator[dict, None, None]:
+    """Generates report IDs for demonstration purposes."""
+    yield {
+        "metadata": {"version": 1, "source": "api_public"},
+        "report": {
+            "region_id": 12598,
+            "x_coord": 3167,
+            "y_coord": 3490,
+            "z_coord": 0,
+            "ts": 1763909384,
+            "manual_detect": 0,
+            "on_members_world": 1,
+            "on_pvp_world": 0,
+            "world_number": 490,
+            "equipment": {
+                "equip_head_id": None,
+                "equip_amulet_id": None,
+                "equip_torso_id": None,
+                "equip_legs_id": None,
+                "equip_boots_id": None,
+                "equip_cape_id": None,
+                "equip_hands_id": None,
+                "equip_weapon_id": None,
+                "equip_shield_id": None,
+            },
+            "equip_ge_value": 0,
+            "reporter_id": 398265,
+            "reported_id": 233134407,
+        },
+    }
 
 
 # Example Usage
