@@ -1,18 +1,37 @@
-FROM python:3.12-slim-bookworm AS builder
+FROM python:3.12-slim-bookworm AS base
 
-# Copy uv from external repository
-COPY --from=ghcr.io/astral-sh/uv:0.5.4 /uv /uvx /bin/
+# Python optimizations
+ENV PYTHONUNBUFFERED=1
+ENV UV_COMPILE_BYTECODE=1
 
-# Set the working directory for the build stage
 WORKDIR /app
 
-# Copy only necessary files for installing dependencies
-COPY ./pyproject.toml .
-COPY ./uv.lock .
-COPY ./README.md .
+FROM base AS builder
+COPY --from=ghcr.io/astral-sh/uv:0.5.4 /uv /bin/
 
-# RUN uv cache dir
-# RUN uv sync
+COPY ./projects/api_public/pyproject.toml ./projects/api_public/uv.lock ./
+COPY ./bases ./bases
+COPY ./components ./components
 
+RUN --mount=type=cache,id=uv_cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev
+
+FROM base AS dev
+COPY --from=ghcr.io/astral-sh/uv:0.5.4 /uv uvx/ /bin/
+
+WORKDIR /app
+
+COPY --from=builder /app/.venv /app/.venv
+
+ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONPATH="/app"
+
+COPY ./projects/api_public/pyproject.toml ./projects/api_public/uv.lock ./
+COPY ./bases ./bases
+COPY ./components ./components
+
+# this isntalls dev dependencies
+RUN --mount=type=cache,id=uv_cache,target=/root/.cache/uv \
+    uv sync --frozen
 
 CMD [ "sleep", "infinity" ]

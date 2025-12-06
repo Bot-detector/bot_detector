@@ -276,14 +276,12 @@ services:
         condition: service_completed_successfully
   api_public:
     container_name: api_public
-    image: bd/api_public
+    image: bd/api_public:prod
     build:
       context: .
       dockerfile: ./projects/api_public/Dockerfile
-      target: builder
+      target: prod
     # command: ["sleep", "infinity"]
-    command: >
-      sh -c "cd ../.. && projects/api_public/.venv/bin/uvicorn bases.bot_detector.api_public.src.core.server:app --host 0.0.0.0 --port 5000 --log-level warning --reload --reload-dir /app"
     env_file:
       - .env
     environment:
@@ -293,9 +291,8 @@ services:
       - POOL_RECYCLE=60
       - POOL_TIMEOUT=30
     volumes:
-      - ./bases:/bases
-      - ./components:/components
-      - uv_cache:/root/.cache/uv
+      - ./bases:/app/bases
+      - ./components:/app/components
     ports:
       - 5000
     networks:
