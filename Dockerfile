@@ -9,7 +9,7 @@ WORKDIR /app
 FROM base AS builder
 COPY --from=ghcr.io/astral-sh/uv:0.5.4 /uv /bin/
 
-COPY ./projects/api_public/pyproject.toml ./projects/api_public/uv.lock ./
+COPY ./pyproject.toml ./uv.lock ./
 COPY ./bases ./bases
 COPY ./components ./components
 
