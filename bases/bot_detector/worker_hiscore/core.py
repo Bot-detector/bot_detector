@@ -60,40 +60,61 @@ async def insert_batch(
     return None, None
 
 
+def transform_scraped_struct(
+    record: ScrapedStruct,
+) -> DataToPredictStruct | None:
+    if record.highscore_data is None:
+        logger.error("Highscore data is None")
+        return None
+
+    _player_id = record.player_data.id
+    _skills = record.highscore_data.skills or {}
+    _skills = {k.lower(): v for k, v in _skills.items() if v is not None}
+    _activities = record.highscore_data.activities or {}
+    _activities = {k.lower(): v for k, v in _activities.items() if v is not None}
+    try:
+        _data = HighScoreStruct.model_validate(_skills | _activities)
+    except ValidationError as e:
+        logger.error(
+            "Failed to validate HighScoreStruct",
+            extra={
+                "player_id": _player_id,
+                "data": _skills | _activities,
+                "errors": e.errors(),
+            },
+            exc_info=True,
+        )
+        return None
+    try:
+        _data_to_predict = DataToPredictStruct.model_validate(
+            {
+                "player_id": _player_id,
+                "data": _data,
+            }
+        )
+        return _data_to_predict
+    except ValidationError as e:
+        logger.error(
+            "Failed to validate DataToPredictStruct",
+            extra={
+                "player_id": _player_id,
+                "data": _skills | _activities,
+                "errors": e.errors(),
+            },
+            exc_info=True,
+        )
+        return None
+
+
 async def produce_data_to_predict(
     data_to_predict_producer: DataToPredictProducer,
     batch: list[ScrapedStruct],
 ):
     _tasks = []
     for _record in batch:
-        if _record.highscore_data is None:
+        _data_to_predict = transform_scraped_struct(_record)
+        if _data_to_predict is None:
             continue
-
-        _player_id = _record.player_data.id
-        _skills = _record.highscore_data.skills or {}
-        _skills = {k.lower(): v for k, v in _skills.items() if v is not None}
-        _activities = _record.highscore_data.activities or {}
-        _activities = {k.lower(): v for k, v in _activities.items() if v is not None}
-
-        try:
-            _data = HighScoreStruct.model_validate(_skills | _activities)
-            _data_to_predict = DataToPredictStruct.model_validate(
-                {
-                    "player_id": _player_id,
-                    "data": _data,
-                }
-            )
-        except ValidationError as e:
-            logger.error(
-                "Failed to validate DataToPredictStruct",
-                extra={
-                    "player_id": _player_id,
-                    "data": _skills | _activities,
-                    "errors": e.errors(),
-                },
-                exc_info=True,
-            )
-
         _tasks.append(data_to_predict_producer.produce_one(data=_data_to_predict))
     await asyncio.gather(*_tasks)
     logger.info(f"Produced {len(_tasks)} messages to data to predict topic.")

@@ -45,6 +45,9 @@ class DataToPredictConsumer(BaseConsumer):
     async def get_lag(self) -> int:
         return await super().get_lag()
 
+    async def commit(self):
+        return await super().commit()
+
     async def consume_one(self) -> DataToPredictStruct | None:
         value, error = await super()._consume_one()
 

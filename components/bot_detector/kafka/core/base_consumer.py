@@ -96,3 +96,6 @@ class BaseConsumer(ConsumerInterface):
             total_lag += lag
 
         return total_lag
+
+    async def commit(self):
+        await self._consumer.commit()
