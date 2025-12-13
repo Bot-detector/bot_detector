@@ -276,11 +276,11 @@ services:
         condition: service_completed_successfully
   api_public:
     container_name: api_public
-    image: bd/api_public:dev
+    image: bd/api_public:prod
     build:
       context: .
       dockerfile: ./projects/api_public/Dockerfile
-      target: dev
+      target: prod
     # command: ["sleep", "infinity"]
     env_file:
       - .env

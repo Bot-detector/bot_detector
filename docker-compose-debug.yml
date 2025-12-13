@@ -120,17 +120,18 @@ services:
     build:
       context: ./
       dockerfile: Dockerfile
+      target: dev
     # command: ["uv", "run", "bases/bot_detector/hiscore_scraper/core.py"]
     # command: uv run uvicorn bases.bot_detector.api_public.src.core.server:app --host 0.0.0.0 --reload --port 5000
     # command: uv run uvicorn bases.bot_detector.website.core.server:app --host 0.0.0.0 --reload --port 5000
     # command: uv run uvicorn bases.bot_detector.api_ml.core.server:app --host 0.0.0.0 --reload --port 5000
     ports:
-      - 5000:5000 # api_publics
+      - 5000 # api endpoint
+      - 8000 # metrics endpoint
     volumes:
       - ./bases:/app/bases
       - ./components:/app/components
       - ./projects:/app/projects
-      - uv_cache:/root/.cache/uv
     command: ["sleep", "infinity"]
     # network_mode: host # needed if we do any portforwarding from the cluster
     networks:
