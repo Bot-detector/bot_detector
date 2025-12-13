@@ -26,7 +26,7 @@ class BaseProducer(ProducerInterface):
         self,
         data: dict,
         topic: str | None = None,
-        partition_key: str | None = None,
+        partition_key: bytes | None = None,
     ):
         # Use the provided topic or fall back to the default topic
         _topic = topic or self.topic
