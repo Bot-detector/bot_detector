@@ -92,5 +92,5 @@ class HighScoreStruct(BaseModel):
 
 
 class DataToPredictStruct(BaseModel):
-    player_id: str
+    player_id: int
     data: HighScoreStruct

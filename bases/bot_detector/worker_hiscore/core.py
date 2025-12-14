@@ -7,11 +7,17 @@ from bot_detector.database import Settings as DBSettings
 from bot_detector.database.hiscore import HighscoreDataRepo
 from bot_detector.database.player import PlayerRepo
 from bot_detector.kafka import Settings as KafkaSettings
+from bot_detector.kafka.data_to_predict import (
+    DataToPredictProducer,
+    DataToPredictStruct,
+    HighScoreStruct,
+)
 from bot_detector.kafka.repositories import (
     RepoPlayerScrapedConsumer,
     RepoPlayerScrapedProducer,
 )
 from bot_detector.structs import ScrapedStruct
+from pydantic import ValidationError
 from pydantic_settings import BaseSettings
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -55,12 +61,73 @@ async def insert_batch(
     return None, None
 
 
+def transform_scraped_struct(
+    record: ScrapedStruct,
+) -> DataToPredictStruct | None:
+    if record.highscore_data is None:
+        logger.error("Highscore data is None")
+        return None
+
+    _player_id = record.player_data.id
+    _skills = record.highscore_data.skills or {}
+    _skills = {k.lower(): v for k, v in _skills.items() if v is not None}
+    _activities = record.highscore_data.activities or {}
+    _activities = {k.lower(): v for k, v in _activities.items() if v is not None}
+    try:
+        _data = HighScoreStruct.model_validate(_skills | _activities)
+    except ValidationError as e:
+        logger.error(
+            "Failed to validate HighScoreStruct",
+            extra={
+                "player_id": _player_id,
+                "data": _skills | _activities,
+                "errors": e.errors(),
+            },
+            exc_info=True,
+        )
+        return None
+    try:
+        _data_to_predict = DataToPredictStruct.model_validate(
+            {
+                "player_id": _player_id,
+                "data": _data,
+            }
+        )
+        return _data_to_predict
+    except ValidationError as e:
+        logger.error(
+            "Failed to validate DataToPredictStruct",
+            extra={
+                "player_id": _player_id,
+                "data": _skills | _activities,
+                "errors": e.errors(),
+            },
+            exc_info=True,
+        )
+        return None
+
+
+async def produce_data_to_predict(
+    data_to_predict_producer: DataToPredictProducer,
+    batch: list[ScrapedStruct],
+):
+    _tasks = []
+    for _record in batch:
+        _data_to_predict = transform_scraped_struct(_record)
+        if _data_to_predict is None:
+            continue
+        _tasks.append(data_to_predict_producer.produce_one(data=_data_to_predict))
+    await asyncio.gather(*_tasks)
+    logger.info(f"Produced {len(_tasks)} messages to data to predict topic.")
+
+
 async def consume_many_task(
     worker_id: int,
     max_messages: int,
     max_interval_ms: int,
     player_sc_consumer: RepoPlayerScrapedConsumer,
     player_sc_producer: RepoPlayerScrapedProducer,
+    data_to_predict_producer: DataToPredictProducer,
     highscore_repo: HighscoreDataRepo,
     player_repo: PlayerRepo,
     session_factory: async_sessionmaker[AsyncSession],
@@ -86,6 +153,11 @@ async def consume_many_task(
                 player_repo=player_repo,
                 batch=batch,
                 session_factory=session_factory,
+            )
+
+            await produce_data_to_predict(
+                data_to_predict_producer=data_to_predict_producer,
+                batch=batch,
             )
 
             if error:
@@ -122,10 +194,13 @@ async def main():
     player_sc_producer = RepoPlayerScrapedProducer(
         bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
     )
-
+    data_to_predict_producer = DataToPredictProducer(
+        bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
+    )
     # start kafka producers and consumers
     await player_sc_consumer.start()
     await player_sc_producer.start()
+    await data_to_predict_producer.start()
 
     # start workers
     workers = [
@@ -136,6 +211,7 @@ async def main():
                 max_interval_ms=Settings().MAX_INTERVAL_MS,
                 player_sc_consumer=player_sc_consumer,
                 player_sc_producer=player_sc_producer,
+                data_to_predict_producer=data_to_predict_producer,
                 highscore_repo=highscore_repo,
                 player_repo=player_repo,
                 session_factory=session_factory,

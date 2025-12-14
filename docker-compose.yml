@@ -96,6 +96,7 @@ services:
   # MINIO
   minio:
     image: minio/minio
+    container_name: minio
     expose:
       - "9000"
       - "9001"
@@ -117,6 +118,7 @@ services:
   # Create a bucket named "bucket" if it doesn't exist
   minio-create-bucket:
     image: minio/mc
+    container_name: minio_create_bucket
     depends_on:
       minio:
         condition: service_healthy

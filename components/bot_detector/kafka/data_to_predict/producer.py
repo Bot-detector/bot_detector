@@ -17,16 +17,12 @@ class DataToPredictProducer(BaseProducer):
     async def get_producer(self):
         return await super().get_producer()
 
-    async def produce_one(
-        self,
-        data: DataToPredictStruct,
-        partition_key: str | None = None,
-    ):
+    async def produce_one(self, data: DataToPredictStruct):
         if not isinstance(data, DataToPredictStruct):
-            raise Exception()
-
-        partition_key = str(int(data.player_id) % 10)
-
+            raise Exception(
+                f"data must be of type DataToPredictStruct, received: {type(data)}, value: {data}"
+            )
+        partition_key = str(int(data.player_id) % 10).encode("utf-8")
         await super().produce_one(
             data=data.model_dump(),
             topic=None,
