@@ -4,7 +4,8 @@ import traceback
 
 from bot_detector import database as db
 from bot_detector.database import Settings as DBSettings
-from bot_detector.database.repositories import HighscoreDataRepo, PlayerRepo
+from bot_detector.database.hiscore import HighscoreDataRepo
+from bot_detector.database.player import PlayerRepo
 from bot_detector.kafka import Settings as KafkaSettings
 from bot_detector.kafka.data_to_predict import (
     DataToPredictProducer,

@@ -12,6 +12,12 @@ for line in sys.stdin:
 endef
 export PRINT_HELP_PYSCRIPT
 
+UNAME_S := $(shell uname -m)
+DOCKER_ENV :=
+ifeq ($(UNAME_S),arm64)
+DOCKER_ENV = DOCKER_DEFAULT_PLATFORM=linux/amd64
+endif
+
 help:
 	@python3 -c "$$PRINT_HELP_PYSCRIPT" < $(MAKEFILE_LIST)
 
@@ -31,25 +37,28 @@ clean-test: ## cleanup pytests leftovers
 	rm -f test-results.html
 	rm -f output.xml
 
+uv-cache:
+	docker volume inspect uv_cache >/dev/null 2>&1 || docker volume create uv_cache
+
 dev-restart: ## restart containers
-	docker compose -f 'docker-compose-dev.yml' down
-	docker compose -f 'docker-compose-dev.yml' up -d --build
+	$(DOCKER_ENV) docker compose -f 'docker-compose-dev.yml' down
+	$(DOCKER_ENV) docker compose -f 'docker-compose-dev.yml' up -d --build
 
-restart: ## restart containers
-	docker compose -f 'docker-compose.yml' down
-	docker compose -f 'docker-compose.yml' up -d --build
+restart: uv-cache## restart containers
+	$(DOCKER_ENV) docker compose -f 'docker-compose.yml' down
+	$(DOCKER_ENV) docker compose -f 'docker-compose.yml' up -d --build
 
-test: docker-restart ## restart containers & test
+test: restart ## restart containers & test
 	uv run pytest
 	
-test-verbose: docker-restart ## restart containers & test
+test-verbose: restart ## restart containers & test
 	uv run pytest -s
 
 restart-%: ## Restart a docker service by name, eg make restart-api_public
 	uv sync --project projects/$*
-	docker compose stop $*
-	docker compose build $*
-	docker compose up -d $*
+	$(DOCKER_ENV) docker compose stop $*
+	$(DOCKER_ENV) docker compose build $*
+	$(DOCKER_ENV) docker compose up -d $*
 
 setup:
 	uv sync

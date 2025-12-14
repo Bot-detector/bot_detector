@@ -1,10 +1,20 @@
-from bot_detector.api_public.src.core.config import DB_SEMAPHORE
-from bot_detector.api_public.src.core.database.database import SessionFactory
+from bot_detector.api_public.src.core.config import DB_SEMAPHORE, settings
+from bot_detector.database import Settings as DBSettings
+from bot_detector.database import get_session_factory
 from sqlalchemy.ext.asyncio import AsyncSession
 
+# Reuse the shared database component instead of maintaining copy
+_db_settings = DBSettings(
+    DATABASE_URL=settings.DATABASE_URL,
+    POOL_TIMEOUT=settings.POOL_TIMEOUT,
+    POOL_RECYCLE=settings.POOL_RECYCLE,
+    DB_DEBUG=settings.ENV != "PRD",
+)
 
-# Dependency to get an asynchronous session
+SessionFactory, _engine = get_session_factory(SETTINGS=_db_settings)
+
+
 async def get_session() -> AsyncSession:
-    async with DB_SEMAPHORE:  # Acquire semaphore before accessing the session
+    async with DB_SEMAPHORE:
         async with SessionFactory() as session:
-            yield session  # Provide the session to the calling function
+            yield session

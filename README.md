@@ -28,6 +28,21 @@
     PROXY_API_KEY="<api key>"
     ```
 
+# Project Standards
+## Definitions
+- **Business logic**: the rules that determine how the domain behaves; validations, decisions, orchestration of use-cases, state transitions, etc.
+- **Plumbing**: transport/infrastructure glue (HTTP routing, request parsing, wiring dependencies) that carries inputs to the correct business logic and returns the result.
+- **Feature**: a cohesive capability (feedback reporting, player scraping, proxy rotation, etc.) that owns its domain rules, ~~DTOs~~ structs, ports, and integrations. Each feature lives inside a component so it can be reused by multiple bases/projects without duplication.
+- **Models** = SQLAlchemy ORM classes mapped to concrete tables (live under `components/bot_detector/database/**/models`). Only the persistence layer (repositories/adapters that talk to storage) should touch them.
+- **Structs** = Pydantic data shapes (requests/responses/contracts) shared across components/bases; they live under `components/bot_detector/structs` and replace the old “DTO” term.
+
+## Working Standards
+- **Components** encapsulate each feature’s business logic plus adapters, and may depend on other components/libraries only.
+- **Bases** expose public APIs and handle plumbing only (routing, request parsing, dependency wiring) before delegating to components.
+- **Projects** only compose bricks + libraries into deployable artifacts; they hold wiring/config, never feature code.
+- **Shared structs** (DTOs, interfaces) belong in reusable components like `components/bot_detector/structs` so every base/project can import them without circular dependencies.
+- **Tests** live under the workspace-level `test/` directory via `[tool.polylith.test]`, so base/component fixtures and contract tests should be added there rather than inside each brick folder. Add per-base `resources/` directories only when a base needs static assets or config that isn’t shared elsewhere.
+
 # The Polylith Architecture
 ## Overview
 The Polylith architecture is a modular approach to organizing codebases, aimed at improving maintainability, reducing duplication, and providing better oversight of projects. It is particularly well-suited for managing large, complex applications.
@@ -104,6 +119,10 @@ flowchart TD
     end
 ```
 # intersting commands
-```
+```sh
 find . -type f -name "pyproject.toml" -not -path "*/.venv/*" -execdir sh -c 'echo "🔄 Updating lock in $(pwd)"; uv lock' \;
+```
+# syncing in all directories, so uv cache is setup
+```sh
+find . -type f -name "pyproject.toml" -not -path "*/.venv/*" -execdir sh -c 'echo "🔄 syncing in $(pwd)"; uv sync' \;
 ```

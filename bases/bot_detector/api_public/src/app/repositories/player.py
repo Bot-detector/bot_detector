@@ -3,12 +3,10 @@ import logging
 import sqlalchemy as sqla
 from bot_detector.api_public.src.app.views.player import PlayerCreate, PlayerInDB
 from bot_detector.api_public.src.core._cache import SimpleALRUCache
-from bot_detector.api_public.src.core.database.models.feedback import (
+from bot_detector.database.api_public import (
+    Player as dbPlayer,
     PredictionFeedback as dbFeedback,
-)
-from bot_detector.api_public.src.core.database.models.player import Player as dbPlayer
-from bot_detector.api_public.src.core.database.models.prediction import (
-    Prediction as dbPrediction,
+    Prediction_v2 as dbPrediction,
 )
 from fastapi.encoders import jsonable_encoder
 from pydantic import ValidationError
@@ -17,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncResult, AsyncSession
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql.expression import Select
 
-# from bot_detector.api_public.src.core.database.models.report import Report as dbReport
+# from bot_detector.database.api_public import Report as dbReport
 
 logger = logging.getLogger(__name__)
 
@@ -93,12 +91,21 @@ class Player:
         return tuple(result.mappings())
 
     async def get_prediction(self, player_names: list[str]):
-        query: Select = select(dbPrediction)
+        query: Select = select(
+            dbPlayer.id.label("player_id"),
+            dbPlayer.name,
+            dbPrediction.created_at,
+            dbPrediction.model_name,
+            dbPrediction.prediction,
+            dbPrediction.confidence,
+            dbPrediction.predictions,
+        )
         query = query.select_from(dbPrediction)
-        query = query.where(dbPrediction.name.in_(player_names))
+        query = query.join(dbPlayer, dbPrediction.player_id == dbPlayer.id)
+        query = query.where(dbPlayer.name.in_(player_names))
 
         result: AsyncResult = await self.session.execute(query)
-        result = result.scalars().all()
+        result = result.mappings().all()
         return jsonable_encoder(result)
 
     async def get(self, player_name: str) -> PlayerInDB:
