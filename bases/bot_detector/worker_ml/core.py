@@ -242,62 +242,75 @@ async def consume_player_scraped(
 
 
 async def main():
+    CONSUME_PLAYER_SCRAPED = False
+    CONSUME_DATA_TO_PREDICT = True
+    assert any((CONSUME_PLAYER_SCRAPED, CONSUME_DATA_TO_PREDICT))
+
     ## database
     session_factory, engine = get_session_factory(SETTINGS=DBSettings())
-    ## kafka consumer
-    player_sc_consumer = RepoPlayerScrapedConsumer(
-        bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
-        group_id="ml_worker",
-    )
-    data_to_predict_consumer = DataToPredictConsumer(
-        bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
-        group_id="ml_worker",
-    )
-    ## kafka producer
-    player_sc_producer = RepoPlayerScrapedProducer(
-        bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
-    )
-    data_to_predict_producer = DataToPredictProducer(
-        bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
-    )
 
     ## api client
     http_session = aiohttp.ClientSession()
     api = MLApiClient(base_url=Settings().BASE_URL, session=http_session)
 
-    # start kafka producers and consumers
-    await player_sc_consumer.start()
-    await player_sc_producer.start()
-    await data_to_predict_consumer.start()
-    await data_to_predict_producer.start()
+    tasks = []
+    if CONSUME_PLAYER_SCRAPED:
+        player_sc_consumer = RepoPlayerScrapedConsumer(
+            bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
+            group_id="ml_worker",
+        )
+        player_sc_producer = RepoPlayerScrapedProducer(
+            bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
+        )
+        await player_sc_consumer.start()
+        await player_sc_producer.start()
+        tasks.append(
+            asyncio.create_task(
+                consume_player_scraped(
+                    max_messages=Settings().MAX_MESSAGES,
+                    max_interval_ms=Settings().MAX_INTERVAL_MS,
+                    player_sc_consumer=player_sc_consumer,
+                    player_sc_producer=player_sc_producer,
+                    api=api,
+                    session_factory=session_factory,  # type: ignore
+                    model_name=Settings().MODEL_NAME,
+                )
+            )
+        )
 
-    tasks = [
-        asyncio.create_task(
-            consume_player_scraped(
-                max_messages=Settings().MAX_MESSAGES,
-                max_interval_ms=Settings().MAX_INTERVAL_MS,
-                player_sc_consumer=player_sc_consumer,
-                player_sc_producer=player_sc_producer,
-                api=api,
-                session_factory=session_factory,  # type: ignore
-                model_name=Settings().MODEL_NAME,
+    if CONSUME_DATA_TO_PREDICT:
+        data_to_predict_consumer = DataToPredictConsumer(
+            bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
+            group_id="ml_worker",
+        )
+        data_to_predict_producer = DataToPredictProducer(
+            bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
+        )
+        await data_to_predict_consumer.start()
+        await data_to_predict_producer.start()
+        tasks.append(
+            asyncio.create_task(
+                consume_data_to_predict(
+                    max_messages=Settings().MAX_MESSAGES,
+                    max_interval_ms=Settings().MAX_INTERVAL_MS,
+                    data_to_predict_consumer=data_to_predict_consumer,
+                    data_to_predict_producer=data_to_predict_producer,
+                    api=api,
+                    session_factory=session_factory,  # type: ignore
+                    model_name=Settings().MODEL_NAME,
+                )
             )
-        ),
-        asyncio.create_task(
-            consume_data_to_predict(
-                max_messages=Settings().MAX_MESSAGES,
-                max_interval_ms=Settings().MAX_INTERVAL_MS,
-                data_to_predict_consumer=data_to_predict_consumer,
-                data_to_predict_producer=data_to_predict_producer,
-                api=api,
-                session_factory=session_factory,  # type: ignore
-                model_name=Settings().MODEL_NAME,
-            )
-        ),
-    ]
+        )
     await asyncio.gather(*tasks)
-    await player_sc_consumer.stop()
-    await player_sc_producer.stop()
+
+    if CONSUME_PLAYER_SCRAPED:
+        await player_sc_consumer.stop()
+        await player_sc_producer.stop()
+
+    if CONSUME_DATA_TO_PREDICT:
+        await data_to_predict_consumer.stop()
+        await data_to_predict_producer.stop()
+
     await http_session.close()
     await engine.dispose()
 

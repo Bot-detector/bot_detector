@@ -65,7 +65,7 @@ def transform_scraped_struct(
     record: ScrapedStruct,
 ) -> DataToPredictStruct | None:
     if record.highscore_data is None:
-        logger.error("Highscore data is None")
+        logger.debug("Highscore data is None")
         return None
 
     _player_id = record.player_data.id
