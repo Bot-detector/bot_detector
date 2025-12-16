@@ -10,13 +10,19 @@ logger = logging.getLogger(__name__)
 
 
 class BaseProducer(ProducerInterface):
-    def __init__(self, bootstrap_servers: str, topic: str | None = None):
+    def __init__(
+        self,
+        bootstrap_servers: str,
+        topic: str | None = None,
+        max_async_actions: int = 10,
+    ):
         self.topic = topic
         self._producer = AIOKafkaProducer(
             bootstrap_servers=bootstrap_servers,
             value_serializer=lambda v: orjson.dumps(v),
             acks="all",
         )
+        self.semaphore = asyncio.Semaphore(value=max_async_actions)
 
     async def start(self):
         await self._producer.start()
@@ -41,14 +47,15 @@ class BaseProducer(ProducerInterface):
         retries = 0
         MAX_BACKOFF = 60
         while True:
-            try:
-                await self._producer.send(
-                    topic=_topic,
-                    value=data,
-                    key=partition_key,
-                )
-                break
-            except KafkaTimeoutError:
-                retries += 1
-                logger.warning(f"KafkaTimeoutError - {topic=} {retries=} ")
-                await asyncio.sleep(min(2**retries, MAX_BACKOFF))
+            async with self.semaphore:
+                try:
+                    await self._producer.send(
+                        topic=_topic,
+                        value=data,
+                        key=partition_key,
+                    )
+                    break
+                except KafkaTimeoutError:
+                    retries += 1
+                    logger.warning(f"KafkaTimeoutError - {topic=} {retries=} ")
+                    await asyncio.sleep(min(2**retries, MAX_BACKOFF))
