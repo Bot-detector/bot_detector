@@ -1,6 +1,12 @@
+import asyncio
+import logging
+
 import orjson
 from aiokafka import AIOKafkaProducer
+from aiokafka.errors import KafkaTimeoutError
 from bot_detector.kafka.core.producer_interface import ProducerInterface
+
+logger = logging.getLogger(__name__)
 
 
 class BaseProducer(ProducerInterface):
@@ -32,8 +38,17 @@ class BaseProducer(ProducerInterface):
         _topic = topic or self.topic
         assert _topic is not None, "Topic must be specified"
 
-        await self._producer.send(
-            topic=_topic,
-            value=data,
-            key=partition_key,
-        )
+        retries = 0
+        MAX_BACKOFF = 60
+        while True:
+            try:
+                await self._producer.send(
+                    topic=_topic,
+                    value=data,
+                    key=partition_key,
+                )
+                break
+            except KafkaTimeoutError:
+                retries += 1
+                logger.warning(f"KafkaTimeoutError - {topic=} {retries=} ")
+                await asyncio.sleep(min(2**retries, MAX_BACKOFF))
