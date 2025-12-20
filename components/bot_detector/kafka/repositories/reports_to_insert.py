@@ -160,14 +160,14 @@ class RepoReportsToInsertConsumer(ConsumerInterface):
 
 
 class RepoReportsToInsertProducer(ProducerInterface):
-    def __init__(self, bootstrap_servers: str):
+    def __init__(self, bootstrap_servers: str, max_async_calls: int):
         self.producer = AIOKafkaProducer(
             bootstrap_servers=bootstrap_servers,
             value_serializer=lambda v: orjson.dumps(v),
             acks="all",
         )
         self.topic = "reports.to_insert"
-        self.semaphore = asyncio.Semaphore(value=10)
+        self.semaphore = asyncio.Semaphore(value=max_async_calls)
 
     async def start(self):
         await self.producer.start()
@@ -192,6 +192,7 @@ class RepoReportsToInsertProducer(ProducerInterface):
                         topic=self.topic,
                         value=report.model_dump(),
                     )
+                    break
                 except KafkaTimeoutError:
                     retries += 1
                     logger.warning(f"KafkaTimeoutError - {retries=} ")
