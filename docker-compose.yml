@@ -297,7 +297,7 @@ services:
     volumes:
       - ./bases:/bases
       - ./components:/components
-      - uv_cache:/root/.cache/uv
+      # - uv_cache:/root/.cache/uv
     ports:
       - 5000
     networks:

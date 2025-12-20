@@ -5,8 +5,12 @@ from bot_detector.api_public.src.app.views.player import PlayerCreate, PlayerInD
 from bot_detector.api_public.src.core._cache import SimpleALRUCache
 from bot_detector.database.api_public import (
     Player as dbPlayer,
-    PredictionFeedback as dbFeedback,
+)
+from bot_detector.database.api_public import (
     Prediction_v2 as dbPrediction,
+)
+from bot_detector.database.api_public import (
+    PredictionFeedback as dbFeedback,
 )
 from fastapi.encoders import jsonable_encoder
 from pydantic import ValidationError
