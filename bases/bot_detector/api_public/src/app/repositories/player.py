@@ -1,4 +1,3 @@
-import logging
 
 import sqlalchemy as sqla
 from bot_detector.api_public.src.app.views.player import PlayerCreate, PlayerInDB
