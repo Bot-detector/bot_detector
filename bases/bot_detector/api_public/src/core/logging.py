@@ -1,21 +1,26 @@
+import json
 import logging
 
 
-# Configure JSON logging
 class JsonFormatter(logging.Formatter):
     def format(self, record):
         log_record = {
             "ts": self.formatTime(record, self.datefmt),
             "lvl": record.levelname,
             "name": record.name,
-            # "module": record.module,
             "func": record.funcName,
             "line": record.lineno,
-            "msg": record.getMessage(),
         }
+
+        if isinstance(record.msg, dict):
+            log_record.update(record.msg)
+        else:
+            log_record["msg"] = record.getMessage()
+
         if record.exc_info:
             log_record["exception"] = self.formatException(record.exc_info)
-        return str(log_record)
+
+        return json.dumps(log_record, default=str)
 
 
 class IgnoreSQLWarnings(logging.Filter):
@@ -32,11 +37,4 @@ handler = logging.StreamHandler()
 handler.setFormatter(JsonFormatter())
 
 logging.basicConfig(level=logging.INFO, handlers=[handler])
-
-
-# set imported loggers to warning
 logging.getLogger("asyncmy").addFilter(IgnoreSQLWarnings())
-# logging.getLogger("urllib3").setLevel(logging.DEBUG)
-# logging.getLogger("uvicorn").setLevel(logging.DEBUG)
-# logging.getLogger("aiomysql").setLevel(logging.ERROR)
-# logging.getLogger("aiokafka").setLevel(logging.WARNING)

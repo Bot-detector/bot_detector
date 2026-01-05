@@ -2,6 +2,7 @@ import asyncio
 import logging
 import time
 
+from bot_detector.api_public.src.core.fastapi.dependencies import wide_event
 from bot_detector.api_public.src.core.fastapi.dependencies.kafka import kafka_manager
 from bot_detector.kafka.repositories.reports_to_insert import (
     RepoReportsToInsertProducer,
@@ -34,19 +35,24 @@ class Report:
         # [d for d in data if min_ts < d.ts < max_ts]
         output = []
 
+        stale_report_count = 0
+        future_report_count = 0
         for d in data:
             if d.ts <= min_ts:
-                logger.info(
-                    f"invalid: {d.ts} <= {min_ts}, now={current_time}, {d.reporter}"
-                )
+                stale_report_count += 1
                 continue
             if d.ts >= max_ts:
-                logger.info(
-                    f"invalid: {d.ts} >= {max_ts}, now={current_time}, {d.reporter}"
-                )
+                future_report_count += 1
                 continue
             output.append(d)
-
+        wide_event.add_context(
+            {
+                "report": {
+                    "stale_report_count": stale_report_count,
+                    "future_report_count": future_report_count,
+                }
+            }
+        )
         return output
 
     def _check_unique_reporter(self, data: list[Detection]) -> list[Detection] | None:
@@ -59,25 +65,25 @@ class Report:
         data = self._check_data_size(data)
         if not data:
             error = "invalid data size"
-            logger.warning(error)
+            wide_event.add_context({"report": {"status": "error", "detail": error}})
             return None, error
 
         data = self._filter_valid_time(data)
         if not data:
             error = "invalid time"
-            logger.warning(error)
+            wide_event.add_context({"report": {"status": "error", "detail": error}})
             return None, error
 
         data = self._check_unique_reporter(data)
         if not data:
             error = "invalid unique reporter"
-            logger.warning(error)
+            wide_event.add_context({"report": {"status": "error", "detail": error}})
             return None, error
         return data, None
 
     def _transform_detection(
         self, data: list[ParsedDetection]
-    ) -> tuple[list[ReportsToInsertStruct], list | None]:
+    ) -> tuple[list[ReportsToInsertStruct], list[str]]:
         reports = []
         errors = []
 
@@ -108,5 +114,12 @@ class Report:
 
         if len(error) > 0:
             error_msg = f"Received {len(error)} validation errors like this: {error[0]}"
-            logger.error(error_msg)
+            wide_event.add_context(
+                {
+                    "report": {
+                        "reports_sent_to_kafka": len(reports),
+                        "report_errors": len(error),
+                    }
+                }
+            )
             raise CustomError(error_msg)
