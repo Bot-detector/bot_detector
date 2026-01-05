@@ -1,15 +1,14 @@
-import logging
-
 from bot_detector.api_public.src.app.views.input.feedback import FeedbackInput
+from bot_detector.api_public.src.core.fastapi.dependencies import wide_event
 from bot_detector.database.api_public import (
     Player as dbPlayer,
+)
+from bot_detector.database.api_public import (
     PredictionFeedback as dbFeedback,
 )
 from sqlalchemy import and_, insert, select
 from sqlalchemy.ext.asyncio import AsyncResult, AsyncSession
 from sqlalchemy.sql.expression import Insert, Select
-
-logger = logging.getLogger(__name__)
 
 
 class Feedback:
@@ -45,7 +44,9 @@ class Feedback:
 
             # check if voter exists
             if not result:
-                logger.info({"voter_does_not_exist": FeedbackInput})
+                wide_event.add_context(
+                    {"feedback": {"status": "error", "detail": "voter_does_not_exist"}}
+                )
                 await self.session.rollback()
                 return False, "voter_does_not_exist"
 
@@ -57,7 +58,9 @@ class Feedback:
 
             # check if duplicate record
             if result:
-                logger.info({"duplicate_record": FeedbackInput, "voter id": voter_id})
+                wide_event.add_context(
+                    {"feedback": {"status": "error", "detail": "duplicate_record"}}
+                )
                 await self.session.rollback()
                 return False, "duplicate_record"
 
@@ -66,4 +69,5 @@ class Feedback:
             sql_insert = sql_insert.values(data)
             result: AsyncResult = await self.session.execute(sql_insert)
             await self.session.commit()
+            wide_event.add_context({"feedback": {"status": "success"}})
         return True, "success"
