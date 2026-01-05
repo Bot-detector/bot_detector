@@ -1,4 +1,3 @@
-
 import sqlalchemy as sqla
 from bot_detector.api_public.src.app.views.player import PlayerCreate, PlayerInDB
 from bot_detector.api_public.src.core._cache import SimpleALRUCache
