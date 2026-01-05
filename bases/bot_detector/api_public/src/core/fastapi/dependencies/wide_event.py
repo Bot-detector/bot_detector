@@ -15,4 +15,9 @@ def add_context(data: dict[str, Any]):
     to add context to the final wide event.
     """
     ctx = _log_context.get()
-    ctx.update(data)  # update dict
+    for key, value in data.items():
+        if isinstance(value, dict) and isinstance(ctx.get(key), dict):
+            # merge nested dict
+            ctx[key].update(value)
+        else:
+            ctx[key] = value
