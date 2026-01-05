@@ -7,7 +7,7 @@ from bot_detector.api_public.src.core.fastapi.dependencies import wide_event
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("api_public.logging_middleware")
 
 
 class LoggingMiddleware(BaseHTTPMiddleware):
