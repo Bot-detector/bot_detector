@@ -23,7 +23,14 @@ async def post_reports(
     report_repo = Report()
     player_repo = Player(session=session, cache=player_cache)
 
-    wide_event.add_context({"report": {"reports_received": len(detections)}})
+    wide_event.add_context(
+        {
+            "report": {
+                "reports_received": len(detections),
+                "sample_report": detections[0].model_dump() if detections else None,
+            }
+        }
+    )
     data, error = await report_repo.parse_data(detections)
     if error:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=error)

@@ -56,7 +56,9 @@ class Report:
         return output
 
     def _check_unique_reporter(self, data: list[Detection]) -> list[Detection] | None:
-        return None if len(set(d.reporter for d in data)) > 1 else data
+        reporters = set(d.reporter for d in data)
+        wide_event.add_context({"report": {"reporters": list(reporters)}})
+        return None if len(reporters) > 1 else data
 
     async def parse_data(self, data: list[Detection]) -> tuple[list[Detection], None]:
         """
