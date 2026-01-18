@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # install to /root/.opencode/bin/opencode
 RUN curl -fsSL https://opencode.ai/install | bash
 
-FROM opencode_base AS build
+FROM base AS build
 
 COPY --from=opencode_base /root/.opencode/bin/opencode /usr/local/bin/
 
