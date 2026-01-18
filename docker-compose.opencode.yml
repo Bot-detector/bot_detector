@@ -3,6 +3,7 @@ services:
     build:
       context: .
       dockerfile: _opencode/Dockerfile
+      target: build
     image: my_opencode
     volumes:
       # opencode source code
@@ -28,4 +29,3 @@ services:
     # Equivalent to -it
     stdin_open: true
     tty: true
-    working_dir: /opencode
