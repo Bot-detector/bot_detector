@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: _opencode/Dockerfile
-      target: build
+      target: final
     image: my_opencode
     volumes:
       # opencode source code
