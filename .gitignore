@@ -176,3 +176,4 @@ test.py
 _minio_data/.gitkeep
 _minio_data/*
 */*spec*.md
+_opencode/.opencode/opencode.jsonc
