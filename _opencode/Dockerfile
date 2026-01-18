@@ -15,11 +15,11 @@ FROM opencode_base AS build
 
 COPY --from=opencode_base /root/.opencode/bin/opencode /usr/local/bin/
 
-WORKDIR /opencode
+WORKDIR /project
 
 RUN addgroup --gid 1000 opencode \
     && adduser --uid 1000 --gid 1000 --disabled-password --gecos "" opencode \
-    && chown -R opencode:opencode /opencode
+    && chown -R opencode:opencode /project
 
 USER opencode
 
