@@ -17,20 +17,17 @@ COPY --from=opencode_base /root/.opencode/bin/opencode /usr/local/bin/
 
 WORKDIR /opencode
 
+RUN addgroup --gid 1000 opencode \
+    && adduser --uid 1000 --gid 1000 --disabled-password --gecos "" opencode \
+    && chown -R opencode:opencode /opencode
+
+USER opencode
+
 COPY pyproject.toml pyproject.toml
 COPY uv.lock uv.lock
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --no-install-project
 
-# Create opencode user and group (UID/GID 1000)
-RUN addgroup --gid 1000 opencode
-
-# create user with UID 1000, primary group opencode, home directory, no password
-RUN adduser --uid 1000 --gid 1000 --disabled-password --gecos "" opencode
-
-USER opencode
-
-CMD ["sleep", "infinity"] 
-
-# ENTRYPOINT ["opencode"]
+# CMD ["sleep", "infinity"] 
+ENTRYPOINT ["opencode"]

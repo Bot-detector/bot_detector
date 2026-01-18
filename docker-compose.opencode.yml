@@ -8,6 +8,7 @@ services:
     volumes:
       # opencode source code
       - ./_opencode/.opencode:/opencode/.opencode
+      - ./_opencode/Dockerfile:/opencode/_opencode/Dockerfile
       - ./AGENTS.md:/opencode/AGENTS.md
       # project source code
       - ./bases:/opencode/bases
