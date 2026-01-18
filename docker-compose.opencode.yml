@@ -5,18 +5,22 @@ services:
       dockerfile: _opencode/Dockerfile
     image: my_opencode
     volumes:
-      # Use ./ to indicate local relative paths
+      # opencode source code
       - ./_opencode/.opencode:/opencode/.opencode
+      - ./AGENTS.md:/opencode/AGENTS.md
+      # project source code
       - ./bases:/opencode/bases
       - ./components:/opencode/components
       - ./projects:/opencode/projects
       - ./test:/opencode/test
-      - ./_kafka:/opencode/_kafka
-      - ./_minio_data:/opencode/_minio_data
-      - ./_mysql:/opencode/_mysql
       - ./uv.lock:/opencode/uv.lock
       - ./pyproject.toml:/opencode/pyproject.toml
-      - ./workspace.toml:/opencode/workspace.toml
+      - ./workspace.toml:/opencode/workspace.toml:ro
+      # infrastructure
+      - ./_kafka:/opencode/_kafka
+      - ./_mysql:/opencode/_mysql
+      # configs and docs
+      - ./specs:/opencode/specs
       - ./docker-compose.yml:/opencode/docker-compose.yml
       - ./README.md:/opencode/README.md
     env_file:

@@ -1,31 +1,33 @@
-FROM ghcr.io/anomalyco/opencode:1.1.25
+# Base image
+FROM python:3.12-alpine
 
-# 1. Install basic utilities
+# 1. Copy binaries
+COPY --from=ghcr.io/astral-sh/uv:0.5.4 /uv /uvx /bin/
+COPY --from=ghcr.io/anomalyco/opencode:1.1.25 /usr/local/bin/opencode /usr/bin/
+
+# 2. Install essential packages for opencode
 RUN apk add --no-cache \
-    git \
-    curl \
-    wget \
-    bash \
-    vim
+    libgcc libstdc++ ripgrep
 
-# 2. Create the opencode user and group with ID 1000
-# -g 1000: Set Group ID
-# -u 1000: Set User ID
-# -D: Don't assign a password
-# -G: Assign the user to the specified group
+# 3. Create opencode user and group (UID/GID 1000)
 RUN addgroup -g 1000 opencode \
     && adduser -u 1000 -G opencode -D opencode
 
-# 3. Create the directory and set ownership/permissions
+# 4. Create working directory and fix permissions
 RUN mkdir -p /opencode \
     && chown -R opencode:opencode /opencode \
     && chmod 755 /opencode
 
-# 4. Set the working directory (optional but recommended)
 WORKDIR /opencode
 
-# 5. Switch to the non-root user
+COPY pyproject.toml /opencode/pyproject.toml
+COPY uv.lock /opencode/uv.lock
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --no-install-project
+
 USER opencode
 
-# The entrypoint from the base image (the 'opencode' binary) 
-# will now run as the 'opencode' user.
+# 7. Default command (optional, can override with ENTRYPOINT)
+CMD ["sleep", "infinity"]
+# ENTRYPOINT ["opencode"]
