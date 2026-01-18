@@ -7,9 +7,10 @@ services:
     image: my_opencode
     volumes:
       # opencode source code
-      - ./_opencode/.opencode:/project/.opencode
+      - ./_opencode/.opencode:/project/.opencodes
       - ./_opencode/Dockerfile:/project/_opencode/Dockerfile
-      - ./_opencode/.env.example:/project/.env.example
+      - ./_opencode/opencode.jsonc:/project/opencode.jsonc
+      - opencode_auth:/home/opencode/.local/share/opencode
       - ./AGENTS.md:/project/AGENTS.md
       # project source code
       - ./bases:/project/bases
@@ -33,3 +34,6 @@ services:
     # Equivalent to -it
     stdin_open: true
     tty: true
+
+volumes:
+  opencode_auth:

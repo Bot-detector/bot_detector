@@ -21,6 +21,10 @@ RUN addgroup --gid 1000 opencode \
     && adduser --uid 1000 --gid 1000 --disabled-password --gecos "" opencode \
     && chown -R opencode:opencode /project
 
+# fix permissions
+RUN mkdir -p /home/opencode/.local/share/opencode \
+    && chown -R opencode:opencode /home/opencode/.local
+
 USER opencode
 
 COPY pyproject.toml pyproject.toml
