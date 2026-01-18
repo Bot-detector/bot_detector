@@ -36,4 +36,5 @@ services:
     tty: true
 
 volumes:
+  # volume to persist opencode auth data
   opencode_auth:
