@@ -6,10 +6,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl unzip \
     && rm -rf /var/lib/apt/lists/*
 
-# install bun
-FROM base_installer AS bun_installer
-RUN curl -fsSL https://bun.sh/install | bash
-
 # install opencode
 FROM base_installer AS opencode_installer
 RUN curl -fsSL https://opencode.ai/install | bash
@@ -19,13 +15,11 @@ FROM base AS final
 
 # Copy all binaries
 COPY --from=ghcr.io/astral-sh/uv:0.5.4 /uv /uvx /bin/
+COPY --from=oven/bun:debian /usr/local/bin/bun /usr/local/bin/
 COPY --from=opencode_installer /root/.opencode/bin/opencode /usr/local/bin/
-COPY --from=bun_installer /root/.bun/bin/bun /usr/local/bin/
+
 # Set up PATH
 ENV PATH=/usr/local/bin:$PATH
-
-# install oh-my-opencode
-RUN bun install -g oh-my-opencode
 
 WORKDIR /project
 
@@ -39,6 +33,9 @@ RUN mkdir -p /home/opencode/.local/share/opencode \
     && chown -R opencode:opencode /home/opencode/.local
 
 USER opencode
+
+# install oh-my-opencode
+# RUN bun x oh-my-opencode install --no-tui --claude=no --chatgpt=no --gemini=no
 
 COPY pyproject.toml pyproject.toml
 COPY uv.lock uv.lock

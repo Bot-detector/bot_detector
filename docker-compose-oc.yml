@@ -7,7 +7,7 @@ services:
     image: my_opencode
     volumes:
       # opencode source code
-      - ./_opencode/.opencode:/project/.opencodes
+      - ./_opencode/.opencode:/project/.opencode
       - ./_opencode/Dockerfile:/project/_opencode/Dockerfile
       - ./_opencode/opencode.jsonc:/project/opencode.jsonc
       - opencode_auth:/home/opencode/.local/share/opencode
