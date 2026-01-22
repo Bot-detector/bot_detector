@@ -1,0 +1,41 @@
+services:
+  opencode:
+    network_mode: host
+    build:
+      context: .
+      dockerfile: _opencode/Dockerfile
+      target: final
+    image: my_opencode
+    volumes:
+      # opencode source code
+      - ./_opencode/.opencode:/project/.opencode
+      - ./_opencode/Dockerfile:/project/_opencode/Dockerfile
+      - ./_opencode/opencode.jsonc:/project/opencode.jsonc
+      - ./_opencode/specs:/project/specs
+      - opencode_auth:/home/opencode/.local/share/opencode
+      - ./AGENTS.md:/project/AGENTS.md
+      # project source code
+      - ./bases:/project/bases
+      - ./components:/project/components
+      - ./projects:/project/projects
+      - ./test:/project/test
+      - ./uv.lock:/project/uv.lock
+      - ./pyproject.toml:/project/pyproject.toml
+      - ./workspace.toml:/project/workspace.toml:ro
+      # infrastructure
+      - ./_kafka:/project/_kafka
+      - ./_mysql:/project/_mysql
+      # configs and docs
+      - ./docker-compose.yml:/project/docker-compose.yml
+      - ./docker-compose-dev.yml:/project/docker-compose-dev.yml
+      - ./docker-compose-oc.yml:/project/docker-compose-oc.yml
+      - ./README.md:/project/README.md
+    env_file:
+      - ./_opencode/.env
+    # Equivalent to -it
+    stdin_open: true
+    tty: true
+
+volumes:
+  # volume to persist opencode auth data
+  opencode_auth:
