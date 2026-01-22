@@ -180,3 +180,8 @@ _minio_data/*
 # opencode
 _opencode/opencode.jsonc
 _opencode/.opencode/oh-my-opencode.jsonc
+_opencode/specs/*
+_opencode/.opencode/agents/*
+_opencode/.opencode/commands/*
+_opencode/.opencode/skills/*
+_opencode/.opencode/tools/*
