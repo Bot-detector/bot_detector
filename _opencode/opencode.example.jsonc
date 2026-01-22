@@ -3,9 +3,8 @@
   "provider": {
     "openrouter": {
       "models": {
-        "openrouter/mistralai/devstral-2512:free": {},
-        "openrouter/openai/gpt-oss-120b:free": {},
-        "openrouter/moonshotai/kimi-k2:free": {}
+        "opencode/glm-4.7-free": {},
+        "openrouter/mistralai/devstral-2512:free": {}
       }
     }
   },

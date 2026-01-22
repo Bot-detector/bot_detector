@@ -1,5 +1,6 @@
 services:
   opencode:
+    network_mode: host
     build:
       context: .
       dockerfile: _opencode/Dockerfile
@@ -10,6 +11,7 @@ services:
       - ./_opencode/.opencode:/project/.opencode
       - ./_opencode/Dockerfile:/project/_opencode/Dockerfile
       - ./_opencode/opencode.jsonc:/project/opencode.jsonc
+      - ./_opencode/specs:/project/specs
       - opencode_auth:/home/opencode/.local/share/opencode
       - ./AGENTS.md:/project/AGENTS.md
       # project source code
@@ -24,7 +26,6 @@ services:
       - ./_kafka:/project/_kafka
       - ./_mysql:/project/_mysql
       # configs and docs
-      - ./specs:/project/specs
       - ./docker-compose.yml:/project/docker-compose.yml
       - ./docker-compose-dev.yml:/project/docker-compose-dev.yml
       - ./docker-compose-oc.yml:/project/docker-compose-oc.yml

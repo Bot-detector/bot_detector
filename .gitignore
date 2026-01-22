@@ -176,6 +176,7 @@ test.py
 _minio_data/.gitkeep
 _minio_data/*
 */*spec*.md
+
 # opencode
 _opencode/opencode.jsonc
-_opencode/opencode.json
+_opencode/.opencode/oh-my-opencode.jsonc
