@@ -1,8 +1,10 @@
+import asyncio
 import logging
 import time
 
 import orjson
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer, TopicPartition
+from aiokafka.errors import KafkaTimeoutError
 from bot_detector.kafka.interface import (
     ConsumerInterface,
     ProducerInterface,
@@ -158,13 +160,14 @@ class RepoReportsToInsertConsumer(ConsumerInterface):
 
 
 class RepoReportsToInsertProducer(ProducerInterface):
-    def __init__(self, bootstrap_servers: str):
+    def __init__(self, bootstrap_servers: str, max_async_calls: int):
         self.producer = AIOKafkaProducer(
             bootstrap_servers=bootstrap_servers,
             value_serializer=lambda v: orjson.dumps(v),
             acks="all",
         )
         self.topic = "reports.to_insert"
+        self.semaphore = asyncio.Semaphore(value=max_async_calls)
 
     async def start(self):
         await self.producer.start()
@@ -180,7 +183,17 @@ class RepoReportsToInsertProducer(ProducerInterface):
         if not isinstance(report, ReportsToInsertStruct):
             raise Exception()
 
-        await self.producer.send(
-            topic=self.topic,
-            value=report.model_dump(),
-        )
+        retries = 0
+        MAX_BACKOFF = 60
+        while True:
+            async with self.semaphore:
+                try:
+                    await self.producer.send(
+                        topic=self.topic,
+                        value=report.model_dump(),
+                    )
+                    break
+                except KafkaTimeoutError:
+                    retries += 1
+                    logger.warning(f"KafkaTimeoutError - {retries=} ")
+                    await asyncio.sleep(min(2**retries, MAX_BACKOFF))

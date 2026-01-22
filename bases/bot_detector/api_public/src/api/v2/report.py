@@ -1,16 +1,14 @@
-import logging
-
 from bot_detector.api_public.src.app.repositories.player import Player
 from bot_detector.api_public.src.app.repositories.report import CustomError, Report
 from bot_detector.api_public.src.app.views.response.ok import Ok
 from bot_detector.api_public.src.core._cache import SimpleALRUCache
+from bot_detector.api_public.src.core.fastapi.dependencies import wide_event
 from bot_detector.api_public.src.core.fastapi.dependencies.session import get_session
 from bot_detector.structs import Detection, ParsedDetection
 from fastapi import APIRouter, Depends, status
 from fastapi.exceptions import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Report"])
 
 player_cache = SimpleALRUCache(max_size=100_000)
@@ -25,11 +23,26 @@ async def post_reports(
     report_repo = Report()
     player_repo = Player(session=session, cache=player_cache)
 
+    wide_event.add_context(
+        {
+            "report": {
+                "reports_received": len(detections),
+                "sample_report": detections[0].model_dump() if detections else None,
+            }
+        }
+    )
     data, error = await report_repo.parse_data(detections)
     if error:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=error)
 
-    logger.debug(f"Received: {len(data)}, Reporter: {data[0].reporter}")
+    wide_event.add_context(
+        {
+            "report": {
+                "valid_reports_received": len(data),
+                "reporter": data[0].reporter,
+            }
+        }
+    )
 
     # get unique list of names
     player_names = list(set([d.reported for d in data] + [d.reporter for d in data]))
@@ -49,7 +62,16 @@ async def post_reports(
 
         # some validation
         if reporter_id is None or reported_id is None:
-            logger.warning(msg=f"{reported_id=}, {reporter_id=}, {d}")
+            wide_event.add_context(
+                {
+                    "report": {
+                        "status": "error",
+                        "detail": "invalid_reporter_or_reported, could not find player id",
+                        "reported": reported,
+                        "reporter": reporter,
+                    }
+                }
+            )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="something went wrong",

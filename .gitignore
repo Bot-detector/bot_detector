@@ -175,3 +175,13 @@ _mysql_data/src/2025-02-23_19-38_players_export.sql
 test.py
 _minio_data/.gitkeep
 _minio_data/*
+*/*spec*.md
+
+# opencode
+_opencode/opencode.jsonc
+_opencode/.opencode/oh-my-opencode.jsonc
+_opencode/specs/*
+_opencode/.opencode/agents/*
+_opencode/.opencode/commands/*
+_opencode/.opencode/skills/*
+_opencode/.opencode/tools/*

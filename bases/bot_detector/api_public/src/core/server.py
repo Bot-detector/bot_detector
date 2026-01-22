@@ -14,6 +14,8 @@ from fastapi.middleware import Middleware
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import start_http_server
 
+from .config import Settings
+
 logger = logging.getLogger(__name__)
 
 
@@ -47,7 +49,8 @@ async def lifespan(app: FastAPI):
     kafka_manager.set_producer(
         key="reports_to_insert",
         producer=RepoReportsToInsertProducer(
-            bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS
+            bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
+            max_async_calls=Settings().KAFKA_MAX_ASYNC_CALLS,
         ),
     )
     producer = kafka_manager.get_producer(key="reports_to_insert")

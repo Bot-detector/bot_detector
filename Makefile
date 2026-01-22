@@ -67,3 +67,6 @@ docs: ## opens your browser to the webapps testing docs
 	open http://localhost:5000/docs
 	xdg-open http://localhost:5000/docs
 	. http://localhost:5000/docs
+opencode:
+	docker compose -f docker-compose-oc.yml down
+	docker compose -f docker-compose-oc.yml run --rm --build opencode

@@ -1,12 +1,15 @@
-import logging
-
 import sqlalchemy as sqla
 from bot_detector.api_public.src.app.views.player import PlayerCreate, PlayerInDB
 from bot_detector.api_public.src.core._cache import SimpleALRUCache
+from bot_detector.api_public.src.core.fastapi.dependencies import wide_event
 from bot_detector.database.api_public import (
     Player as dbPlayer,
-    PredictionFeedback as dbFeedback,
+)
+from bot_detector.database.api_public import (
     Prediction_v2 as dbPrediction,
+)
+from bot_detector.database.api_public import (
+    PredictionFeedback as dbFeedback,
 )
 from fastapi.encoders import jsonable_encoder
 from pydantic import ValidationError
@@ -14,10 +17,6 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncResult, AsyncSession
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql.expression import Select
-
-# from bot_detector.database.api_public import Report as dbReport
-
-logger = logging.getLogger(__name__)
 
 
 def model_to_dict(model):
@@ -121,17 +120,31 @@ class Player:
                 return None
             player_in_db = PlayerInDB(**model_to_dict(data[0]))
         except ValidationError as e:
-            logger.error(f"Validation error: {e.json()}")
+            wide_event.add_context(
+                {
+                    "player": {
+                        "status": "error",
+                        "detail": e.json(),
+                    }
+                }
+            )
             return None
         return player_in_db
 
+    # TODO: valkey externalize cache
     async def get_cache(self, player_name: str) -> PlayerInDB:
         player_name = self.sanitize_name(player_name)
         player = await self.cache.get(key=player_name)
 
         if isinstance(player, PlayerInDB):
-            if self.cache.hits % 100 == 0 and self.cache.hits > 0:
-                logger.info(f"hits: {self.cache.hits}, misses: {self.cache.misses}")
+            wide_event.add_context(
+                {
+                    "player": {
+                        "cache_hits": self.cache.hits,
+                        "cache_misses": self.cache.misses,
+                    }
+                }
+            )
             return player
 
         player = await self.get(player_name=player_name)
@@ -145,6 +158,9 @@ class Player:
         sql = sqla.insert(dbPlayer).values(player.model_dump()).prefix_with("IGNORE")
         await self.session.execute(sql)
         await self.session.commit()
+        wide_event.add_context(
+            {"player": {"player_inserted": True, "player_name": player.name}}
+        )
         return await self.get(player_name=player.name)
 
     async def get_or_insert(self, player_name: str, cached=True) -> PlayerInDB:

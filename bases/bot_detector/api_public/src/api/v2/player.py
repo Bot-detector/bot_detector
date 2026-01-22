@@ -1,5 +1,4 @@
 import asyncio
-import logging
 from typing import Annotated
 
 from bot_detector.api_public.src.app.repositories.player import Player as repoPlayer
@@ -18,7 +17,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic.fields import Field
 
 router = APIRouter(tags=["Player"])
-logger = logging.getLogger(__name__)
 
 
 @router.get("/player/report/score", response_model=list[ReportScoreResponse])
@@ -102,6 +100,7 @@ async def get_prediction(
     data = await repo.get_prediction(player_names=names)
     if not data:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Player not found"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Player not found",
         )
     return [PredictionResponse.from_data(d, breakdown) for d in data]

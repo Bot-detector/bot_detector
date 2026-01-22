@@ -104,7 +104,7 @@ CREATE TABLE prediction_latest (
   player_id INT NOT NULL,
   model_name VARCHAR(50) NOT NULL,
   prediction VARCHAR(50) NOT NULL,
-  confidence DECIMAL(5, 2) NOT NULL,
+  confidence DECIMAL(5, 4) NOT NULL,
   predictions JSON DEFAULT NULL,
   PRIMARY KEY (player_id),
   FOREIGN KEY (player_id) REFERENCES Players(id)
@@ -127,7 +127,7 @@ CREATE TABLE prediction (
   player_id INT NOT NULL,
   model_name VARCHAR(50) NOT NULL,
   prediction VARCHAR(50) NOT NULL,
-  confidence DECIMAL(5, 2) NOT NULL,
+  confidence DECIMAL(5, 4) NOT NULL,
   predictions JSON DEFAULT NULL,
   PRIMARY KEY (prediction_id),
   FOREIGN KEY (player_id) REFERENCES Players(id),

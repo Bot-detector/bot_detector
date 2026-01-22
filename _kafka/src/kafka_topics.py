@@ -42,6 +42,13 @@ def create_topics(kafka_broker: str | list):
                 num_partitions=4,
                 replication_factor=1,
             ),
+            # producer: worker_hiscore
+            # consumer: worker_ml <=> api_ml
+            NewTopic(
+                name="data.to_predict",
+                num_partitions=4,
+                replication_factor=1,
+            ),
         ]
     )
 
