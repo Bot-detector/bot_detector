@@ -1,30 +1,57 @@
-FROM python:3.12-slim-bookworm AS builder
+FROM python:3.12-slim-bookworm AS base
 
-# Copy uv from external repository
-COPY --from=ghcr.io/astral-sh/uv:0.5.4 /uv /uvx /bin/
+# Python optimizations
+ENV PYTHONUNBUFFERED=1
+ENV UV_COMPILE_BYTECODE=1
 
-# set the working directory
 WORKDIR /app
 
-# Copy only necessary files to run the projects
+FROM base AS builder
+COPY --from=ghcr.io/astral-sh/uv:0.5.4 /uv /bin/
+
+WORKDIR /app
+
+COPY ./projects/api_public ./projects/api_public
 COPY ./bases ./bases
 COPY ./components ./components
-COPY ./projects ./projects
 
-WORKDIR /app/projects/api_public
+RUN --mount=type=cache,id=uv_cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --project ./projects/api_public
 
-# install dependencies via RUN uv build
-RUN uv sync --frozen --no-editable
+FROM base AS dev
+COPY --from=ghcr.io/astral-sh/uv:0.5.4 /uv uvx/ /bin/
 
-# Production stage: Prepare the final production environment
-FROM python:3.12-slim-bookworm AS production
+WORKDIR /app
 
-# Creates a non-root user with an explicit UID and adds permission to access the /project folder
-RUN adduser -u 5678 --disabled-password --gecos "" appuser
+COPY --from=builder /app/projects/api_public/.venv /app/.venv
 
-WORKDIR /app/projects/api_public
-COPY --from=builder --chown=appuser /app/projects/api_public/.venv /app/projects/api_public/.venv
+ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONPATH="/app"
+
+COPY ./projects/api_public ./projects/api_public
+COPY ./bases ./bases
+COPY ./components ./components
+
+# this installs dev dependencies
+RUN --mount=type=cache,id=uv_cache,target=/root/.cache/uv \
+    uv sync --frozen --project ./projects/api_public \
+    && cp -r projects/api_public/.venv/ .venv/
+
+CMD ["uvicorn", "bot_detector.api_public.src.core.server:app", "--host", "0.0.0.0", "--port", "5000", "--reload"]
+
+FROM base AS prod
+
+WORKDIR /app
+
+# Create a secure user
+RUN addgroup --system appuser && \
+    adduser --system --ingroup appuser --home /app --no-create-home --disabled-password --uid 5678 appuser
+
+COPY --from=builder --chown=appuser /app/projects/api_public/.venv /app/.venv
+
+ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONPATH="/app"
 
 USER appuser
 
-CMD [".venv/bin/uvicorn", "bot_detector.api_public.src.core.server:app", "--proxy-headers", "--host", "0.0.0.0", "--port", "5000", "--log-level", "warning"]
+CMD ["python3", "-m", "uvicorn", "bot_detector.api_public.src.core.server:app", "--host", "0.0.0.0", "--port", "5000", "--log-level", "warning"]

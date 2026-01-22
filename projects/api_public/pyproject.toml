@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.scripts]
-scrape_task_producer = "bot_detector.api_public.core.server:run"
+api_public = "bot_detector.api_public.core.server:run"
 
 [tool.hatch.build.hooks.polylith-bricks]
 packages = ["bot_detector"]
