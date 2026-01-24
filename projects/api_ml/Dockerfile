@@ -1,3 +1,6 @@
+# ------------------------------------------------------------
+# Base (shared env only, no filesystem assumptions)
+# ------------------------------------------------------------
 FROM python:3.12-slim-bookworm AS base
 
 # Python optimizations
@@ -6,7 +9,12 @@ ENV UV_COMPILE_BYTECODE=1
 
 WORKDIR /app
 
+
+# ------------------------------------------------------------
+# Builder: production dependencies only
+# ------------------------------------------------------------
 FROM base AS builder
+
 COPY --from=ghcr.io/astral-sh/uv:0.5.13 /uv /bin/
 
 WORKDIR /app
@@ -18,7 +26,12 @@ COPY ./components ./components
 RUN --mount=type=cache,id=uv_cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --project ./projects/api_ml
 
+
+# ------------------------------------------------------------
+# Dev: development environment with dev dependencies
+# ------------------------------------------------------------
 FROM base AS dev
+
 COPY --from=ghcr.io/astral-sh/uv:0.5.13 /uv uvx/ /bin/
 
 WORKDIR /app
@@ -36,13 +49,17 @@ RUN --mount=type=cache,id=uv_cache,target=/root/.cache/uv \
 
 CMD ["uvicorn", "bot_detector.api_ml.core.server:app", "--host", "0.0.0.0", "--port", "5000", "--reload"]
 
+
+# ------------------------------------------------------------
+# Prod: minimal, secure, venv-only runtime
+# ------------------------------------------------------------
 FROM base AS prod
 
 WORKDIR /app
 
 # Create a secure user
 RUN addgroup --system appuser && \
-    adduser --system --ingroup appuser --home /app --no-create-home --disabled-password --uid 5678 appuser
+    adduser --system --ingroup appuser --home /app --no-create-home --disabled-password --uid 1000 appuser
 
 COPY --from=builder --chown=appuser /app/projects/api_ml/.venv /app/.venv
 

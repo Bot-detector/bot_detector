@@ -1,4 +1,4 @@
-# this docker-compose file is used to simulate production environment
+# this docker-compose file is used for production deployment
 services:
   # KAFKA
   kafka:
@@ -33,12 +33,12 @@ services:
       retries: 5
     networks:
       - botdetector-network
+
   kafka_setup:
     container_name: kafka_setup
-    image: bd/kafka_setup # tags the image if build
+    image: bd/kafka_setup
     build:
       context: ./_kafka
-    # command: ["sleep", "infinity"]
     environment:
       - KAFKA_BROKER=kafka:9092
     networks:
@@ -46,6 +46,7 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
+
   kafdrop:
     container_name: kafdrop
     image: obsidiandynamics/kafdrop:latest
@@ -54,22 +55,22 @@ services:
       - JVM_OPTS=-Xms32M -Xmx64M
       - SERVER_SERVLET_CONTEXTPATH=/
     ports:
-      - 9042:9000 # too many things use 9000 like portainer.. lets use 9042 instead?
+      - 9042:9000
     restart: on-failure
     networks:
       - botdetector-network
     depends_on:
       kafka:
         condition: service_healthy
+
   # MYSQL
   mysql:
     container_name: mysql
-    image: bd/mysql # tags the image if build
+    image: bd/mysql
     build:
       context: ./_mysql
     environment:
       - MYSQL_ROOT_PASSWORD=root_bot_buster
-      # - MYSQL_DATABASE=playerdata
     ports:
       - 3307:3306
     networks:
@@ -80,12 +81,12 @@ services:
       retries: 3
       start_period: 30s
       timeout: 5s
+
   mysql_setup:
     container_name: mysql_setup
-    image: bd/mysql_setup # tags the image if build
+    image: bd/mysql_setup
     build:
       context: ./_mysql_data
-    # command: ["sleep", "infinity"]
     environment:
       - DATABASE_URL=mysql+asyncmy://root:root_bot_buster@mysql:3306/playerdata
       - DEBUG=False
@@ -94,9 +95,11 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+
   # MINIO
   minio:
     image: minio/minio
+    container_name: minio
     expose:
       - "9000"
       - "9001"
@@ -115,9 +118,11 @@ services:
     command: server /data --console-address ":9001"
     networks:
       - botdetector-network
+
   # Create a bucket named "bucket" if it doesn't exist
   minio-create-bucket:
     image: minio/mc
+    container_name: minio_create_bucket
     depends_on:
       minio:
         condition: service_healthy
@@ -130,6 +135,9 @@ services:
         echo 'bucket already exists'
       fi
       "
+    networks:
+      - botdetector-network
+
   # COMPONENTS
   hiscore_scraper:
     container_name: hiscore_scraper
@@ -138,49 +146,40 @@ services:
       context: ./
       dockerfile: ./projects/hiscore_scraper/Dockerfile
       target: prod
-    # command: ["sleep", "infinity"]
     networks:
       - botdetector-network
     env_file:
       - .env
-    volumes:
-      - uv_cache:/root/.cache/uv
     depends_on:
       kafka_setup:
         condition: service_completed_successfully
+
   runemetrics_scraper:
     container_name: runemetrics_scraper
-    image: bd/runemetrics_scraper
+    image: bd/runemetrics_scraper:prd
     build:
       context: ./
       dockerfile: ./projects/runemetrics_scraper/Dockerfile
       target: prod
-    # command: ["sleep", "infinity"]
-    # command: ["uv",  "run", "bot_detector/runemetrics_scraper/src/core.py"]
     networks:
       - botdetector-network
     env_file:
       - .env
-    volumes:
-      - uv_cache:/root/.cache/uv
     depends_on:
       kafka_setup:
         condition: service_completed_successfully
+
   worker_hiscore:
     container_name: worker_hiscore
-    image: bd/worker_hiscore
+    image: bd/worker_hiscore:prd
     build:
       context: ./
       dockerfile: ./projects/worker_hiscore/Dockerfile
       target: prod
-    # command: ["sleep", "infinity"]
-    # command: ["uv", "run", "bot_detector/worker_hiscore/src/core.py"]
     networks:
       - botdetector-network
     env_file:
       - .env
-    volumes:
-      - uv_cache:/root/.cache/uv
     depends_on:
       kafka:
         condition: service_healthy
@@ -190,33 +189,31 @@ services:
         condition: service_healthy
       mysql_setup:
         condition: service_completed_successfully
+
   worker_report:
     container_name: worker_report
-    image: bd/worker_report
+    image: bd/worker_report:prd
     build:
       context: ./
       dockerfile: ./projects/worker_report/Dockerfile
       target: prod
-    # command: ["sleep", "infinity"]
     networks:
       - botdetector-network
     env_file:
       - .env
-    volumes:
-      - uv_cache:/root/.cache/uv
     depends_on:
       kafka_setup:
         condition: service_completed_successfully
       mysql_setup:
         condition: service_completed_successfully
+
   worker_ml:
     container_name: worker_ml
-    image: bd/worker_ml
+    image: bd/worker_ml:prd
     build:
       context: ./
       dockerfile: ./projects/worker_ml/Dockerfile
       target: prod
-    # command: ["sleep", "infinity"]
     environment:
       - DATABASE_URL=mysql+asyncmy://ml-worker:ml_worker_pw@mysql:3306/playerdata
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
@@ -226,8 +223,6 @@ services:
       - MODEL_NAME=multi_model_v1
     networks:
       - botdetector-network
-    volumes:
-      - uv_cache:/root/.cache/uv
     depends_on:
       kafka_setup:
         condition: service_completed_successfully
@@ -235,33 +230,31 @@ services:
         condition: service_completed_successfully
       api_ml:
         condition: service_healthy
+
   scrape_task_producer:
     container_name: scrape_task_producer
-    image: bd/scrape_task_producer
+    image: bd/scrape_task_producer:prd
     build:
       context: ./
       dockerfile: ./projects/scrape_task_producer/Dockerfile
       target: prod
-    # command: ["sleep", "infinity"]
     networks:
       - botdetector-network
     env_file:
       - .env
-    volumes:
-      - uv_cache:/root/.cache/uv
     depends_on:
       kafka_setup:
         condition: service_completed_successfully
       mysql_setup:
         condition: service_completed_successfully
+
   job_prune_hs_data:
     container_name: job_prune_hs_data
-    image: bd/job_prune_hs_data
+    image: bd/job_prune_hs_data:prd
     build:
       context: ./
       dockerfile: ./projects/job_prune_hs_data/Dockerfile
       target: prod
-    # command: ["sleep", "infinity"]
     networks:
       - botdetector-network
     environment:
@@ -269,19 +262,17 @@ services:
       - DATABASE_URL=mysql+asyncmy://job-prune-hs:job_prune_hs_pw@mysql:3306/playerdata
     env_file:
       - .env
-    volumes:
-      - uv_cache:/root/.cache/uv
     depends_on:
       mysql_setup:
         condition: service_completed_successfully
+
   api_public:
     container_name: api_public
-    image: bd/api_public:prod
+    image: bd/api_public:prd
     build:
       context: .
       dockerfile: ./projects/api_public/Dockerfile
       target: prod
-    # command: ["sleep", "infinity"]
     env_file:
       - .env
     environment:
@@ -290,10 +281,7 @@ services:
       - ENV=DEV
       - POOL_RECYCLE=60
       - POOL_TIMEOUT=30
-    volumes:
-      - ./bases:/app/bases
-      - ./components:/app/components
-    ports: 
+    ports:
       - 5000
     networks:
       - botdetector-network
@@ -308,18 +296,10 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
-  wait_for_api_public:
-    image: alpine:latest
-    container_name: wait_for_api_public
-    command: ["sh", "-c", "echo 'api_public healthy'"]
-    depends_on:
-      api_public:
-        condition: service_healthy
-    networks:
-      - botdetector-network
+
   website:
     container_name: website
-    image: bd/website
+    image: bd/website:prd
     build:
       context: .
       dockerfile: ./projects/website/Dockerfile
@@ -332,10 +312,6 @@ services:
       RELEASE_VERSION: "0.1"
       PATREON_CLIENT_ID: ""
       PATREON_CLIENT_SECRET: ""
-    volumes:
-      - uv_cache:/root/.cache/uv
-    ports:
-      - 5000
     networks:
       - botdetector-network
     healthcheck:
@@ -344,14 +320,14 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
+
   api_ml:
     container_name: api_ml
-    image: bd/api_ml
+    image: bd/api_ml:prd
     build:
       context: .
       dockerfile: ./projects/api_ml/Dockerfile
       target: prod
-    # command: ["sleep", "infinity"]
     env_file:
       - .env
     environment:
@@ -359,12 +335,8 @@ services:
       - AWS_ACCESS_KEY_ID=minio_user
       - AWS_SECRET_ACCESS_KEY=minio_password
       - UV_HTTP_TIMEOUT=120
-    volumes:
-      - ./bases:/app/bases
-      - ./components:/app/components
-      - uv_cache:/root/.cache/uv
     ports:
-      - 5001:5000
+      - 5000
     networks:
       - botdetector-network
     depends_on:
@@ -380,7 +352,3 @@ services:
 networks:
   botdetector-network:
     name: bd-network
-
-volumes:
-  uv_cache:
-    external: true
