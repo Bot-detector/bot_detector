@@ -1,19 +1,41 @@
-import time
+# base_consumer.py
+
+import asyncio
+import logging
+from typing import (
+    Callable,
+    Generic,
+    List,
+    Optional,
+    TypeVar,
+)
 
 import orjson
 from aiokafka import AIOKafkaConsumer, TopicPartition
-from bot_detector.kafka.core.consumer_interface import ConsumerInterface
+from pydantic import BaseModel, ValidationError
+
+from .batcher import Batcher
+
+logger = logging.getLogger(__name__)
+
+T = TypeVar("T", bound=BaseModel)
 
 
-class BaseConsumer(ConsumerInterface):
+class BaseConsumer(Generic[T]):
+    """
+    Generic async Kafka consumer with Pydantic validation and batching.
+    """
+
     def __init__(
         self,
         topic: str,
         group_id: str,
         bootstrap_servers: str,
+        deserializer: Callable[[dict], T],
         enable_auto_commit: bool = True,
     ):
         self.topic = topic
+        self.deserializer = deserializer
         self._consumer = AIOKafkaConsumer(
             topic,
             group_id=group_id,
@@ -22,6 +44,10 @@ class BaseConsumer(ConsumerInterface):
             bootstrap_servers=bootstrap_servers,
             enable_auto_commit=enable_auto_commit,
         )
+
+    # --------------------
+    # Lifecycle
+    # --------------------
 
     async def start(self):
         await self._consumer.start()
@@ -33,69 +59,80 @@ class BaseConsumer(ConsumerInterface):
     async def get_consumer(self):
         return self._consumer
 
-    def _validate_value(self, value) -> tuple[dict | None, str | None]:
-        if not isinstance(value, dict):
+    async def commit(self):
+        await self._consumer.commit()
+
+    # --------------------
+    # Low-level consume primitives
+    # --------------------
+
+    async def consume_one(self) -> tuple[Optional[T], Optional[str]]:
+        try:
+            consumer_record = await self._consumer.getone()
+        except Exception as e:
+            return None, f"Kafka getone error: {e}"
+
+        if not isinstance(consumer_record.value, dict):
             return None, "Message value is not a dict"
-        return value, None
 
-    async def _consume_one(self) -> tuple[dict | None, str | None]:
-        msg = await self._consumer.getone()
-        value, error = self._validate_value(value=msg.value)
-        return value, error
+        try:
+            return self.deserializer(consumer_record.value), None
+        except ValidationError as ve:
+            logger.warning(f"Validation error: {ve}")
+            return None, f"Validation error: {ve}"
 
-    async def _buffer_records(self, max_records: int, timeout_ms: int) -> list:
-        buffer = []
-        start = time.time()
+    async def consume_many(
+        self, max_records: int, timeout_ms: int
+    ) -> tuple[List[T], List[str]]:
+        batcher = Batcher[T](batch_size=max_records, timeout_ms=timeout_ms)
+        errors: List[str] = []
 
-        while len(buffer) < max_records:
-            time_left = timeout_ms / 1000 - (time.time() - start)
-
-            if time_left <= 0:
+        while not batcher.check_flush():
+            remaining_ms = int(batcher.time_left * 1000)
+            if remaining_ms <= 0:
                 break
 
-            records = await self._consumer.getmany(
-                timeout_ms=int(time_left * 1000),
-                max_records=max_records - len(buffer),
-            )
-            buffer.extend([msg.value for msgs in records.values() for msg in msgs])
+            try:
+                records = await self._consumer.getmany(
+                    timeout_ms=remaining_ms,
+                    max_records=max_records - batcher.size,
+                )
+            except Exception as e:
+                errors.append(f"Kafka getmany error: {e}")
+                break
 
-        return buffer
+            if not records:
+                await asyncio.sleep(0.01)  # prevent busy-loop
+                continue
 
-    async def _consume_many(
-        self,
-        max_messages: int,
-        timeout_ms: int,
-    ) -> tuple[list[dict | None], list[str | None]]:
-        msg_values = await self._buffer_records(
-            max_records=max_messages,
-            timeout_ms=timeout_ms,
-        )
+            for consumer_records in records.values():
+                for r in consumer_records:
+                    if not isinstance(r.value, dict):
+                        errors.append("Message value is not a dict")
+                        continue
+                    try:
+                        batcher.append(self.deserializer(r.value), auto=False)
+                    except ValidationError as ve:
+                        errors.append(f"Validation error: {ve}")
 
-        values, errors = [], []
+        return batcher.flush(), errors
 
-        for value, error in map(self._validate_value, msg_values):
-            if error:
-                errors.append(error)
-            elif value is not None:
-                values.append(value)
-        return values, errors
+    # --------------------
+    # Metrics
+    # --------------------
 
     async def get_lag(self) -> int:
         total_lag = 0
 
         partitions = self._consumer.partitions_for_topic(self.topic)
-
         if partitions is None:
             return 0
 
         for partition in partitions:
             tp = TopicPartition(self.topic, partition)
-            committed = await self._consumer.committed(tp)
+            committed = await self._consumer.committed(tp) or 0
             end_offset = await self._consumer.end_offsets([tp])
             lag = end_offset[tp] - committed
             total_lag += lag
 
         return total_lag
-
-    async def commit(self):
-        await self._consumer.commit()
