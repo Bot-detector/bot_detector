@@ -138,6 +138,7 @@ async def main():
     ## producer
     report_producer = RepoReportsToInsertProducer(
         bootstrap_servers=b_server,
+        max_async_calls=100,
     )
 
     # start kafka producers and consumers
