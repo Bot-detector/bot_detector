@@ -17,7 +17,9 @@ FROM base AS builder
 COPY --from=ghcr.io/astral-sh/uv:0.5.13 /uv /bin/uv
 COPY ./bases ./bases
 COPY ./components ./components
-COPY ./projects/api_public ./projects/api_public
+COPY ./projects/api_public/Dockerfile ./projects/api_public/Dockerfile
+COPY ./projects/api_public/pyproject.toml ./projects/api_public/pyproject.toml
+COPY ./projects/api_public/uv.lock ./projects/api_public/uv.lock
 COPY workspace.toml workspace.toml
 
 # IMPORTANT: venv path is fixed here
@@ -38,7 +40,9 @@ ENV PYTHONPATH="/project"
 
 COPY ./bases ./bases
 COPY ./components ./components
-COPY ./projects/api_public ./projects/api_public
+COPY ./projects/api_public/Dockerfile ./projects/api_public/Dockerfile
+COPY ./projects/api_public/pyproject.toml ./projects/api_public/pyproject.toml
+COPY ./projects/api_public/uv.lock ./projects/api_public/uv.lock
 COPY workspace.toml workspace.toml
 
 WORKDIR /project/projects/api_public
