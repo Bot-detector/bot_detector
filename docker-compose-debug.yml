@@ -1,3 +1,4 @@
+# this docker-compose file is used for debugging and development purposes
 services:
   kafka:
     image: apache/kafka:3.7.2

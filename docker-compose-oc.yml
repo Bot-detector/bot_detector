@@ -27,8 +27,9 @@ services:
       - ./_mysql:/project/_mysql
       # configs and docs
       - ./docker-compose.yml:/project/docker-compose.yml
-      - ./docker-compose-dev.yml:/project/docker-compose-dev.yml
       - ./docker-compose-oc.yml:/project/docker-compose-oc.yml
+      - ./docker-compose-dev.yml:/project/docker-compose-dev.yml
+      - ./docker-compose-debug.yml:/project/docker-compose-debug.yml
       - ./README.md:/project/README.md
     env_file:
       - ./_opencode/.env

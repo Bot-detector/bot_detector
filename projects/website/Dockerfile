@@ -1,29 +1,54 @@
-FROM python:3.12-slim-bookworm AS builder
+FROM python:3.12-slim-bookworm AS base
 
-# Copy uv from external repository
-COPY --from=ghcr.io/astral-sh/uv:0.5.4 /uv /uvx /bin/
+# Python optimizations
+ENV PYTHONUNBUFFERED=1
+ENV UV_COMPILE_BYTECODE=1
 
-# set the working directory
 WORKDIR /app
 
-# Copy only necessary files to run the projects
+FROM base AS builder
+COPY --from=ghcr.io/astral-sh/uv:0.5.13 /uv /bin/
+
+WORKDIR /app
+
+COPY ./projects/website ./projects/website
 COPY ./bases ./bases
 COPY ./components ./components
-COPY ./projects ./projects
 
-WORKDIR /app/projects/website
+RUN --mount=type=cache,id=uv_cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --project ./projects/website
 
-# install dependencies via RUN uv build
-RUN uv sync --frozen --no-editable
+FROM base AS dev
+COPY --from=ghcr.io/astral-sh/uv:0.5.13 /uv uvx/ /bin/
+COPY --from=builder /app/projects/website/.venv /app/.venv
 
-# Production stage: Prepare the final production environment
-FROM python:3.12-slim-bookworm AS production
+WORKDIR /app
 
-# Creates a non-root user with an explicit UID and adds permission to access the /project folder
-RUN adduser -u 5678 --disabled-password --gecos "" appuser
+ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONPATH="/app"
 
-WORKDIR /app/projects/website
-COPY --from=builder --chown=appuser /app/projects/website/.venv /app/projects/website/.venv
+COPY ./projects/website ./projects/website
+COPY ./bases ./bases
+COPY ./components ./components
+
+RUN --mount=type=cache,id=uv_cache,target=/root/.cache/uv \
+    uv sync --dev --project ./projects/website \
+    && cp -r projects/website/.venv/ .venv/
+
+CMD ["uvicorn", "bot_detector.website.core.server:app", "--host", "0.0.0.0", "--port", "5000", "--reload"]
+
+FROM base AS prod
+
+WORKDIR /app
+
+# Create a secure user
+RUN addgroup --system appuser && \
+    adduser --system --ingroup appuser --home /app --no-create-home --disabled-password --uid 5678 appuser
+
+COPY --from=builder --chown=appuser /app/projects/website/.venv /app/.venv
+
+ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONPATH="/app"
 
 USER appuser
 

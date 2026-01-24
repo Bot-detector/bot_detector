@@ -1,3 +1,4 @@
+# this compose file is used for local development and testing
 services:
   # KAFKA
   kafka:
@@ -96,6 +97,7 @@ services:
   # MINIO
   minio:
     image: minio/minio
+    container_name: minio
     expose:
       - "9000"
       - "9001"
@@ -117,6 +119,7 @@ services:
   # Create a bucket named "bucket" if it doesn't exist
   minio-create-bucket:
     image: minio/mc
+    container_name: minio_create_bucket
     depends_on:
       minio:
         condition: service_healthy
@@ -132,12 +135,12 @@ services:
   # COMPONENTS
   hiscore_scraper:
     container_name: hiscore_scraper
-    image: bd/hiscore_scraper # tags the image if build
+    image: bd/hiscore_scraper:dev
     build:
       context: ./
       dockerfile: ./projects/hiscore_scraper/Dockerfile
-      target: production
-    # command: ["uv", "run", "uvicorn", "bot_detector.api_public.src.core.server:app", "--host", "0.0.0.0", "--port", "5000", "--log-level", "warning", "--reload", "--reload-dir", "/app/bot_detector/api_public/"]
+      target: dev
+    # command: ["sleep", "infinity"]
     networks:
       - botdetector-network
     env_file:
@@ -149,11 +152,11 @@ services:
         condition: service_completed_successfully
   runemetrics_scraper:
     container_name: runemetrics_scraper
-    image: bd/runemetrics_scraper # tags the image if build
+    image: bd/runemetrics_scraper
     build:
       context: ./
       dockerfile: ./projects/runemetrics_scraper/Dockerfile
-      target: production
+      target: dev
     # command: ["sleep", "infinity"]
     # command: ["uv",  "run", "bot_detector/runemetrics_scraper/src/core.py"]
     networks:
@@ -167,11 +170,11 @@ services:
         condition: service_completed_successfully
   worker_hiscore:
     container_name: worker_hiscore
-    image: bd/worker_hiscore # tags the image if build
+    image: bd/worker_hiscore
     build:
       context: ./
       dockerfile: ./projects/worker_hiscore/Dockerfile
-      target: production
+      target: dev
     # command: ["sleep", "infinity"]
     # command: ["uv", "run", "bot_detector/worker_hiscore/src/core.py"]
     networks:
@@ -191,11 +194,11 @@ services:
         condition: service_completed_successfully
   worker_report:
     container_name: worker_report
-    image: bd/worker_report # tags the image if build
+    image: bd/worker_report
     build:
       context: ./
       dockerfile: ./projects/worker_report/Dockerfile
-      target: production
+      target: dev
     # command: ["sleep", "infinity"]
     networks:
       - botdetector-network
@@ -210,11 +213,11 @@ services:
         condition: service_completed_successfully
   worker_ml:
     container_name: worker_ml
-    image: bd/worker_ml # tags the image if build
+    image: bd/worker_ml
     build:
       context: ./
       dockerfile: ./projects/worker_ml/Dockerfile
-      target: production
+      target: dev
     # command: ["sleep", "infinity"]
     environment:
       - DATABASE_URL=mysql+asyncmy://ml-worker:ml_worker_pw@mysql:3306/playerdata
@@ -237,11 +240,11 @@ services:
   
   scrape_task_producer:
     container_name: scrape_task_producer
-    image: bd/scrape_task_producer # tags the image if build
+    image: bd/scrape_task_producer
     build:
       context: ./
       dockerfile: ./projects/scrape_task_producer/Dockerfile
-      target: production
+      target: dev
     # command: ["sleep", "infinity"]
     networks:
       - botdetector-network
@@ -256,11 +259,11 @@ services:
         condition: service_completed_successfully
   job_prune_hs_data:
     container_name: job_prune_hs_data
-    image: bd/job_prune_hs_data # tags the image if build
+    image: bd/job_prune_hs_data
     build:
       context: ./
       dockerfile: ./projects/job_prune_hs_data/Dockerfile
-      target: production
+      target: dev
     # command: ["sleep", "infinity"]
     networks:
       - botdetector-network
@@ -276,11 +279,11 @@ services:
         condition: service_completed_successfully
   api_public:
     container_name: api_public
-    image: bd/api_public:prod
+    image: bd/api_public:dev
     build:
       context: .
       dockerfile: ./projects/api_public/Dockerfile
-      target: prod
+      target: dev
     # command: ["sleep", "infinity"]
     env_file:
       - .env
@@ -291,8 +294,9 @@ services:
       - POOL_RECYCLE=60
       - POOL_TIMEOUT=30
     volumes:
-      - ./bases:/app/bases
-      - ./components:/app/components
+      - ./bases:/bases
+      - ./components:/components
+      # - uv_cache:/root/.cache/uv
     ports:
       - 5000
     networks:
@@ -323,6 +327,7 @@ services:
     build:
       context: .
       dockerfile: ./projects/website/Dockerfile
+      target: dev
     env_file:
       - .env
     environment:
@@ -349,10 +354,8 @@ services:
     build:
       context: .
       dockerfile: ./projects/api_ml/Dockerfile
-      target: builder
+      target: dev
     # command: ["sleep", "infinity"]
-    command: >
-      sh -c "cd ../.. && projects/api_ml/.venv/bin/uvicorn bases.bot_detector.api_ml.core.server:app --host 0.0.0.0 --port 5000 --log-level warning --reload --reload-dir bases/bot_detector/api_ml"
     env_file:
       - .env
     environment:
@@ -382,14 +385,6 @@ networks:
   botdetector-network:
     name: bd-network
 
-# To create the docker volume for uv cache (run only once)
-# docker volume create uv_cache
-
-# To copy existing cache from host to docker volume (run only once)
-# docker run --rm \
-#   -v uv_cache:/data \
-#   -v ~/.cache/uv:/source \
-#   alpine sh -c "cp -r /source/* /data/"
 volumes:
   uv_cache:
     external: true
