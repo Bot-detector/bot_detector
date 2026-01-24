@@ -1,57 +1,78 @@
+# ------------------------------------------------------------
+# Base (shared env only, no filesystem assumptions)
+# ------------------------------------------------------------
 FROM python:3.12-slim-bookworm AS base
 
-# Python optimizations
 ENV PYTHONUNBUFFERED=1
 ENV UV_COMPILE_BYTECODE=1
 
-WORKDIR /app
+WORKDIR /project
 
+
+# ------------------------------------------------------------
+# Builder: production dependencies only
+# ------------------------------------------------------------
 FROM base AS builder
-COPY --from=ghcr.io/astral-sh/uv:0.5.4 /uv /bin/
 
-WORKDIR /app
-
-COPY ./projects/api_ml ./projects/api_ml
+COPY --from=ghcr.io/astral-sh/uv:0.5.13 /uv /bin/uv
 COPY ./bases ./bases
 COPY ./components ./components
+COPY ./projects/api_ml ./projects/api_ml
+COPY workspace.toml workspace.toml
+
+# IMPORTANT: venv path is fixed here
+WORKDIR /project/projects/api_ml
 
 RUN --mount=type=cache,id=uv_cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --project ./projects/api_ml
+    uv sync --frozen --no-dev
 
+
+# ------------------------------------------------------------
+# Dev: development environment with dev dependencies
+# ------------------------------------------------------------
 FROM base AS dev
-COPY --from=ghcr.io/astral-sh/uv:0.5.4 /uv uvx/ /bin/
 
-WORKDIR /app
+COPY --from=ghcr.io/astral-sh/uv:0.5.13 /uv /uvx /bin/
 
-COPY --from=builder /app/projects/api_ml/.venv /app/.venv
+ENV PYTHONPATH="/project"
 
-ENV PATH="/app/.venv/bin:$PATH"
-ENV PYTHONPATH="/app"
-
-COPY ./projects/api_ml ./projects/api_ml
 COPY ./bases ./bases
 COPY ./components ./components
+COPY ./projects/api_ml ./projects/api_ml
+COPY workspace.toml workspace.toml
 
-# this installs dev dependencies
+WORKDIR /project/projects/api_ml
+
 RUN --mount=type=cache,id=uv_cache,target=/root/.cache/uv \
-    uv sync --frozen --project ./projects/api_ml \
-    && cp -r projects/api_ml/.venv/ .venv/
+    uv sync --dev
+
+ENV PATH="/project/projects/api_ml/.venv/bin:$PATH"
 
 CMD ["uvicorn", "bot_detector.api_ml.core.server:app", "--host", "0.0.0.0", "--port", "5000", "--reload"]
 
-FROM base AS prod
 
-WORKDIR /app
+# ------------------------------------------------------------
+# Prod: minimal, secure, venv-only runtime
+# ------------------------------------------------------------
+FROM python:3.12-slim-bookworm AS prod
 
-# Create a secure user
+# Non-root user
 RUN addgroup --system appuser && \
-    adduser --system --ingroup appuser --home /app --no-create-home --disabled-password --uid 5678 appuser
+    adduser --system --ingroup appuser \
+            --uid 1000 --disabled-password \
+            --no-create-home appuser
 
-COPY --from=builder --chown=appuser /app/projects/api_ml/.venv /app/.venv
+# SAME PATH as builder
+WORKDIR /project/projects/api_ml
 
-ENV PATH="/app/.venv/bin:$PATH"
-ENV PYTHONPATH="/app"
+# Copy sealed venv (no relocation!)
+COPY --from=builder \
+    --chown=appuser:appuser \
+    /project/projects/api_ml/.venv \
+    /project/projects/api_ml/.venv
+
+ENV PATH="/project/projects/api_ml/.venv/bin:$PATH"
 
 USER appuser
 
-CMD ["python3", "-m", "uvicorn", "bot_detector.api_ml.src.core.server:app", "--host", "0.0.0.0", "--port", "5000", "--log-level", "warning"]
+CMD ["uvicorn", "bot_detector.api_ml.core.server:app", "--host", "0.0.0.0", "--port", "5000", "--log-level", "warning"]
