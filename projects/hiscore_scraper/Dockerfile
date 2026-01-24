@@ -6,7 +6,7 @@ FROM python:3.12-slim-bookworm AS base
 ENV PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1
 
-WORKDIR /app
+WORKDIR /project
 
 
 # ------------------------------------------------------------
@@ -24,7 +24,7 @@ COPY ./projects ./projects
 COPY workspace.toml workspace.toml
 
 # IMPORTANT: venv path is fixed here
-WORKDIR /app/projects/hiscore_scraper
+WORKDIR /project/projects/hiscore_scraper
 
 RUN --mount=type=cache,id=uv_cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
@@ -37,19 +37,19 @@ FROM base AS dev
 
 COPY --from=ghcr.io/astral-sh/uv:0.5.13 /uv /uvx /bin/
 
-ENV PYTHONPATH="/app"
+ENV PYTHONPATH="/project"
 
 COPY ./bases ./bases
 COPY ./components ./components
 COPY ./projects ./projects
 COPY workspace.toml workspace.toml
 
-WORKDIR /app/projects/hiscore_scraper
+WORKDIR /project/projects/hiscore_scraper
 
 RUN --mount=type=cache,id=uv_cache,target=/root/.cache/uv \
     uv sync --dev
 
-ENV PATH="/app/projects/hiscore_scraper/.venv/bin:$PATH"
+ENV PATH="/project/projects/hiscore_scraper/.venv/bin:$PATH"
 
 CMD ["hiscore_scraper"]
 
@@ -66,15 +66,15 @@ RUN addgroup --system appuser && \
             --no-create-home appuser
 
 # SAME PATH as builder
-WORKDIR /app/projects/hiscore_scraper
+WORKDIR /project/projects/hiscore_scraper
 
 # Copy sealed venv (no relocation!)
 COPY --from=builder \
     --chown=appuser:appuser \
-    /app/projects/hiscore_scraper/.venv \
-    /app/projects/hiscore_scraper/.venv
+    /project/projects/hiscore_scraper/.venv \
+    /project/projects/hiscore_scraper/.venv
 
-ENV PATH="/app/projects/hiscore_scraper/.venv/bin:$PATH"
+ENV PATH="/project/projects/hiscore_scraper/.venv/bin:$PATH"
 
 USER appuser
 

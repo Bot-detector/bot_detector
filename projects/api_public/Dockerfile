@@ -7,7 +7,7 @@ FROM python:3.12-slim-bookworm AS base
 ENV PYTHONUNBUFFERED=1
 ENV UV_COMPILE_BYTECODE=1
 
-WORKDIR /app
+WORKDIR /project
 
 
 # ------------------------------------------------------------
@@ -17,7 +17,7 @@ FROM base AS builder
 
 COPY --from=ghcr.io/astral-sh/uv:0.5.13 /uv /bin/
 
-WORKDIR /app
+WORKDIR /project
 
 COPY ./projects/api_public ./projects/api_public
 COPY ./bases ./bases
@@ -34,10 +34,10 @@ FROM base AS dev
 
 COPY --from=ghcr.io/astral-sh/uv:0.5.13 /uv uvx/ /bin/
 
-WORKDIR /app
+WORKDIR /project
 
-ENV PATH="/app/.venv/bin:$PATH"
-ENV PYTHONPATH="/app"
+ENV PATH="/project/.venv/bin:$PATH"
+ENV PYTHONPATH="/project"
 
 COPY ./projects/api_public ./projects/api_public
 COPY ./bases ./bases
@@ -55,16 +55,16 @@ CMD ["uvicorn", "bot_detector.api_public.src.core.server:app", "--host", "0.0.0.
 # ------------------------------------------------------------
 FROM base AS prod
 
-WORKDIR /app
+WORKDIR /project
 
 # Create a secure user
 RUN addgroup --system appuser && \
-    adduser --system --ingroup appuser --home /app --no-create-home --disabled-password --uid 1000 appuser
+    adduser --system --ingroup appuser --home /project --no-create-home --disabled-password --uid 1000 appuser
 
-COPY --from=builder --chown=appuser /app/projects/api_public/.venv /app/.venv
+COPY --from=builder --chown=appuser /project/projects/api_public/.venv /project/.venv
 
-ENV PATH="/app/.venv/bin:$PATH"
-ENV PYTHONPATH="/app"
+ENV PATH="/project/.venv/bin:$PATH"
+ENV PYTHONPATH="/project"
 
 USER appuser
 
