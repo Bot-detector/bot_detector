@@ -1,55 +1,82 @@
+# ------------------------------------------------------------
+# Base (shared env only, no filesystem assumptions)
+# ------------------------------------------------------------
 FROM python:3.12-slim-bookworm AS base
 
-# Python optimizations
 ENV PYTHONUNBUFFERED=1
 ENV UV_COMPILE_BYTECODE=1
 
-WORKDIR /app
+WORKDIR /project
 
+
+# ------------------------------------------------------------
+# Builder: production dependencies only
+# ------------------------------------------------------------
 FROM base AS builder
-COPY --from=ghcr.io/astral-sh/uv:0.5.13 /uv /bin/
 
-WORKDIR /app
-
-COPY ./projects/job_hs_migration_v3 ./projects/job_hs_migration_v3
+COPY --from=ghcr.io/astral-sh/uv:0.5.13 /uv /bin/uv
 COPY ./bases ./bases
 COPY ./components ./components
+COPY ./projects/job_hs_migration_v3/Dockerfile ./projects/job_hs_migration_v3/Dockerfile
+COPY ./projects/job_hs_migration_v3/pyproject.toml ./projects/job_hs_migration_v3/pyproject.toml
+COPY ./projects/job_hs_migration_v3/uv.lock ./projects/job_hs_migration_v3/uv.lock
+COPY workspace.toml workspace.toml
+
+# IMPORTANT: venv path is fixed here
+WORKDIR /project/projects/job_hs_migration_v3
 
 RUN --mount=type=cache,id=uv_cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --project ./projects/job_hs_migration_v3
+    uv sync --frozen --no-dev
 
+
+# ------------------------------------------------------------
+# Dev: development environment with dev dependencies
+# ------------------------------------------------------------
 FROM base AS dev
-COPY --from=ghcr.io/astral-sh/uv:0.5.13 /uv uvx/ /bin/
-COPY --from=builder /app/projects/job_hs_migration_v3/.venv /app/.venv
 
-WORKDIR /app
+COPY --from=ghcr.io/astral-sh/uv:0.5.13 /uv /uvx /bin/
 
-ENV PATH="/app/.venv/bin:$PATH"
-ENV PYTHONPATH="/app"
+ENV PYTHONPATH="/project"
 
-COPY ./projects/job_hs_migration_v3 ./projects/job_hs_migration_v3
 COPY ./bases ./bases
 COPY ./components ./components
+COPY ./projects/job_hs_migration_v3/Dockerfile ./projects/job_hs_migration_v3/Dockerfile
+COPY ./projects/job_hs_migration_v3/pyproject.toml ./projects/job_hs_migration_v3/pyproject.toml
+COPY ./projects/job_hs_migration_v3/uv.lock ./projects/job_hs_migration_v3/uv.lock
+COPY workspace.toml workspace.toml
+
+WORKDIR /project/projects/job_hs_migration_v3
 
 RUN --mount=type=cache,id=uv_cache,target=/root/.cache/uv \
-    uv sync --dev --project ./projects/job_hs_migration_v3 \
-    && cp -r projects/job_hs_migration_v3/.venv/ .venv/
+    uv sync --dev
 
-CMD [".venv/bin/job_hs_migration_v3"]
+ENV PATH="/project/projects/job_hs_migration_v3/.venv/bin:$PATH"
 
-FROM base AS prod
+CMD ["job_hs_migration_v3"]
 
-WORKDIR /app
 
-# Create a secure user
+# ------------------------------------------------------------
+# Prod: minimal, secure, venv-only runtime
+# ------------------------------------------------------------
+FROM python:3.12-slim-bookworm AS prod
+
+# Non-root user
 RUN addgroup --system appuser && \
-    adduser --system --ingroup appuser --home /app --no-create-home --disabled-password --uid 5678 appuser
+    adduser --system --ingroup appuser \
+            --uid 1000 --disabled-password \
+            --no-create-home appuser
 
-COPY --from=builder --chown=appuser /app/projects/job_hs_migration_v3/.venv /app/.venv
+# SAME PATH as builder
+WORKDIR /project/projects/job_hs_migration_v3
 
-ENV PATH="/app/.venv/bin:$PATH"
-ENV PYTHONPATH="/app"
+# Copy sealed venv (no relocation!)
+COPY --from=builder \
+    --chown=appuser:appuser \
+    /project/projects/job_hs_migration_v3/.venv \
+    /project/projects/job_hs_migration_v3/.venv
+
+ENV PATH="/project/projects/job_hs_migration_v3/.venv/bin:$PATH"
 
 USER appuser
 
-CMD [".venv/bin/job_hs_migration_v3"]
+CMD ["job_hs_migration_v3"]

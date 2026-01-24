@@ -111,7 +111,7 @@ services:
     volumes:
       - ./_minio_data:/data
     healthcheck:
-      test: timeout 5s bash -c ':> /dev/tcp/127.0.0.1:9000' || exit 1
+      test: timeout 5s bash -c ':> /dev/tcp/127.0.0.1/9000' || exit 1
       interval: 1s
       timeout: 10s
       retries: 5
@@ -220,8 +220,8 @@ services:
       - MAX_INTERVAL_MS=5000
       - MODEL_NAME=multi_model_v1
     volumes:
-      - ./bases:/app/bases
-      - ./components:/app/components
+      - ./bases:/project/bases
+      - ./components:/project/components
     networks:
       - botdetector-network
     depends_on:
@@ -283,8 +283,8 @@ services:
       - POOL_RECYCLE=60
       - POOL_TIMEOUT=30
     volumes:
-      - ./bases:/app/bases
-      - ./components:/app/components
+      - ./bases:/project/bases
+      - ./components:/project/components
     ports:
       - 5000
     networks:
@@ -317,8 +317,8 @@ services:
       PATREON_CLIENT_ID: ""
       PATREON_CLIENT_SECRET: ""
     volumes:
-      - ./bases:/app/bases
-      - ./components:/app/components
+      - ./bases:/project/bases
+      - ./components:/project/components
     ports:
       - 5000
     networks:
@@ -336,6 +336,7 @@ services:
       context: .
       dockerfile: ./projects/api_ml/Dockerfile
       target: dev
+    # command: ["sleep", "infinity"]
     env_file:
       - .env
     environment:

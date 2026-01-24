@@ -1,55 +1,82 @@
+# ------------------------------------------------------------
+# Base (shared env only, no filesystem assumptions)
+# ------------------------------------------------------------
 FROM python:3.12-slim-bookworm AS base
 
-# Python optimizations
 ENV PYTHONUNBUFFERED=1
 ENV UV_COMPILE_BYTECODE=1
 
-WORKDIR /app
+WORKDIR /project
 
+
+# ------------------------------------------------------------
+# Builder: production dependencies only
+# ------------------------------------------------------------
 FROM base AS builder
-COPY --from=ghcr.io/astral-sh/uv:0.5.13 /uv /bin/
 
-WORKDIR /app
-
-COPY ./projects/website ./projects/website
+COPY --from=ghcr.io/astral-sh/uv:0.5.13 /uv /bin/uv
 COPY ./bases ./bases
 COPY ./components ./components
+COPY ./projects/website/Dockerfile ./projects/website/Dockerfile
+COPY ./projects/website/pyproject.toml ./projects/website/pyproject.toml
+COPY ./projects/website/uv.lock ./projects/website/uv.lock
+COPY workspace.toml workspace.toml
+
+# IMPORTANT: venv path is fixed here
+WORKDIR /project/projects/website
 
 RUN --mount=type=cache,id=uv_cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --project ./projects/website
+    uv sync --frozen --no-dev
 
+
+# ------------------------------------------------------------
+# Dev: development environment with dev dependencies
+# ------------------------------------------------------------
 FROM base AS dev
-COPY --from=ghcr.io/astral-sh/uv:0.5.13 /uv uvx/ /bin/
-COPY --from=builder /app/projects/website/.venv /app/.venv
 
-WORKDIR /app
+COPY --from=ghcr.io/astral-sh/uv:0.5.13 /uv /uvx /bin/
 
-ENV PATH="/app/.venv/bin:$PATH"
-ENV PYTHONPATH="/app"
+ENV PYTHONPATH="/project"
 
-COPY ./projects/website ./projects/website
 COPY ./bases ./bases
 COPY ./components ./components
+COPY ./projects/website/Dockerfile ./projects/website/Dockerfile
+COPY ./projects/website/pyproject.toml ./projects/website/pyproject.toml
+COPY ./projects/website/uv.lock ./projects/website/uv.lock
+COPY workspace.toml workspace.toml
+
+WORKDIR /project/projects/website
 
 RUN --mount=type=cache,id=uv_cache,target=/root/.cache/uv \
-    uv sync --dev --project ./projects/website \
-    && cp -r projects/website/.venv/ .venv/
+    uv sync --dev
+
+ENV PATH="/project/projects/website/.venv/bin:$PATH"
 
 CMD ["uvicorn", "bot_detector.website.core.server:app", "--host", "0.0.0.0", "--port", "5000", "--reload"]
 
-FROM base AS prod
 
-WORKDIR /app
+# ------------------------------------------------------------
+# Prod: minimal, secure, venv-only runtime
+# ------------------------------------------------------------
+FROM python:3.12-slim-bookworm AS prod
 
-# Create a secure user
+# Non-root user
 RUN addgroup --system appuser && \
-    adduser --system --ingroup appuser --home /app --no-create-home --disabled-password --uid 5678 appuser
+    adduser --system --ingroup appuser \
+            --uid 1000 --disabled-password \
+            --no-create-home appuser
 
-COPY --from=builder --chown=appuser /app/projects/website/.venv /app/.venv
+# SAME PATH as builder
+WORKDIR /project/projects/website
 
-ENV PATH="/app/.venv/bin:$PATH"
-ENV PYTHONPATH="/app"
+# Copy sealed venv (no relocation!)
+COPY --from=builder \
+    --chown=appuser:appuser \
+    /project/projects/website/.venv \
+    /project/projects/website/.venv
+
+ENV PATH="/project/projects/website/.venv/bin:$PATH"
 
 USER appuser
 
-CMD [".venv/bin/uvicorn", "bot_detector.website.core.server:app", "--proxy-headers", "--host", "0.0.0.0", "--port", "5000", "--log-level", "warning"]
+CMD ["uvicorn", "bot_detector.website.core.server:app", "--proxy-headers", "--host", "0.0.0.0", "--port", "5000", "--log-level", "warning"]

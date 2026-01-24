@@ -1,55 +1,82 @@
+# ------------------------------------------------------------
+# Base (shared env only, no filesystem assumptions)
+# ------------------------------------------------------------
 FROM python:3.12-slim-bookworm AS base
 
-# Python optimizations
 ENV PYTHONUNBUFFERED=1
 ENV UV_COMPILE_BYTECODE=1
 
-WORKDIR /app
+WORKDIR /project
 
+
+# ------------------------------------------------------------
+# Builder: production dependencies only
+# ------------------------------------------------------------
 FROM base AS builder
-COPY --from=ghcr.io/astral-sh/uv:0.5.13 /uv /bin/
 
-WORKDIR /app
-
-COPY ./projects/worker_report ./projects/worker_report
+COPY --from=ghcr.io/astral-sh/uv:0.5.13 /uv /bin/uv
 COPY ./bases ./bases
 COPY ./components ./components
+COPY ./projects/worker_report/Dockerfile ./projects/worker_report/Dockerfile
+COPY ./projects/worker_report/pyproject.toml ./projects/worker_report/pyproject.toml
+COPY ./projects/worker_report/uv.lock ./projects/worker_report/uv.lock
+COPY workspace.toml workspace.toml
+
+# IMPORTANT: venv path is fixed here
+WORKDIR /project/projects/worker_report
 
 RUN --mount=type=cache,id=uv_cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --project ./projects/worker_report
+    uv sync --frozen --no-dev
 
+
+# ------------------------------------------------------------
+# Dev: development environment with dev dependencies
+# ------------------------------------------------------------
 FROM base AS dev
-COPY --from=ghcr.io/astral-sh/uv:0.5.13 /uv uvx/ /bin/
-COPY --from=builder /app/projects/worker_report/.venv /app/.venv
 
-WORKDIR /app
+COPY --from=ghcr.io/astral-sh/uv:0.5.13 /uv /uvx /bin/
 
-ENV PATH="/app/.venv/bin:$PATH"
-ENV PYTHONPATH="/app"
+ENV PYTHONPATH="/project"
 
-COPY ./projects/worker_report ./projects/worker_report
 COPY ./bases ./bases
 COPY ./components ./components
+COPY ./projects/worker_report/Dockerfile ./projects/worker_report/Dockerfile
+COPY ./projects/worker_report/pyproject.toml ./projects/worker_report/pyproject.toml
+COPY ./projects/worker_report/uv.lock ./projects/worker_report/uv.lock
+COPY workspace.toml workspace.toml
+
+WORKDIR /project/projects/worker_report
 
 RUN --mount=type=cache,id=uv_cache,target=/root/.cache/uv \
-    uv sync --dev --project ./projects/worker_report \
-    && cp -r projects/worker_report/.venv/ .venv/
+    uv sync --dev
 
-CMD [".venv/bin/worker_report"]
+ENV PATH="/project/projects/worker_report/.venv/bin:$PATH"
 
-FROM base AS prod
+CMD ["worker_report"]
 
-WORKDIR /app
 
-# Create a secure user
+# ------------------------------------------------------------
+# Prod: minimal, secure, venv-only runtime
+# ------------------------------------------------------------
+FROM python:3.12-slim-bookworm AS prod
+
+# Non-root user
 RUN addgroup --system appuser && \
-    adduser --system --ingroup appuser --home /app --no-create-home --disabled-password --uid 5678 appuser
+    adduser --system --ingroup appuser \
+            --uid 1000 --disabled-password \
+            --no-create-home appuser
 
-COPY --from=builder --chown=appuser /app/projects/worker_report/.venv /app/.venv
+# SAME PATH as builder
+WORKDIR /project/projects/worker_report
 
-ENV PATH="/app/.venv/bin:$PATH"
-ENV PYTHONPATH="/app"
+# Copy sealed venv (no relocation!)
+COPY --from=builder \
+    --chown=appuser:appuser \
+    /project/projects/worker_report/.venv \
+    /project/projects/worker_report/.venv
+
+ENV PATH="/project/projects/worker_report/.venv/bin:$PATH"
 
 USER appuser
 
-CMD [".venv/bin/worker_report"]
+CMD ["worker_report"]
