@@ -1,5 +1,3 @@
-from typing import Optional
-
 from bot_detector.kafka.core.base_producer import BaseProducer
 
 from .struct import DataToPredictStruct
