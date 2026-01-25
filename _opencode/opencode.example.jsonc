@@ -1,5 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  "model": "openrouter/mistralai/devstral-2512:free",
   "provider": {
     "openrouter": {
       "models": {
@@ -8,6 +9,10 @@
       }
     }
   },
-  "model": "openrouter/mistralai/devstral-2512:free",
-  "default_agent": "build"
+  "lsp": {
+    "python": {
+      "command": ["uvx", "pyright"],
+      "extensions": [".py", ".pyi"]
+    }
+  },
 }

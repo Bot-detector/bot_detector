@@ -1,5 +1,3 @@
-from typing import Optional
-
 from bot_detector.kafka.core.base_producer import BaseProducer
 
 from .struct import DataToPredictStruct
@@ -23,14 +21,15 @@ class DataToPredictProducer(BaseProducer[DataToPredictStruct]):
         )
 
     async def produce_one(
-        self, data: DataToPredictStruct, partition_key: Optional[bytes] = None
+        self,
+        message: DataToPredictStruct,
+        topic: str | None = None,
+        partition_key: bytes | None = None,
+        max_retries: int = 5,
     ):
         """
         Produce a single DataToPredictStruct message.
-
-        Automatically generates a partition key if not provided.
         """
-        if partition_key is None:
-            partition_key = str(int(data.player_id) % 10).encode("utf-8")
-
-        await super().produce_one(data, partition_key=partition_key)
+        await super().produce_one(
+            message, topic=topic, partition_key=partition_key, max_retries=max_retries
+        )

@@ -29,8 +29,8 @@ class DataToPredictConsumer(BaseConsumer[DataToPredictStruct]):
 
     # --- Optionally override consume_many to log errors ---
     async def consume_many(
-        self, max_messages: int, timeout_ms: int
-    ) -> list[DataToPredictStruct]:
-        values, errors = await super().consume_many(max_messages, timeout_ms)
+        self, max_records: int, timeout_ms: int
+    ) -> tuple[list[DataToPredictStruct], list[str]]:
+        values, errors = await super().consume_many(max_records, timeout_ms)
         logger.error(f"Consumed {len(values)} messages with {len(errors)} errors")
-        return [v for v in values if v is not None]
+        return values, errors

@@ -6,12 +6,13 @@ from datetime import date, datetime, time, timedelta
 from bot_detector.database import Settings as DBSettings
 from bot_detector.database import get_session_factory
 from bot_detector.database.player import PlayerRepo
-from bot_detector.kafka import Settings as KafkaSettings
-from bot_detector.kafka.repositories import (
-    RepoPlayersToScrapeConsumer,
-    RepoPlayersToScrapeProducer,
+from bot_detector.kafka import (
+    PlayersToScrapeConsumer,
+    PlayersToScrapeProducer,
+    ToScrapeStruct,
 )
-from bot_detector.structs import MetaData, PlayerStruct, ToScrapeStruct
+from bot_detector.kafka import Settings as KafkaSettings
+from bot_detector.structs import MetaData, PlayerStruct
 from pydantic_settings import BaseSettings
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from typing_extensions import Literal
@@ -50,7 +51,7 @@ class FetchParams:
 
 async def produce_players(
     players: list[PlayerStruct],
-    player_producer: RepoPlayersToScrapeProducer,
+    player_producer: PlayersToScrapeProducer,
 ):
     logger.info(f"Putting {len(players)} players in queue")
     player_structs = [
@@ -63,7 +64,12 @@ async def produce_players(
     ]
 
     for player in player_structs:
-        await player_producer.produce_one(player=player)
+        await player_producer.produce_one(
+            ToScrapeStruct(
+                metadata=MetaData(version=1, source="scrape_task_producer"),
+                player_data=player.player_data,
+            )
+        )
 
 
 def _reduce_days(fetch_params: FetchParams) -> FetchParams:
@@ -149,8 +155,8 @@ def determine_fetch_params(
 async def process_players(
     async_session: async_sessionmaker[AsyncSession],
     player_repo: PlayerRepo,
-    player_producer: RepoPlayersToScrapeProducer,
-    player_consumer: RepoPlayersToScrapeConsumer,
+    player_producer: PlayersToScrapeProducer,
+    player_consumer: PlayersToScrapeConsumer,
     limit: int = 10,
 ):
     max_days = 20
@@ -217,8 +223,8 @@ async def main():
     async_session, async_engine = get_session_factory(SETTINGS=DBSettings())
 
     bootstrap_servers = KafkaSettings().KAFKA_BOOTSTRAP_SERVERS
-    player_producer = RepoPlayersToScrapeProducer(bootstrap_servers=bootstrap_servers)
-    player_consumer = RepoPlayersToScrapeConsumer(
+    player_producer = PlayersToScrapeProducer(bootstrap_servers=bootstrap_servers)
+    player_consumer = PlayersToScrapeConsumer(
         bootstrap_servers=bootstrap_servers, group_id="scraper"
     )
 

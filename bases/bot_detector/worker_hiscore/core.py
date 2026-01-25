@@ -6,17 +6,17 @@ from bot_detector import database as db
 from bot_detector.database import Settings as DBSettings
 from bot_detector.database.hiscore import HighscoreDataRepo
 from bot_detector.database.player import PlayerRepo
+from bot_detector.kafka import (
+    PlayersScrapedConsumer,
+    PlayersScrapedProducer,
+    ScrapedStruct,
+)
 from bot_detector.kafka import Settings as KafkaSettings
 from bot_detector.kafka.data_to_predict import (
     DataToPredictProducer,
     DataToPredictStruct,
     HighScoreStruct,
 )
-from bot_detector.kafka.repositories import (
-    RepoPlayerScrapedConsumer,
-    RepoPlayerScrapedProducer,
-)
-from bot_detector.structs import ScrapedStruct
 from pydantic import ValidationError
 from pydantic_settings import BaseSettings
 from sqlalchemy.exc import OperationalError
@@ -116,7 +116,7 @@ async def produce_data_to_predict(
         _data_to_predict = transform_scraped_struct(_record)
         if _data_to_predict is None:
             continue
-        _tasks.append(data_to_predict_producer.produce_one(data=_data_to_predict))
+        _tasks.append(data_to_predict_producer.produce_one(message=_data_to_predict))
     await asyncio.gather(*_tasks)
     logger.info(f"Produced {len(_tasks)} messages to data to predict topic.")
 
@@ -125,17 +125,18 @@ async def consume_many_task(
     worker_id: int,
     max_messages: int,
     max_interval_ms: int,
-    player_sc_consumer: RepoPlayerScrapedConsumer,
-    player_sc_producer: RepoPlayerScrapedProducer,
+    player_sc_consumer: PlayersScrapedConsumer,
+    player_sc_producer: PlayersScrapedProducer,
     data_to_predict_producer: DataToPredictProducer,
     highscore_repo: HighscoreDataRepo,
     player_repo: PlayerRepo,
     session_factory: async_sessionmaker[AsyncSession],
 ):
     while True:
+        batch = []
         try:
             batch, errors = await player_sc_consumer.consume_many(
-                max_messages=max_messages,
+                max_records=max_messages,
                 timeout_ms=max_interval_ms,
             )
             logger.info(f"[{worker_id}] consumed {len(batch)} scrapes")
@@ -163,20 +164,33 @@ async def consume_many_task(
             if error:
                 logger.error(f"{error}")
                 await asyncio.gather(
-                    *[player_sc_producer.produce_one(b) for b in batch]
+                    *[
+                        player_sc_producer.produce_one(
+                            b, partition_key=str(b.player_data.id % 10).encode("utf-8")
+                        )
+                        for b in batch
+                    ]
                 )
                 await asyncio.sleep(15)
 
             await player_sc_consumer.commit()
+
+            # ideally we want batches to be as full as possible, this is more efficient on the database
+            if len(batch) < 1000:
+                await asyncio.sleep(60)
         except Exception as e:
             logger.error(f"[{worker_id}] Error consuming scrapes: {e}")
             logger.debug(f"[{worker_id}] Traceback: \n{traceback.format_exc()}")
-            await asyncio.gather(*[player_sc_producer.produce_one(b) for b in batch])
+            if batch:  # only retry if we have data
+                await asyncio.gather(
+                    *[
+                        player_sc_producer.produce_one(
+                            b, partition_key=str(b.player_data.id % 10).encode("utf-8")
+                        )
+                        for b in batch
+                    ]
+                )
             await asyncio.sleep(15)
-
-        # ideally we want batches to be as full as possible, this is more efficient on the database
-        if len(batch) < 1000:
-            await asyncio.sleep(60)
 
 
 async def main():
@@ -186,12 +200,12 @@ async def main():
     highscore_repo = HighscoreDataRepo()
 
     ## consumer
-    player_sc_consumer = RepoPlayerScrapedConsumer(
+    player_sc_consumer = PlayersScrapedConsumer(
         bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
         group_id="highscore_worker",
     )
     ## producer
-    player_sc_producer = RepoPlayerScrapedProducer(
+    player_sc_producer = PlayersScrapedProducer(
         bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
     )
     data_to_predict_producer = DataToPredictProducer(

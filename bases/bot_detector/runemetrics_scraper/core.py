@@ -5,17 +5,18 @@ from datetime import datetime
 
 import aiohttp
 from aiohttp import ClientSession
-from bot_detector.kafka import Settings as KafkaSettings
-from bot_detector.kafka.repositories import (
-    RepoPlayerScrapedProducer,
-    RepoPlayersNotFoundConsumer,
-    RepoPlayersNotFoundProducer,
+from bot_detector.kafka import (
+    PlayersNotFoundConsumer,
+    PlayersNotFoundProducer,
+    PlayersScrapedProducer,
+    ScrapedStruct,
 )
+from bot_detector.kafka import Settings as KafkaSettings
 from bot_detector.proxy_manager import ProxyManager
 from bot_detector.proxy_manager import Settings as ProxySettings
 from bot_detector.runemetrics_api import RuneMetrics, RuneMetricsResponse
 from bot_detector.runemetrics_api.exceptions import UnexpectedRedirection
-from bot_detector.structs import MetaData, PlayerStruct, ScrapedStruct
+from bot_detector.structs import MetaData, PlayerStruct
 from osrs.utils import RateLimiter
 from prometheus_client import Counter, Histogram, start_http_server
 from pydantic import ValidationError
@@ -72,11 +73,17 @@ player_update_errors = Counter(
 async def get_proxy(
     proxy_manager: ProxyManager,
     worker_id: int,
-) -> str:
+) -> str | None:
     proxy, error = await proxy_manager.get_proxy(worker_id)
+
     if error:
         logger.error(f"[{worker_id}]: {error}")
         return None
+
+    if isinstance(proxy, list):
+        logger.error(f"[{worker_id}]: Expected single proxy, got list.")
+        return None
+
     return proxy
 
 
@@ -143,9 +150,9 @@ async def work(
     worker_id: int,
     proxy_manager: ProxyManager,
     rate_limiter: RateLimiter,
-    player_nf_consumer: RepoPlayersNotFoundConsumer,
-    player_nf_producer: RepoPlayersNotFoundProducer,
-    player_sc_producer: RepoPlayerScrapedProducer,
+    player_nf_consumer: PlayersNotFoundConsumer,
+    player_nf_producer: PlayersNotFoundProducer,
+    player_sc_producer: PlayersScrapedProducer,
 ):
     async with ClientSession() as session:
         while True:
@@ -161,13 +168,16 @@ async def work(
 
             # get player from kafka
             try:
-                player = await player_nf_consumer.consume_one()
+                player, error = await player_nf_consumer.consume_one()
             except ValidationError as e:
                 error = e.json()
                 logger.error(error)
                 continue
+            if error:
+                logger.error(f"[{worker_id}]: {error}")
+                await asyncio.sleep(10)
+                continue
 
-            # handle exceptions
             if player is None:
                 logger.error(f"[{worker_id}]: No player available.")
                 await asyncio.sleep(10)
@@ -196,7 +206,7 @@ async def work(
             if error:
                 error_counter.labels(proxy=_proxy).inc()
                 logger.warning(f"[{worker_id}][{player_data.name}]: {error=}")
-                await player_nf_producer.produce_one(player=player)
+                await player_nf_producer.produce_one(player)
                 await asyncio.sleep(10)
                 continue
 
@@ -215,12 +225,15 @@ async def work(
             except ValidationError as e:
                 error = e.json()
                 logger.error(error)
-                await player_nf_producer.produce_one(player=player)
+                await player_nf_producer.produce_one(player)
                 continue
 
             # push data to kafka
             success_counter.labels(proxy=_proxy).inc()
-            await player_sc_producer.produce_one(scraped_data=scraped_data)
+            await player_sc_producer.produce_one(
+                scraped_data,
+                partition_key=str(scraped_data.player_data.id % 10).encode("utf-8"),
+            )
             logger.debug(
                 f"[{worker_id}][{player_data.name}]: {player_data.label_jagex=}"
             )
@@ -234,13 +247,13 @@ async def main():
     b_server = KafkaSettings().KAFKA_BOOTSTRAP_SERVERS
 
     ## consumer
-    player_nf_consumer = RepoPlayersNotFoundConsumer(
+    player_nf_consumer = PlayersNotFoundConsumer(
         bootstrap_servers=b_server, group_id="runemetrics_scraper"
     )
 
     ## producer
-    player_nf_producer = RepoPlayersNotFoundProducer(bootstrap_servers=b_server)
-    player_sc_producer = RepoPlayerScrapedProducer(bootstrap_servers=b_server)
+    player_nf_producer = PlayersNotFoundProducer(bootstrap_servers=b_server)
+    player_sc_producer = PlayersScrapedProducer(bootstrap_servers=b_server)
 
     # start kafka producers and consumers
     await player_nf_consumer.start()
