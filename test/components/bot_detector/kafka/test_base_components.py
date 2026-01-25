@@ -1,9 +1,3 @@
-"""
-Unit tests for base Kafka components (BaseConsumer, BaseProducer, Settings).
-
-These tests cover normal operations and error scenarios in an extensible way.
-"""
-
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -93,6 +87,7 @@ async def test_base_consumer_consume_one_kafka_error():
     result, error = await consumer.consume_one()
 
     assert result is None
+    assert error is not None
     assert "Kafka connection error" in error
     assert "Kafka getone error" in error
 
@@ -141,6 +136,7 @@ async def test_base_consumer_consume_one_validation_error():
     result, error = await consumer.consume_one()
 
     assert result is None
+    assert error is not None
     assert "Validation error" in error
 
 

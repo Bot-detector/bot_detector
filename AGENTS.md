@@ -283,6 +283,61 @@ class PlayerRepository:
     def __init__(self, session_factory):
         self._session_factory = session_factory
 ```
+
+## AGENTS.md Maintenance & Best Practices
+
+### Documenting Learnings
+- Update this file when new patterns emerge from codebase work
+- Track learnings from refactorings, migrations, and bug fixes
+- Add both DO and DON'T examples with context on WHY they exist
+- Remove outdated information promptly to avoid confusion
+- Document edge cases and error scenarios encountered in production
+
+### Update Process
+1. **Add pattern**: Before implementing new patterns in codebase
+2. **Update AGENTS.md**: Document the pattern with examples immediately
+3. **Verify examples**: Ensure code examples are tested and actually work
+4. **Update related sections**: If pattern affects multiple areas (e.g., Kafka + async), update all relevant sections
+5. **Run tests**: Verify new patterns work with existing test suite
+
+### Content Guidelines
+- **Use realistic examples**: All code examples must be tested and actually work
+- **Maintain consistency**: Follow the same 88-char, 4-space, single-quote formatting
+- **Be specific**: Avoid vague advice like "write clean code" - show concrete patterns
+- **Include context**: Explain WHY a practice exists based on project history or architectural constraints
+- **Document edge cases**: Error scenarios, timeouts, data validation failures should be included
+- **Link to files**: Reference actual implementation files where possible (e.g., `components/bot_detector/kafka/core/base_consumer.py`)
+
+### Review Cadence
+- **Pre-change**: Before doing a major change, review the document
+- **Post-deployment**: After major feature releases verify documentation accuracy
+- **Pre-refactor**: Capture patterns before they change during large refactorings
+
+### Anti-Patterns to Avoid
+
+**Vague Guidelines:**
+- ❌ "Write maintainable code" (too subjective, no concrete criteria)
+- ❌ "Follow best practices" (circular - what practices? where from?)
+- ❌ "Use good naming conventions" (already covered in Code Style section)
+
+**Better Alternatives:**
+- ✅ "Use `snake_case` for variables, `PascalCase` for classes" (specific, actionable)
+- ✅ "Handle async operations with `async with` context managers" (pattern with example)
+- ✅ "Never catch `Exception` without re-raising or logging context" (security + debugging)
+
+**Outdated Information:**
+- Remove references to deprecated libraries, old patterns, or version-specific quirks that no longer apply
+- Update example code to match current project structure (e.g., if directory paths change)
+
+### Living Document Principles
+
+AGENTS.md is a living document that evolves with the codebase:
+
+1. **No theoretical practices**: Only document patterns that have been proven in this project
+2. **Evidence-based**: Include both success examples and failure examples from real incidents
+3. **Contextual explanations**: Always explain WHY a pattern exists (e.g., "Feature-based Kafka pattern: Separates concerns for better testability")
+4. **Remove ambiguity**: Replace subjective terms with measurable criteria
+
 # References:
 - https://github.com/fastapi/fastapi
 - https://fastapi.tiangolo.com/
