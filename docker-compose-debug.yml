@@ -143,9 +143,6 @@ services:
       - MODEL_NAME=multi_model_v1
     env_file:
       - .env
-# use host network mode
 networks:
   botdetector-network:
     name: bd-network
-volumes:
-  uv_cache:
