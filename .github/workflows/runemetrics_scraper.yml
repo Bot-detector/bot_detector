@@ -34,7 +34,7 @@ jobs:
     with:
       registry: quay.io/bot_detector/scraper-runemetrics
       environment: ${{ (github.event.inputs.environment == 'deploy to prd' && 'prd') }}
-      BUILD_ARGS: "--target=production"
+      BUILD_ARGS: "--target=prod"
       DOCKERFILE: ./projects/runemetrics_scraper/Dockerfile
     secrets:
       QUAY_REGISTERY_PASSWORD: ${{ secrets.QUAY_REGISTERY_PASSWORD }}

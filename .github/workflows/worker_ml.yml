@@ -55,7 +55,7 @@ jobs:
     with:
       registry: ${{ needs.env_vars.outputs.QUAY_REGISTERY }}
       environment: ${{ (github.event.inputs.environment == 'deploy to prd' && 'prd') }}
-      BUILD_ARGS: "--target=production"
+      BUILD_ARGS: "--target=prod"
       DOCKERFILE: ${{ needs.env_vars.outputs.DOCKERFILE }}
     secrets:
       QUAY_REGISTERY_PASSWORD: ${{ secrets.QUAY_REGISTERY_PASSWORD }}

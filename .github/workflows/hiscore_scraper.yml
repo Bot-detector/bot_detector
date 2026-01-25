@@ -33,7 +33,7 @@ jobs:
     with:
       registry: quay.io/bot_detector/scraper-highscore
       environment: ${{ (github.event.inputs.environment == 'deploy to prd' && 'prd') }}
-      BUILD_ARGS: "--target=production"
+      BUILD_ARGS: "--target=prod"
       DOCKERFILE: ./projects/hiscore_scraper/Dockerfile
     secrets:
       QUAY_REGISTERY_PASSWORD: ${{ secrets.QUAY_REGISTERY_PASSWORD }}
