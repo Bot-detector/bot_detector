@@ -7,16 +7,15 @@ from bot_detector.database import Settings as DBSettings
 from bot_detector.database import get_session_factory
 from bot_detector.database.prediction import PredictionLatestRepo, PredictionRepo
 from bot_detector.kafka import (
+    DataToPredictConsumer,
+    DataToPredictProducer,
+    DataToPredictStruct,
     PlayersScrapedConsumer,
     PlayersScrapedProducer,
     ScrapedStruct,
 )
 from bot_detector.kafka import Settings as KafkaSettings
-from bot_detector.kafka.data_to_predict import (
-    DataToPredictConsumer,
-    DataToPredictProducer,
-    DataToPredictStruct,
-)
+from bot_detector.ml_api import InputData, MLApiClient, Prediction
 from bot_detector.structs import PredictionCreate
 from bot_detector.worker_ml.settings import Settings
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -177,7 +176,7 @@ async def consume_player_scraped(
     while True:
         try:
             batch, errors = await player_sc_consumer.consume_many(
-                max_messages=max_messages,
+                max_records=max_messages,
                 timeout_ms=max_interval_ms,
             )
             logger.info(f"Consumed {len(batch)} records")
@@ -222,12 +221,7 @@ async def consume_player_scraped(
                     }
                 )
                 await asyncio.gather(
-                    *[
-                        player_sc_producer.produce_one(
-                            b, partition_key=str(b.player_data.id % 10).encode("utf-8")
-                        )
-                        for b in batch
-                    ]
+                    *[player_sc_producer.produce_one(b) for b in batch]
                 )
                 await player_sc_consumer.commit()
                 await asyncio.sleep(15)

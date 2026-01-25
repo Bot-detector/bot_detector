@@ -2,14 +2,14 @@ import asyncio
 import logging
 
 from aiohttp import ClientSession
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
-    PROXY_API_KEY: str
+    PROXY_API_KEY: str = Field(...)
     MAX_CALLS: int = 100
     INTERVAL: int = 60
 
@@ -96,7 +96,9 @@ class ProxyManager:
             self.proxy_list = [proxy.url for proxy in _proxy_list]
         return self.proxy_list
 
-    async def get_proxy(self, index=None):
+    async def get_proxy(
+        self, index=None
+    ) -> tuple[str | list[str] | None, Exception | None]:
         """
         Retrieve a proxy by index or return all proxies if no index is specified.
 

@@ -7,8 +7,8 @@ from bot_detector.api_public.src.core.fastapi.middleware import (
     LoggingMiddleware,
     PrometheusMiddleware,
 )
+from bot_detector.kafka import ReportsToInsertProducer
 from bot_detector.kafka import Settings as KafkaSettings
-from bot_detector.kafka.repositories import RepoReportsToInsertProducer
 from fastapi import FastAPI
 from fastapi.middleware import Middleware
 from fastapi.middleware.cors import CORSMiddleware
@@ -48,9 +48,9 @@ async def lifespan(app: FastAPI):
     logger.info("startup initiated")
     kafka_manager.set_producer(
         key="reports_to_insert",
-        producer=RepoReportsToInsertProducer(
+        producer=ReportsToInsertProducer(
             bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
-            max_async_calls=Settings().KAFKA_MAX_ASYNC_CALLS,
+            max_async_actions=Settings().KAFKA_MAX_ASYNC_CALLS,
         ),
     )
     producer = kafka_manager.get_producer(key="reports_to_insert")

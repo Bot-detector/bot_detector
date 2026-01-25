@@ -4,14 +4,11 @@ import time
 
 from bot_detector.api_public.src.core.fastapi.dependencies import wide_event
 from bot_detector.api_public.src.core.fastapi.dependencies.kafka import kafka_manager
-from bot_detector.kafka.repositories.reports_to_insert import (
-    RepoReportsToInsertProducer,
-)
+from bot_detector.kafka import ReportsToInsertProducer, ReportsToInsertStruct
 from bot_detector.structs import (
     Detection,
     MetaData,
     ParsedDetection,
-    ReportsToInsertStruct,
 )
 from pydantic import ValidationError
 
@@ -101,7 +98,7 @@ class Report:
 
     async def send_to_kafka(self, data: list[ParsedDetection]) -> None:
         producer = kafka_manager.get_producer(key="reports_to_insert")
-        producer: RepoReportsToInsertProducer | None
+        producer: ReportsToInsertProducer | None
 
         if not producer:
             raise CustomError("Producer not found")
@@ -111,7 +108,7 @@ class Report:
         # Transform data to ReportsToInsertStruct
         reports, error = self._transform_detection(data)
 
-        tasks = [producer.produce_one(report=report) for report in reports]
+        tasks = [producer.produce_one(report) for report in reports]
         await asyncio.gather(*tasks)
 
         if len(error) > 0:

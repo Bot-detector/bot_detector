@@ -133,6 +133,7 @@ async def consume_many_task(
     session_factory: async_sessionmaker[AsyncSession],
 ):
     while True:
+        batch = []
         try:
             batch, errors = await player_sc_consumer.consume_many(
                 max_records=max_messages,
@@ -173,22 +174,23 @@ async def consume_many_task(
                 await asyncio.sleep(15)
 
             await player_sc_consumer.commit()
+
+            # ideally we want batches to be as full as possible, this is more efficient on the database
+            if len(batch) < 1000:
+                await asyncio.sleep(60)
         except Exception as e:
             logger.error(f"[{worker_id}] Error consuming scrapes: {e}")
             logger.debug(f"[{worker_id}] Traceback: \n{traceback.format_exc()}")
-            await asyncio.gather(
-                *[
-                    player_sc_producer.produce_one(
-                        b, partition_key=str(b.player_data.id % 10).encode("utf-8")
-                    )
-                    for b in batch
-                ]
-            )
+            if batch:  # only retry if we have data
+                await asyncio.gather(
+                    *[
+                        player_sc_producer.produce_one(
+                            b, partition_key=str(b.player_data.id % 10).encode("utf-8")
+                        )
+                        for b in batch
+                    ]
+                )
             await asyncio.sleep(15)
-
-        # ideally we want batches to be as full as possible, this is more efficient on the database
-        if len(batch) < 1000:
-            await asyncio.sleep(60)
 
 
 async def main():

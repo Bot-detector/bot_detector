@@ -8,13 +8,15 @@ from typing import Any
 import aiohttp
 from aiohttp import ClientSession
 from bot_detector.kafka import (
+    NotFoundStruct,
+    PlayersNotFoundProducer,
     PlayersScrapedProducer,
     PlayersToScrapeConsumer,
     PlayersToScrapeProducer,
-    PlayersNotFoundProducer,
+    ScrapedStruct,
+    ToScrapeStruct,
 )
 from bot_detector.kafka import Settings as KafkaSettings
-from bot_detector.kafka import ScrapedStruct, NotFoundStruct, ToScrapeStruct
 from bot_detector.proxy_manager import ProxyManager
 from bot_detector.proxy_manager import Settings as ProxySettings
 from bot_detector.structs import (
@@ -66,10 +68,15 @@ latency_histogram = Histogram(
 async def get_proxy(
     proxy_manager: ProxyManager,
     worker_id: int,
-) -> str:
+) -> str | None:
     proxy, error = await proxy_manager.get_proxy(worker_id)
+
     if error:
         logger.error(f"Worker {worker_id}: {error}")
+        return None
+
+    if isinstance(proxy, list):
+        logger.error(f"Worker {worker_id}: Proxy is a list, expected a string.")
         return None
     return proxy
 
@@ -81,12 +88,16 @@ async def scrape_player(
 ) -> tuple[PlayerStats | None, float | None, str | None]:
     player_stats, error, latency = None, None, None
     try:
-        player_stats, latency = await hiscore_instance.get(
+        hiscore_data = await hiscore_instance.get(
             mode=HSMode.OLDSCHOOL,
             player=player.name,
             session=session,
             return_latency=True,
         )
+        if isinstance(hiscore_data, tuple):
+            player_stats, latency = hiscore_data
+        else:
+            player_stats = hiscore_data
         return player_stats, latency, error
     except PlayerDoesNotExist:
         logger.debug(f"{player.name=} does not exist.")
@@ -150,7 +161,6 @@ async def work(
         while True:
             # get proxy
             proxy = await get_proxy(proxy_manager, worker_id)
-            _proxy = proxy.split("@")[1]
 
             # handle exceptions
             if proxy is None:
@@ -158,10 +168,12 @@ async def work(
                 await asyncio.sleep(10)
                 continue
 
+            _proxy = proxy.split("@")[1]
+
             # get player from kafka
             try:
                 start_time = time.perf_counter()
-                player = await player_ts_consumer.consume_one()
+                player_to_scrape, error = await player_ts_consumer.consume_one()
                 total_time = time.perf_counter() - start_time
                 logger.debug(f"[{worker_id}]: consume one {total_time:.4f}")
             except ValidationError as e:
@@ -169,12 +181,17 @@ async def work(
                 continue
 
             # handle exceptions
-            if player is None:
+            if error:
+                logger.error(f"[{worker_id}]: {error}")
+                await asyncio.sleep(10)
+                continue
+
+            if player_to_scrape is None:
                 logger.warning(f"[{worker_id}]: No player available.")
                 await asyncio.sleep(10)
                 continue
 
-            player_data = player.player_data
+            player_data = player_to_scrape.player_data
 
             hiscore_instance = Hiscore(
                 proxy=proxy,
@@ -201,7 +218,7 @@ async def work(
                 await player_ts_producer.produce_one(
                     ToScrapeStruct(
                         metadata=MetaData(version=1, source="hiscore_scraper"),
-                        player_data=player,
+                        player_data=player_to_scrape.player_data,
                     )
                 )
                 await asyncio.sleep(10)
@@ -229,17 +246,24 @@ async def work(
 
             if error:
                 logger.error(f"[{worker_id}][{player_data.name}]: Error transforming.")
-                await player_ts_producer.produce_one(player=player)
+                await player_ts_producer.produce_one(player_to_scrape)
                 continue
 
+            if scraped_data is None:
+                logger.error(f"[{worker_id}][{player_data.name}]: No scraped data.")
+                await player_ts_producer.produce_one(player_to_scrape)
+                continue
+
+            partition_key = str(scraped_data.player_data.id % 10).encode("utf-8")
             await player_sc_producer.produce_one(
-                scraped_data, partition_key=str(scraped_data.player_data.id % 10).encode("utf-8")
+                message=scraped_data,
+                partition_key=partition_key,
             )
             logger.debug(f"[{worker_id}][{player_data.name}]: scraped successfully.")
 
 
 async def main():
-    proxy_manager = ProxyManager(api_key=ProxySettings().PROXY_API_KEY)
+    proxy_manager = ProxyManager(api_key=ProxySettings().PROXY_API_KEY)  # type: ignore
     proxies = await proxy_manager.fetch_proxies()
 
     # initialize kafka producers and consumers
@@ -264,8 +288,8 @@ async def main():
             worker_id=worker_id,
             proxy_manager=proxy_manager,
             rate_limiter=RateLimiter(
-                calls_per_interval=ProxySettings().MAX_CALLS,
-                interval=ProxySettings().INTERVAL,
+                calls_per_interval=ProxySettings().MAX_CALLS,  # type: ignore
+                interval=ProxySettings().INTERVAL,  # type: ignore
             ),
             player_ts_consumer=player_ts_consumer,
             player_ts_producer=player_ts_producer,

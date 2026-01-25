@@ -6,12 +6,12 @@ from datetime import date, datetime, time, timedelta
 from bot_detector.database import Settings as DBSettings
 from bot_detector.database import get_session_factory
 from bot_detector.database.player import PlayerRepo
-from bot_detector.kafka import Settings as KafkaSettings
 from bot_detector.kafka import (
     PlayersToScrapeConsumer,
     PlayersToScrapeProducer,
     ToScrapeStruct,
 )
+from bot_detector.kafka import Settings as KafkaSettings
 from bot_detector.structs import MetaData, PlayerStruct
 from pydantic_settings import BaseSettings
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -67,7 +67,7 @@ async def produce_players(
         await player_producer.produce_one(
             ToScrapeStruct(
                 metadata=MetaData(version=1, source="scrape_task_producer"),
-                player_data=player,
+                player_data=player.player_data,
             )
         )
 

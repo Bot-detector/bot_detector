@@ -6,12 +6,13 @@ from asyncio import Queue
 from bot_detector import database as db
 from bot_detector.database import Settings as DBSettings
 from bot_detector.database.report import ReportRepo
-from bot_detector.kafka import Settings as KafkaSettings
-from bot_detector.kafka.repositories import (
-    RepoReportsToInsertConsumer,
-    RepoReportsToInsertProducer,
+from bot_detector.kafka import (
+    ReportsToInsertConsumer,
+    ReportsToInsertProducer,
+    ReportsToInsertStruct,
 )
-from bot_detector.structs import ParsedDetection, ReportsToInsertStruct
+from bot_detector.kafka import Settings as KafkaSettings
+from bot_detector.structs import ParsedDetection
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -65,7 +66,7 @@ async def parse_detections(
 
 
 async def consume_many_task(
-    report_consumer: RepoReportsToInsertConsumer,
+    report_consumer: ReportsToInsertConsumer,
     max_messages: int,
     max_interval_ms: int,
     session_factory: async_sessionmaker[AsyncSession],
@@ -75,7 +76,7 @@ async def consume_many_task(
     while True:
         try:
             reports, errors = await report_consumer.consume_many(
-                max_messages=max_messages,
+                max_records=max_messages,
                 timeout_ms=max_interval_ms,
             )
             logger.debug(f"consumed {len(reports)} reports")
@@ -110,13 +111,13 @@ async def consume_many_task(
             await asyncio.sleep(5)
 
 
-async def error_task(error_queue: Queue, report_producer: RepoReportsToInsertProducer):
+async def error_task(error_queue: Queue, report_producer: ReportsToInsertProducer):
     while True:
         report: ReportsToInsertStruct = await error_queue.get()
         if not isinstance(report, ReportsToInsertStruct):
             logger.warning(f"invalid {report=}")
             continue
-        await report_producer.produce_one(report=report)
+        await report_producer.produce_one(report)
 
 
 async def main():
@@ -130,15 +131,15 @@ async def main():
     # initialize kafka producers and consumers
     b_server = KafkaSettings().KAFKA_BOOTSTRAP_SERVERS
     ## consumer
-    report_consumer = RepoReportsToInsertConsumer(
+    report_consumer = ReportsToInsertConsumer(
         bootstrap_servers=b_server,
         group_id="report_worker",
     )
 
     ## producer
-    report_producer = RepoReportsToInsertProducer(
+    report_producer = ReportsToInsertProducer(
         bootstrap_servers=b_server,
-        max_async_calls=100,
+        max_async_actions=100,
     )
 
     # start kafka producers and consumers

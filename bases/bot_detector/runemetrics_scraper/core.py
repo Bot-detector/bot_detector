@@ -6,12 +6,12 @@ from datetime import datetime
 import aiohttp
 from aiohttp import ClientSession
 from bot_detector.kafka import (
-    PlayersScrapedProducer,
     PlayersNotFoundConsumer,
     PlayersNotFoundProducer,
+    PlayersScrapedProducer,
+    ScrapedStruct,
 )
 from bot_detector.kafka import Settings as KafkaSettings
-from bot_detector.kafka import NotFoundStruct, ScrapedStruct
 from bot_detector.proxy_manager import ProxyManager
 from bot_detector.proxy_manager import Settings as ProxySettings
 from bot_detector.runemetrics_api import RuneMetrics, RuneMetricsResponse
@@ -73,32 +73,122 @@ player_update_errors = Counter(
 async def get_proxy(
     proxy_manager: ProxyManager,
     worker_id: int,
-) -> str:
+) -> str | None:
     proxy, error = await proxy_manager.get_proxy(worker_id)
-            if error:
-                error_counter.labels(proxy=_proxy).inc()
-                logger.warning(f"[{worker_id}][{player_data.name}]: {error=}")
-                await player_nf_producer.produce_one(
-                    NotFoundStruct(
-                        metadata=MetaData(version=1, source="runemetrics_scraper"),
-                        player_data=player_data,
-                    )
-                )
+
+    if error:
+        logger.error(f"[{worker_id}]: {error}")
+        return None
+
+    if isinstance(proxy, list):
+        logger.error(f"[{worker_id}]: Expected single proxy, got list.")
+        return None
+
+    return proxy
+
+
+async def scrape_player(
+    player: PlayerStruct,
+    session: ClientSession,
+    runemetrics_instance: RuneMetrics,
+) -> tuple[PlayerStruct | None, float | None, str | None]:
+    player_data, latency, error = None, None, None
+    try:
+        player_data, latency = await runemetrics_instance.get(
+            player_name=player.name,
+            session=session,
+            return_latency=True,
+        )
+        return player_data, latency, error
+    except UnexpectedRedirection:
+        error = f"Unexpected redirection for {player.name=}."
+        # logger.error(error)
+        return None, None, error
+    except (
+        aiohttp.ClientResponseError,
+        aiohttp.ConnectionTimeoutError,
+        aiohttp.ClientConnectorError,
+        aiohttp.ServerDisconnectedError,
+    ) as e:
+        error = f"Client response error: {e}"
+        # logger.error(error)
+        return None, None, error
+
+
+async def update_player(
+    player_data: PlayerStruct,
+    runemetrics_response: RuneMetricsResponse,
+) -> PlayerStruct:
+    player_data.updated_at = datetime.now()
+    player_data.possible_ban = 1
+    player_data.confirmed_player = 0
+
+    if runemetrics_response.error is None:
+        player_data.label_jagex = 0
+        return player_data
+
+    _error = runemetrics_response.error.error
+    player_update_errors.labels(error_type=_error).inc()
+
+    match _error:
+        # username is not associated to an account
+        case "NO_PROFILE":
+            player_data.label_jagex = 1
+        # account is perm banned
+        case "NOT_A_MEMBER":
+            player_data.label_jagex = 2
+        # runemetrics is set to private. either they're too low level or they're banned.
+        case "PROFILE_PRIVATE":
+            player_data.label_jagex = 3
+        case _:
+            # account is active, probably just too low stats for hiscores
+            player_data.label_jagex = 0
+    return player_data
+
+
+async def work(
+    worker_id: int,
+    proxy_manager: ProxyManager,
+    rate_limiter: RateLimiter,
+    player_nf_consumer: PlayersNotFoundConsumer,
+    player_nf_producer: PlayersNotFoundProducer,
+    player_sc_producer: PlayersScrapedProducer,
+):
+    async with ClientSession() as session:
+        while True:
+            # get proxy
+            proxy = await get_proxy(proxy_manager, worker_id)
+            _proxy = proxy.split("@")[1]
+
+            # handle exceptions
+            if proxy is None:
+                logger.error(f"[{worker_id}]: No proxy available.")
                 await asyncio.sleep(10)
                 continue
 
-            # handle exceptions
+            # get player from kafka
+            try:
+                player, error = await player_nf_consumer.consume_one()
+            except ValidationError as e:
+                error = e.json()
+                logger.error(error)
+                continue
+            if error:
+                logger.error(f"[{worker_id}]: {error}")
+                await asyncio.sleep(10)
+                continue
+
             if player is None:
                 logger.error(f"[{worker_id}]: No player available.")
                 await asyncio.sleep(10)
                 continue
 
-    player_data = player_data
+            player_data = player.player_data
 
-    hiscore_instance = Hiscore(
-        proxy=proxy,
-        rate_limiter=rate_limiter,
-    )
+            runemetrics_instance = RuneMetrics(
+                proxy=proxy,
+                rate_limiter=rate_limiter,
+            )
 
             # metric: every time we scrape a player, we increment the counter
             total_counter.labels(proxy=_proxy).inc()
@@ -116,7 +206,7 @@ async def get_proxy(
             if error:
                 error_counter.labels(proxy=_proxy).inc()
                 logger.warning(f"[{worker_id}][{player_data.name}]: {error=}")
-                await player_nf_producer.produce_one(player=player)
+                await player_nf_producer.produce_one(player)
                 await asyncio.sleep(10)
                 continue
 
@@ -135,13 +225,14 @@ async def get_proxy(
             except ValidationError as e:
                 error = e.json()
                 logger.error(error)
-                await player_nf_producer.produce_one(player=player)
+                await player_nf_producer.produce_one(player)
                 continue
 
             # push data to kafka
             success_counter.labels(proxy=_proxy).inc()
             await player_sc_producer.produce_one(
-                scraped_data, partition_key=str(scraped_data.player_data.id % 10).encode("utf-8")
+                scraped_data,
+                partition_key=str(scraped_data.player_data.id % 10).encode("utf-8"),
             )
             logger.debug(
                 f"[{worker_id}][{player_data.name}]: {player_data.label_jagex=}"
