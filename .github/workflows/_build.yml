@@ -46,7 +46,7 @@ jobs:
       
       - name: Docker Build
         run: |
-          docker build . \
+          DOCKER_BUILDKIT=1 docker build . \
             --file "${{ inputs.DOCKERFILE }}" \
             ${{ inputs.BUILD_ARGS }} \
             -t "${{ inputs.REGISTRY }}:${{ steps.vars.outputs.GIT_HASH }}"\
