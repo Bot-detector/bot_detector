@@ -6,18 +6,18 @@ import aiohttp
 from bot_detector.database import Settings as DBSettings
 from bot_detector.database import get_session_factory
 from bot_detector.database.prediction import PredictionLatestRepo, PredictionRepo
+from bot_detector.kafka import (
+    PlayersScrapedConsumer,
+    PlayersScrapedProducer,
+    ScrapedStruct,
+)
 from bot_detector.kafka import Settings as KafkaSettings
 from bot_detector.kafka.data_to_predict import (
     DataToPredictConsumer,
     DataToPredictProducer,
     DataToPredictStruct,
 )
-from bot_detector.kafka.repositories import (
-    RepoPlayerScrapedConsumer,
-    RepoPlayerScrapedProducer,
-)
-from bot_detector.ml_api import InputData, MLApiClient, Prediction
-from bot_detector.structs import PredictionCreate, ScrapedStruct
+from bot_detector.structs import PredictionCreate
 from bot_detector.worker_ml.settings import Settings
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -100,8 +100,8 @@ async def consume_data_to_predict(
     model_name: str = "multi_model_v1",
 ):
     while True:
-        _batch = await data_to_predict_consumer.consume_many(
-            max_messages=max_messages,
+        _batch, errors = await data_to_predict_consumer.consume_many(
+            max_records=max_messages,
             timeout_ms=max_interval_ms,
         )
         logger.info(f"Consumed {len(_batch)} records")
@@ -168,8 +168,8 @@ async def consume_data_to_predict(
 async def consume_player_scraped(
     max_messages: int,
     max_interval_ms: int,
-    player_sc_consumer: RepoPlayerScrapedConsumer,
-    player_sc_producer: RepoPlayerScrapedProducer,
+    player_sc_consumer: PlayersScrapedConsumer,
+    player_sc_producer: PlayersScrapedProducer,
     api: MLApiClient,
     session_factory: async_sessionmaker[AsyncSession],
     model_name: str = "multi_model_v1",
@@ -222,7 +222,12 @@ async def consume_player_scraped(
                     }
                 )
                 await asyncio.gather(
-                    *[player_sc_producer.produce_one(b) for b in batch]
+                    *[
+                        player_sc_producer.produce_one(
+                            b, partition_key=str(b.player_data.id % 10).encode("utf-8")
+                        )
+                        for b in batch
+                    ]
                 )
                 await player_sc_consumer.commit()
                 await asyncio.sleep(15)
@@ -255,11 +260,11 @@ async def main():
 
     tasks = []
     if CONSUME_PLAYER_SCRAPED:
-        player_sc_consumer = RepoPlayerScrapedConsumer(
+        player_sc_consumer = PlayersScrapedConsumer(
             bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
             group_id="ml_worker",
         )
-        player_sc_producer = RepoPlayerScrapedProducer(
+        player_sc_producer = PlayersScrapedProducer(
             bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
         )
         await player_sc_consumer.start()

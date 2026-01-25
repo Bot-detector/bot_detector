@@ -34,7 +34,7 @@ RUN addgroup --gid 1000 opencode \
 USER opencode
 
 RUN --mount=type=cache,target=/home/opencode/.bun/,uid=1000,gid=1000 \
-    bun x oh-my-opencode install --no-tui --claude=no --chatgpt=no --gemini=no
+    bun x oh-my-opencode install --no-tui --claude=no --openai=no --gemini=no --copilot=no --opencode-zen=no --zai-coding-plan=no
 
 RUN --mount=type=cache,target=/home/opencode/.bun/,uid=1000,gid=1000 \
     bun install @ast-grep/cli

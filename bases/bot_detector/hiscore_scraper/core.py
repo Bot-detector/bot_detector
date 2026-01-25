@@ -7,13 +7,14 @@ from typing import Any
 
 import aiohttp
 from aiohttp import ClientSession
-from bot_detector.kafka import Settings as KafkaSettings
-from bot_detector.kafka.repositories import (
-    RepoPlayerScrapedProducer,
-    RepoPlayersNotFoundProducer,
-    RepoPlayersToScrapeConsumer,
-    RepoPlayersToScrapeProducer,
+from bot_detector.kafka import (
+    PlayersScrapedProducer,
+    PlayersToScrapeConsumer,
+    PlayersToScrapeProducer,
+    PlayersNotFoundProducer,
 )
+from bot_detector.kafka import Settings as KafkaSettings
+from bot_detector.kafka import ScrapedStruct, NotFoundStruct, ToScrapeStruct
 from bot_detector.proxy_manager import ProxyManager
 from bot_detector.proxy_manager import Settings as ProxySettings
 from bot_detector.structs import (
@@ -21,7 +22,6 @@ from bot_detector.structs import (
     MetaData,
     PlayerStruct,
 )
-from bot_detector.structs.kafka import NotFoundStruct, ScrapedStruct
 from osrs.asyncio import Hiscore, HSMode
 from osrs.asyncio.osrs.hiscores import PlayerStats
 from osrs.exceptions import PlayerDoesNotExist, UnexpectedRedirection
@@ -141,10 +141,10 @@ async def work(
     worker_id: int,
     proxy_manager: ProxyManager,
     rate_limiter: RateLimiter,
-    player_ts_consumer: RepoPlayersToScrapeConsumer,
-    player_ts_producer: RepoPlayersToScrapeProducer,
-    player_nf_producer: RepoPlayersNotFoundProducer,
-    player_sc_producer: RepoPlayerScrapedProducer,
+    player_ts_consumer: PlayersToScrapeConsumer,
+    player_ts_producer: PlayersToScrapeProducer,
+    player_nf_producer: PlayersNotFoundProducer,
+    player_sc_producer: PlayersScrapedProducer,
 ):
     async with ClientSession() as session:
         while True:
@@ -198,7 +198,12 @@ async def work(
             if error:
                 error_counter.labels(proxy=_proxy).inc()
                 logger.warning(f"[{worker_id}][{player_data.name}]: {error=}")
-                await player_ts_producer.produce_one(player=player)
+                await player_ts_producer.produce_one(
+                    ToScrapeStruct(
+                        metadata=MetaData(version=1, source="hiscore_scraper"),
+                        player_data=player,
+                    )
+                )
                 await asyncio.sleep(10)
                 continue
 
@@ -208,7 +213,7 @@ async def work(
                 logger.debug(f"[{worker_id}][{player_data.name}]: not found.")
                 player_data.possible_ban = True
                 await player_nf_producer.produce_one(
-                    player=NotFoundStruct(
+                    NotFoundStruct(
                         metadata=MetaData(version=1, source="hiscore_scraper"),
                         player_data=player_data,
                     )
@@ -227,7 +232,9 @@ async def work(
                 await player_ts_producer.produce_one(player=player)
                 continue
 
-            await player_sc_producer.produce_one(scraped_data=scraped_data)
+            await player_sc_producer.produce_one(
+                scraped_data, partition_key=str(scraped_data.player_data.id % 10).encode("utf-8")
+            )
             logger.debug(f"[{worker_id}][{player_data.name}]: scraped successfully.")
 
 
@@ -238,13 +245,13 @@ async def main():
     # initialize kafka producers and consumers
     b_server = KafkaSettings().KAFKA_BOOTSTRAP_SERVERS
     ## consumer
-    player_ts_consumer = RepoPlayersToScrapeConsumer(
+    player_ts_consumer = PlayersToScrapeConsumer(
         bootstrap_servers=b_server, group_id="scraper"
     )
     ## producer
-    player_ts_producer = RepoPlayersToScrapeProducer(bootstrap_servers=b_server)
-    player_nf_producer = RepoPlayersNotFoundProducer(bootstrap_servers=b_server)
-    player_sc_producer = RepoPlayerScrapedProducer(bootstrap_servers=b_server)
+    player_ts_producer = PlayersToScrapeProducer(bootstrap_servers=b_server)
+    player_nf_producer = PlayersNotFoundProducer(bootstrap_servers=b_server)
+    player_sc_producer = PlayersScrapedProducer(bootstrap_servers=b_server)
 
     # start kafka producers and consumers
     await player_ts_consumer.start()

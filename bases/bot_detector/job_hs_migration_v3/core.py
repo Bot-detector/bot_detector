@@ -7,15 +7,12 @@ from datetime import timedelta
 import sqlalchemy as sqla
 from bot_detector.database import Settings as DBSettings
 from bot_detector.database import get_session_factory
+from bot_detector.kafka import PlayersScrapedProducer, ScrapedStruct
 from bot_detector.kafka import Settings as KafkaSettings
-from bot_detector.kafka.repositories import (
-    RepoPlayerScrapedProducer,
-)
 from bot_detector.structs import (
     HighscoreBaseStruct,
     MetaData,
     PlayerStruct,
-    ScrapedStruct,
 )
 from pydantic_settings import BaseSettings
 from sqlalchemy import TextClause
@@ -147,7 +144,7 @@ def json_to_struct(data: list[dict]) -> list[ScrapedStruct]:
 
 
 async def producer_send(
-    producer: RepoPlayerScrapedProducer,
+    producer: PlayersScrapedProducer,
     stop_event: asyncio.Event,
     queue: asyncio.Queue,
 ):
@@ -160,7 +157,12 @@ async def producer_send(
             start_time = time.time()
 
             while data:
-                tasks = [producer.produce_one(scraped_data=d) for d in data]
+                tasks = [
+                    producer.produce_one(
+                        d, partition_key=str(d.player_data.id % 10).encode("utf-8")
+                    )
+                    for d in data
+                ]
                 results = await asyncio.gather(*tasks, return_exceptions=True)
                 # Filter out failed messages for retry
                 data = [d for d, r in zip(data, results) if isinstance(r, Exception)]
@@ -179,7 +181,7 @@ async def producer_send(
 async def main():
     async_session, async_engine = get_session_factory(SETTINGS=DBSettings())
     b_server = KafkaSettings().KAFKA_BOOTSTRAP_SERVERS
-    player_sc_producer = RepoPlayerScrapedProducer(bootstrap_servers=b_server)
+    player_sc_producer = PlayersScrapedProducer(bootstrap_servers=b_server)
     produce_queue = asyncio.Queue(maxsize=1)
     stop_event = asyncio.Event()
 

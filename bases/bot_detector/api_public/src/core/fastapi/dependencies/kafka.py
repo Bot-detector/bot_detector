@@ -1,6 +1,7 @@
 import logging
 
-from bot_detector.kafka.interface import ConsumerInterface, ProducerInterface
+from bot_detector.kafka.core.base_consumer import BaseConsumer
+from bot_detector.kafka.core.base_producer import BaseProducer
 
 logger = logging.getLogger(__name__)
 
@@ -11,11 +12,11 @@ class KafkaManager:
         self.consumers = {}
         logger.debug("KafkaManager initialized.")
 
-    def set_producer(self, key: str, producer: ProducerInterface) -> None:
+    def set_producer(self, key: str, producer: BaseProducer) -> None:
         self.producers[key] = producer
         logger.debug(f"Producer set for key: {key}")
 
-    def get_producer(self, key: str | None) -> ProducerInterface | None:
+    def get_producer(self, key: str | None) -> BaseProducer | None:
         logger.debug(f"Retrieving producer for key: {key}")
 
         if key is None:
@@ -31,11 +32,11 @@ class KafkaManager:
         logger.debug(f"Producer retrieved for key: {key}")
         return producer
 
-    def set_consumer(self, key: str, consumer: ConsumerInterface) -> None:
+    def set_consumer(self, key: str, consumer: BaseConsumer) -> None:
         self.consumers[key] = consumer
         logger.debug(f"Consumer set for key: {key}")
 
-    def get_consumer(self, key: str | None) -> ConsumerInterface | None:
+    def get_consumer(self, key: str | None) -> BaseConsumer | None:
         if key is None:
             return self.consumers
 
