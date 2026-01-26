@@ -131,3 +131,11 @@ find . -type f -name "pyproject.toml" -not -path "*/.venv/*" -execdir sh -c 'ech
 ```sh
 find . -type f -name "pyproject.toml" -not -path "*/.venv/*" -execdir sh -c 'echo "🔄 Removing Dockerfile.bak in $(pwd)"; rm Dockerfile.bak' \;
 ```
+list all branches that are gone in the remote
+```sh
+git fetch --prune && git branch -vv | awk '/: gone]/{print $1}'
+```
+delete all branches that are gone in the remote
+```sh
+git fetch --prune && git branch -vv | awk '/: gone]/{print $1}' | xargs -r echo git branch -D
+```
