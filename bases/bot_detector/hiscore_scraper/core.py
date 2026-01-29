@@ -33,9 +33,13 @@ from .metrics import (
     error_counter,
     latency_histogram,
     not_found_counter,
+    retry_counter,
+    retry_delay_histogram,
+    retry_histogram,
     success_counter,
     total_counter,
 )
+from .retry_tracker import RetryTracker
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +127,30 @@ async def transform_player_stats(
     return hiscore_data, error
 
 
+async def handle_retry(
+    retry_tracker: RetryTracker,
+    worker_id: int,
+    proxy: str,
+):
+    """
+    Handle retry logic: update metrics and sleep with backoff delay.
+
+    Args:
+        retry_tracker: RetryTracker instance.
+        worker_id: Worker identifier.
+        proxy: Proxy address for metrics labels.
+    """
+    _proxy = proxy.split("@")[1]
+    retry_tracker.record_attempt(worker_id, success=False)
+    delay = retry_tracker.get_backoff_delay(worker_id)
+    retry_count = retry_tracker.get_retry_count(worker_id)
+    retry_counter.labels(proxy=_proxy).inc()
+    retry_histogram.labels(proxy=_proxy).observe(retry_count)
+    retry_delay_histogram.labels(proxy=_proxy).observe(delay)
+    logger.warning(f"[{worker_id}]: backing off {delay:.2f}s")
+    await asyncio.sleep(delay)
+
+
 async def work(
     worker_id: int,
     proxy_manager: ProxyManager,
@@ -132,6 +160,8 @@ async def work(
     player_nf_producer: PlayersNotFoundProducer,
     player_sc_producer: PlayersScrapedProducer,
 ):
+    retry_tracker = RetryTracker(base_delay=10.0, max_delay=300.0, decay_window=300.0)
+
     async with ClientSession() as session:
         while True:
             # get proxy
@@ -189,14 +219,18 @@ async def work(
             # handle exceptions
             if error:
                 error_counter.labels(proxy=_proxy).inc()
-                logger.warning(f"[{worker_id}][{player_data.name}]: {error=}")
+                retry_count = retry_tracker.get_retry_count(worker_id)
+                logger.warning(
+                    f"[{worker_id}][{player_data.name}]: {error=}, "
+                    f"retry_count={retry_count}"
+                )
                 await player_ts_producer.produce_one(
                     ToScrapeStruct(
                         metadata=MetaData(version=1, source="hiscore_scraper"),
                         player_data=player_to_scrape.player_data,
                     )
                 )
-                await asyncio.sleep(10)
+                await handle_retry(retry_tracker, worker_id, proxy)
                 continue
 
             # if player not found, than send to not found topic
@@ -210,6 +244,7 @@ async def work(
                         player_data=player_data,
                     )
                 )
+                await handle_retry(retry_tracker, worker_id, proxy)
                 continue
 
             success_counter.labels(proxy=_proxy).inc()
@@ -222,12 +257,17 @@ async def work(
             if error:
                 logger.error(f"[{worker_id}][{player_data.name}]: Error transforming.")
                 await player_ts_producer.produce_one(player_to_scrape)
+                await handle_retry(retry_tracker, worker_id, proxy)
                 continue
 
             if scraped_data is None:
                 logger.error(f"[{worker_id}][{player_data.name}]: No scraped data.")
                 await player_ts_producer.produce_one(player_to_scrape)
+                await handle_retry(retry_tracker, worker_id, proxy)
                 continue
+
+            # Successful scrape - reset retry counter
+            retry_tracker.record_attempt(worker_id, success=True)
 
             partition_key = str(scraped_data.player_data.id % 10).encode("utf-8")
             await player_sc_producer.produce_one(
