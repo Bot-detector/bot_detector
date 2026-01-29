@@ -46,10 +46,14 @@ jobs:
 
       - name: docker version
         run: docker --version
-      
+
+      - name: docker buildx version
+        run: |
+          docker buildx version
+
       - name: Docker Build
         run: |
-          DOCKER_BUILDKIT=1 docker build . \
+          docker builx build . \
             --file "${{ inputs.DOCKERFILE }}" \
             ${{ inputs.BUILD_ARGS }} \
             -t "${{ inputs.REGISTRY }}:${{ steps.vars.outputs.GIT_HASH }}"\
