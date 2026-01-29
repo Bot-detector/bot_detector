@@ -40,6 +40,9 @@ jobs:
         id: vars
         run: |
           echo "GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")" >> $GITHUB_OUTPUT
+      
+      - name: docker info
+        run: docker info
 
       - name: docker version
         run: docker --version
