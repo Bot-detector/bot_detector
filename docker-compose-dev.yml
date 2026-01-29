@@ -146,6 +146,8 @@ services:
       target: dev
     networks:
       - botdetector-network
+    environment:
+      - DEBUG=1
     env_file:
       - .env
     depends_on:
