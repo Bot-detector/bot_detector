@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import os
 import time
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -28,41 +27,17 @@ from osrs.asyncio import Hiscore, HSMode
 from osrs.asyncio.osrs.hiscores import PlayerStats
 from osrs.exceptions import PlayerDoesNotExist, UnexpectedRedirection
 from osrs.utils import RateLimiter
-from prometheus_client import Counter, Histogram, start_http_server
 from pydantic import ValidationError
 
+from .metrics import (
+    error_counter,
+    latency_histogram,
+    not_found_counter,
+    success_counter,
+    total_counter,
+)
+
 logger = logging.getLogger(__name__)
-
-if os.environ.get("ENVIRONMENT") != "test":
-    start_http_server(8000)
-
-# Prometheus metrics
-total_counter = Counter(
-    name="highscore_request_count",
-    documentation="Count of request player stats fetches",
-    labelnames=["proxy"],
-)
-success_counter = Counter(
-    name="highscore_success_count",
-    documentation="Count of successful player stats fetches",
-    labelnames=["proxy"],
-)
-error_counter = Counter(
-    name="highscore_error_count",
-    documentation="Count of failed player stats fetches",
-    labelnames=["proxy"],
-)
-not_found_counter = Counter(
-    name="highscore_not_found_count",
-    documentation="Count of players not found",
-    labelnames=["proxy"],
-)
-latency_histogram = Histogram(
-    name="highscore_fetch_latency_seconds",
-    documentation="Latency of player stats fetches",
-    labelnames=["proxy"],
-    buckets=(0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0, 20.0, 30.0),
-)
 
 
 async def get_proxy(
@@ -102,8 +77,8 @@ async def scrape_player(
     except PlayerDoesNotExist:
         logger.debug(f"{player.name=} does not exist.")
         return None, None, None
-    except UnexpectedRedirection:
-        error = f"Unexpected redirection for {player.name=}."
+    except UnexpectedRedirection as e:
+        error = f"Unexpected redirection: {e}"
         # logger.error(error)
         return None, None, error
     except (
