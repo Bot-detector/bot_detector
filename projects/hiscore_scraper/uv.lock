@@ -127,19 +127,6 @@ wheels = [
 ]
 
 [[package]]
-name = "aiokafkaengine"
-version = "0.1.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "aiokafka" },
-    { name = "asyncio" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/ef/36/242c724b5f292584db0c841abf397295e4734cf048087c423ad682dd369e/aiokafkaengine-0.1.0.tar.gz", hash = "sha256:5e2c4ea2e370a2d1844708fa205dc1e87d61ca8bb52fd14aa53e5919e8135f58", size = 29078 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/12/02/81a63df5c2216ba74254c40885fe87f2680284c8d2d31664d1b7ad03af0a/aiokafkaengine-0.1.0-py3-none-any.whl", hash = "sha256:7fe7cfabf24d47d6d7c55ed1c367fefe81990f08ca331ce1bbf81ac1e0b1b644", size = 5011 },
-]
-
-[[package]]
 name = "aiosignal"
 version = "1.4.0"
 source = { registry = "https://pypi.org/simple" }
@@ -168,15 +155,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/a5/ae/136395dfbfe00dfc94da3f3e136d0b13f394cba8f4841120e34226265780/async_timeout-5.0.1.tar.gz", hash = "sha256:d9321a7a3d5a6a5e187e824d2fa0793ce379a202935782d555d6e9d2735677d3", size = 9274 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/fe/ba/e2081de779ca30d473f21f5b30e0e737c438205440784c7dfc81efc2b029/async_timeout-5.0.1-py3-none-any.whl", hash = "sha256:39e3809566ff85354557ec2398b55e096c8364bacac9405a7a1fa429e77fe76c", size = 6233 },
-]
-
-[[package]]
-name = "asyncio"
-version = "3.4.3"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/da/54/054bafaf2c0fb8473d423743e191fcdf49b2c1fd5e9af3524efbe097bafd/asyncio-3.4.3.tar.gz", hash = "sha256:83360ff8bc97980e4ff25c964c7bd3923d333d177aa4f7fb736b019f26c7cb41", size = 204411 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/22/74/07679c5b9f98a7cb0fc147b1ef1cc1853bc07a4eb9cb5731e24732c5f773/asyncio-3.4.3-py3-none-any.whl", hash = "sha256:c4d18b22701821de07bd6aea8b53d21449ec0ec5680645e5317062ea21817d2d", size = 101767 },
 ]
 
 [[package]]
@@ -333,7 +311,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
-    { name = "aiokafkaengine" },
+    { name = "aiokafka" },
     { name = "orjson" },
     { name = "osrs" },
     { name = "prometheus-client" },
@@ -344,7 +322,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "aiohttp", specifier = "==3.11.11" },
-    { name = "aiokafkaengine", specifier = "==0.1.0" },
+    { name = "aiokafka", specifier = "==0.12.0" },
     { name = "orjson", specifier = "==3.10.16" },
     { name = "osrs", specifier = "==0.0.15" },
     { name = "prometheus-client", specifier = "==0.22.0" },
