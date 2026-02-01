@@ -185,3 +185,10 @@ _opencode/.opencode/agents/*
 _opencode/.opencode/commands/*
 _opencode/.opencode/skills/*
 _opencode/.opencode/tools/*
+_opencode/.opencode/memory/*
+_opencode/src/*
+_opencode/package.json
+_opencode/bun.lock
+_opencode/tsconfig.json
+_opencode/node_modules/
+_opencode/.opencode/README.md
