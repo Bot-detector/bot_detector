@@ -30,12 +30,14 @@ WORKDIR /project
 # Create dedicated user
 RUN addgroup --gid 1000 opencode \
     && adduser --uid 1000 --gid 1000 --disabled-password --gecos "" opencode \
-    && chown -R opencode:opencode /project /home/opencode/
+    && mkdir -p /home/opencode/.local/state /home/opencode/.cache \
+    && chown -R opencode:opencode /project /home/opencode
 
 USER opencode
 
-RUN --mount=type=cache,target=/home/opencode/.bun/,uid=1000,gid=1000 \
-    bun x oh-my-opencode install --no-tui --claude=no --openai=no --gemini=no --copilot=no --opencode-zen=no --zai-coding-plan=no
+
+# RUN --mount=type=cache,target=/home/opencode/.bun/,uid=1000,gid=1000 \
+#     bun x oh-my-opencode install --no-tui --claude=no --openai=no --gemini=no --copilot=no --opencode-zen=no --zai-coding-plan=no
 
 RUN --mount=type=cache,target=/home/opencode/.bun/,uid=1000,gid=1000 \
     bun install @ast-grep/cli
