@@ -185,3 +185,5 @@ _opencode/.opencode/agents/*
 _opencode/.opencode/commands/*
 _opencode/.opencode/skills/*
 _opencode/.opencode/tools/*
+_opencode/.opencode/memory/*
+_opencode/.opencode/README.md
