@@ -13,7 +13,7 @@ dependencies = [
     "pydantic-settings==2.7.0",
     "pydantic==2.10.4",
     "sqlalchemy==2.0.44",
-    "aiokafkaengine==0.1.0",
+    "aiokafka==0.12.0",
     "orjson==3.10.16",
 ]
 
