@@ -15,13 +15,14 @@ from aiokafka import AIOKafkaConsumer, TopicPartition
 from pydantic import BaseModel, ValidationError
 
 from .batcher import Batcher
+from .consumer_interface import ConsumerInterface
 
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
 
 
-class BaseConsumer(Generic[T]):
+class BaseConsumer(Generic[T], ConsumerInterface[T]):
     """
     Generic async Kafka consumer with Pydantic validation and batching.
     """

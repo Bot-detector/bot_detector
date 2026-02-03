@@ -1,0 +1,13 @@
+from typing import Generic, Protocol, TypeVar
+
+from pydantic import BaseModel
+
+T = TypeVar("T", bound=BaseModel)
+
+
+class WorkerInterface(Protocol, Generic[T]):  # pragma: no cover
+    async def start(self) -> None: ...
+    async def stop(self) -> None: ...
+
+    async def on_message(self, message: T) -> bool: ...
+    async def on_message_batch(self, messages: list[T]) -> bool: ...

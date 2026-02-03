@@ -1,31 +1,17 @@
-from abc import ABC, abstractmethod
+from typing import Any, Generic, Optional, Protocol, TypeVar
+
+from pydantic import BaseModel
+
+T = TypeVar("T", bound=BaseModel)  # invariant by default
 
 
-class ConsumerInterface(ABC):
-    @abstractmethod
-    def __init__(self, group_id: str):
-        pass
-
-    @abstractmethod
-    async def start(self):
-        pass
-
-    @abstractmethod
-    async def stop(self):
-        pass
-
-    @abstractmethod
-    async def get_consumer(self):
-        pass
-
-    @abstractmethod
-    async def consume_one(self):
-        pass
-
-    @abstractmethod
-    async def consume_many(self):
-        pass
-
-    @abstractmethod
-    async def get_lag(self) -> int:
-        pass
+class ConsumerInterface(Protocol, Generic[T]):
+    async def start(self) -> None: ...
+    async def stop(self) -> None: ...
+    async def get_consumer(self) -> Any: ...
+    async def commit(self) -> None: ...
+    async def consume_one(self) -> tuple[Optional[T], Optional[str]]: ...
+    async def consume_many(
+        self, max_records: int, timeout_ms: int
+    ) -> tuple[list[T], list[str]]: ...
+    async def get_lag(self) -> int: ...

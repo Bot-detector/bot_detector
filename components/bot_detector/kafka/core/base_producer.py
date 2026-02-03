@@ -9,12 +9,14 @@ from aiokafka import AIOKafkaProducer
 from aiokafka.errors import KafkaTimeoutError
 from pydantic import BaseModel, ValidationError
 
+from .producer_interface import ProducerInterface
+
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
 
 
-class BaseProducer(Generic[T]):
+class BaseProducer(Generic[T], ProducerInterface[T]):
     """
     Generic async Kafka producer with Pydantic serialization and concurrency control.
     """
