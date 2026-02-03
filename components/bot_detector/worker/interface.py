@@ -5,7 +5,7 @@ from pydantic import BaseModel
 T = TypeVar("T", bound=BaseModel)
 
 
-class WorkerInterface(Protocol, Generic[T]):
+class WorkerInterface(Protocol, Generic[T]):  # pragma: no cover
     async def start(self) -> None: ...
     async def stop(self) -> None: ...
 

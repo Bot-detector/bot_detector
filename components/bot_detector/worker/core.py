@@ -12,32 +12,11 @@ T = TypeVar("T", bound=BaseModel)
 
 
 class BaseWorker(Generic[T], WorkerInterface[T]):
-    """Generic worker with minimal boilerplate and integrated logging.
+    """Generic worker with minimal boilerplate and integrated logging."""
 
-    Usage:
-        class CustomWorker(Worker[MessageStruct]):
-            async def on_message(self, message: MessageStruct) -> bool:
-                # Your business logic here
-                return True  # or False to retry
-            async def on_message_batch(self, messages: list[MessageStruct]) -> bool:
-                # Your batch business logic here
-                return True  # or False to retry
-
-        consumer = YourKafkaConsumer(...)
-        producer = YourKafkaProducer(...)
-
-        **Single message mode**
-        worker = Worker[MessageStruct](consumer, producer)
-        await worker.start()
-
-        **Batch mode**
-        worker = Worker[MessageStruct](consumer, producer, batch_processing=True, batch_size=100)
-        await worker.start()
-
-        **With custom sample ratio**
-        worker = Worker[MessageStruct](consumer, producer, sample_ratio=0.02)
-        await worker.start()
-    """
+    EMPTY_MESSAGE_SLEEP = 10
+    PRODUCE_RETRY_DELAY = 5
+    PRODUCE_MAX_RETRY = 3
 
     def __init__(
         self,
@@ -49,17 +28,6 @@ class BaseWorker(Generic[T], WorkerInterface[T]):
         wide_event: EventLoggerInterface = WideEventLogger(sample_ratio=0.1),
         logger_name: str | None = None,
     ) -> None:
-        """Initialize worker.
-
-        Args:
-            consumer: Kafka consumer for this worker
-            producer: Kafka producer for retry messages
-            max_messages: Max messages per batch from Kafka (default: 10_000)
-            max_interval_ms: Max wait interval in ms (default: 5_000)
-            batch_processing: Enable batch message processing (default: False)
-            wide_event: WideEventLogger for structured logging (default: WideEventLogger with 0.1 sample ratio)
-            logger_name: Optional logger name (default: class name)
-        """
         self._consumer = consumer
         self._producer = producer
         self._max_messages = max_messages
@@ -67,23 +35,16 @@ class BaseWorker(Generic[T], WorkerInterface[T]):
         self._batch_processing = batch_processing
         self._wide_event = wide_event
         self._logger = logging.getLogger(logger_name or self.__class__.__name__)
+        self._stop_event = asyncio.Event()
 
     async def on_message(self, message: T) -> bool:
-        """Process a single message.
-
-        Override with your business logic.
-        Returns True for success, False to retry.
-        """
+        """Override with single message logic. Return True for success."""
         return True
 
     async def on_message_batch(self, messages: list[T]) -> bool:
-        """Process a batch of messages.
-
-        Optional - only implement when batch_processing=True.
-        Returns True if all successful, False to retry.
-        """
-        for message in messages:
-            if not await self.on_message(message):
+        """Override with batch message logic. Return True if all succeed."""
+        for msg in messages:
+            if not await self.on_message(msg):
                 return False
         return True
 
@@ -93,99 +54,124 @@ class BaseWorker(Generic[T], WorkerInterface[T]):
         await self._run()
 
     async def stop(self) -> None:
+        self._stop_event.set()
         await self._consumer.stop()
         await self._producer.stop()
 
+    # ------------------------
+    # Hooks
+    # ------------------------
+    async def _consume_error_hook(self, errors: list[str]):
+        self._add_context({"error": {"consumer_errors": errors[:5]}})
+
+    async def _empty_message_hook(self):
+        self._add_context({"_run": {"status": "empty"}})
+        await asyncio.sleep(self.EMPTY_MESSAGE_SLEEP)
+
+    async def _failed_on_message_hook(self):
+        self._add_context({"_run": {"status": "failed"}})
+
+    async def _success_on_message_hook(self):
+        self._add_context({"_run": {"status": "success"}})
+
+    # ------------------------
+    # Retry logic
+    # ------------------------
+    async def _produce_failed_messages(self, batch: list[T]) -> None:
+        errors: list[str] = []
+
+        for message in batch:
+            retry_count = 0
+            while retry_count < self.PRODUCE_MAX_RETRY:
+                try:
+                    await self._producer.produce_one(message=message)
+                    break
+                except Exception as e:
+                    retry_count += 1
+                    if retry_count >= self.PRODUCE_MAX_RETRY:
+                        errors.append(str(e))
+                        break
+                    await asyncio.sleep(self.PRODUCE_RETRY_DELAY)
+
+        if errors:
+            self._add_context({"error": {"produce_failed_messages": errors[:5]}})
+
+    # ------------------------
+    # Core processing loops
+    # ------------------------
+    async def _run_one(self) -> list[T]:
+        failed: list[T] = []
+        message, consume_error = await self._consumer.consume_one()
+        if consume_error:
+            await self._consume_error_hook([consume_error])
+        if message is None:
+            await self._empty_message_hook()
+        else:
+            if await self.on_message(message):
+                await self._success_on_message_hook()
+            else:
+                failed.append(message)
+                await self._failed_on_message_hook()
+        return failed
+
+    async def _run_many(self) -> list[T]:
+        failed_messages: list[T] = []
+        batch, errors = await self._consumer.consume_many(
+            max_records=self._max_messages, timeout_ms=self._max_interval_ms
+        )
+
+        if errors:
+            await self._consume_error_hook(errors)
+
+        if not batch:
+            await self._empty_message_hook()
+            return []
+
+        self._add_context({"_run": {"batch_size": len(batch)}})
+
+        if await self.on_message_batch(batch):
+            await self._success_on_message_hook()
+        else:
+            failed_messages.extend(batch)
+            await self._failed_on_message_hook()
+
+        return failed_messages
+
     async def _run(self) -> None:
-        """Main worker loop with error-based sampling.
-
-        Uses try/finally to manage WideEventLogger context:
-        - If error key exists → always log (regardless of sample_ratio)
-        - If no error key → sample based on sample_ratio
-        """
-        while True:
-            # Set initial context (error: None by default)
+        while not self._stop_event.is_set():
             token = self._set_context(data={})
-
             try:
-                batch, errors = await self._consumer.consume_many(
-                    max_records=self._max_messages,
-                    timeout_ms=self._max_interval_ms,
-                )
-
-                if errors:
-                    self._add_context({"error": {"consumer": str(errors)}})
-
-                if not batch:
-                    await asyncio.sleep(15)
-                    continue
-
-                self._add_context({"_run": {"batch": f"received {len(batch)}"}})
-
-                failed_messages = []
                 if self._batch_processing:
-                    if not await self.on_message_batch(batch):
-                        self._add_context({"error": {"_processing": "Batch failed"}})
-                        failed_messages.extend(batch)
+                    failed_messages = await self._run_many()
                 else:
-                    for message in batch:
-                        if not await self.on_message(message):
-                            self._add_context(
-                                {"error": {"_processing": "message failed"}}
-                            )
-                            failed_messages.append(message)
-
-                await self._retry_failed_messages(failed_messages)
+                    failed_messages = await self._run_one()
+                await self._produce_failed_messages(failed_messages)
                 await self._consumer.commit()
-
-                if len(batch) < 1000:
-                    await asyncio.sleep(60)
-
             except Exception as e:
-                self._add_context({"error": {"_run": str(e)}})
+                self._add_context({"error": {"_run_exception": str(e)}})
                 await asyncio.sleep(15)
             finally:
-                # Log based on error-based sampling strategy
                 self._log()
-                # Reset context in finally to ensure cleanup
                 self._reset_context(token)
 
-    async def _retry_failed_messages(self, batch: list[T]) -> None:
-        """Retry failed messages from batch."""
-        for message in batch:
-            try:
-                await self._producer.produce_one(message=message)
-            except Exception as e:
-                self._add_context({"error": {"retry_error": str(e)}})
-        await asyncio.sleep(15)
-
+    # ------------------------
+    # WideEvent logging
+    # ------------------------
     def _set_context(self, data: dict) -> Any:
-        """Set log context for structured logging."""
         return self._wide_event.set(data)
 
     def _add_context(self, data: dict) -> None:
-        """Add to log context for structured logging."""
         self._wide_event.add(data)
 
     def _get_context(self) -> dict:
-        """Get current log context."""
         return self._wide_event.get()
 
     def _reset_context(self, token: Any) -> None:
-        """Reset log context."""
         self._wide_event.reset(token)
 
     def _log(self) -> None:
-        """Log context with error-based sampling.
-
-        Error-based sampling strategy:
-        - If 'error' key exists → always log (regardless of sample_ratio)
-        - If no 'error' key → sample based on wide_event.sample_ratio
-        """
         context = self._get_context()
         if "error" in context:
-            # Errors always logged (high priority)
             self._logger.error(context)
         elif self._wide_event.sample():
-            # Successful messages sampled (low priority)
             self._logger.info(context)

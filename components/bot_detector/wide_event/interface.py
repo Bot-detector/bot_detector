@@ -1,7 +1,7 @@
 from typing import Any, Protocol
 
 
-class EventLoggerInterface(Protocol):
+class EventLoggerInterface(Protocol):  # pragma: no cover
     """
     Manages wide event logging context across an async application.
     """
