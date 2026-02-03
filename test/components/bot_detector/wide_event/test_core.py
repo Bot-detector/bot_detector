@@ -244,7 +244,7 @@ def test_complex_nested_structure():
 def test_add_with_deeply_nested_struct():
     """Test add with deeply nested dictionary structure."""
     logger = WideEventLogger()
-    token = logger.set(
+    _ = logger.set(
         {
             "config": {
                 "database": {
