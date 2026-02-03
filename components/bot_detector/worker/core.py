@@ -3,7 +3,7 @@ import logging
 from typing import Any, Generic, TypeVar
 
 from bot_detector.kafka import ConsumerInterface, ProducerInterface
-from bot_detector.wide_event import WideEventLogger
+from bot_detector.wide_event import EventLoggerInterface, WideEventLogger
 from pydantic import BaseModel
 
 from .interface import WorkerInterface
@@ -26,15 +26,15 @@ class BaseWorker(Generic[T], WorkerInterface[T]):
         consumer = YourKafkaConsumer(...)
         producer = YourKafkaProducer(...)
 
-        # Single message mode
+        **Single message mode**
         worker = Worker[MessageStruct](consumer, producer)
         await worker.start()
 
-        # Batch mode
+        **Batch mode**
         worker = Worker[MessageStruct](consumer, producer, batch_processing=True, batch_size=100)
         await worker.start()
 
-        # With custom sample ratio
+        **With custom sample ratio**
         worker = Worker[MessageStruct](consumer, producer, sample_ratio=0.02)
         await worker.start()
     """
@@ -46,8 +46,8 @@ class BaseWorker(Generic[T], WorkerInterface[T]):
         max_messages: int = 10_000,
         max_interval_ms: int = 5_000,
         batch_processing: bool = False,
-        batch_size: int = 1,
-        sample_ratio: float = 0.01,
+        wide_event: EventLoggerInterface = WideEventLogger(sample_ratio=0.1),
+        logger_name: str | None = None,
     ) -> None:
         """Initialize worker.
 
@@ -57,18 +57,16 @@ class BaseWorker(Generic[T], WorkerInterface[T]):
             max_messages: Max messages per batch from Kafka (default: 10_000)
             max_interval_ms: Max wait interval in ms (default: 5_000)
             batch_processing: Enable batch message processing (default: False)
-            batch_size: Number of messages per batch when batch_processing=True (default: 1)
-            sample_ratio: Sample ratio for successful messages (default: 0.01 = 1%)
+            wide_event: WideEventLogger for structured logging (default: WideEventLogger with 0.1 sample ratio)
+            logger_name: Optional logger name (default: class name)
         """
         self._consumer = consumer
         self._producer = producer
         self._max_messages = max_messages
         self._max_interval_ms = max_interval_ms
         self._batch_processing = batch_processing
-        self._batch_size = batch_size
-        self._sample_ratio = sample_ratio
-        self._wide_event = WideEventLogger(sample_ratio=sample_ratio)
-        self._logger = logging.getLogger(self.__class__.__name__)
+        self._wide_event = wide_event
+        self._logger = logging.getLogger(logger_name or self.__class__.__name__)
 
     async def on_message(self, message: T) -> bool:
         """Process a single message.

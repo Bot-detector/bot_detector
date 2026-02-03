@@ -1,15 +1,11 @@
-from typing import Generic, Protocol, TypeVar, runtime_checkable
+from typing import Generic, Protocol, TypeVar
 
 from pydantic import BaseModel
 
 T = TypeVar("T", bound=BaseModel)
 
 
-@runtime_checkable
 class WorkerInterface(Protocol, Generic[T]):
-    """Protocol for worker implementations."""
-    __slots__ = ()
-
     async def start(self) -> None: ...
     async def stop(self) -> None: ...
 
