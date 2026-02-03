@@ -1,52 +1,49 @@
 FROM python:3.12-slim-bookworm AS base
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    sqlite3 \
-    libatomic1 \
-    && rm -rf /var/lib/apt/lists/*
+# Create dedicated user with home directory
+RUN addgroup --gid 1000 opencode \
+    && adduser --uid 1000 --gid 1000 --disabled-password --gecos "" --home /home/opencode opencode \
+    && mkdir -p /home/opencode \
+    && chown -R opencode:opencode /home/opencode
 
-FROM base AS base_installer
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl unzip \
-    && rm -rf /var/lib/apt/lists/*
-
-# install opencode
-FROM base_installer AS opencode_installer
-RUN curl -fsSL https://opencode.ai/install | bash
+ENV HOME=/home/opencode
+WORKDIR /home/opencode
 
 FROM base AS final
 
-# Copy all binaries
-COPY --from=ghcr.io/astral-sh/uv:0.5.4 /uv /uvx /bin/
-COPY --from=oven/bun:debian /usr/local/bin/bun /usr/local/bin/
-COPY --from=opencode_installer /root/.opencode/bin/opencode /usr/local/bin/
-
-# Set up PATH
-ENV PATH=/usr/local/bin:/home/opencode/.local/bin:$PATH
-
-WORKDIR /project
-
-# Create dedicated user
-RUN addgroup --gid 1000 opencode \
-    && adduser --uid 1000 --gid 1000 --disabled-password --gecos "" opencode \
-    && mkdir -p /home/opencode/.local/state /home/opencode/.cache \
-    && chown -R opencode:opencode /project /home/opencode
-
 USER opencode
 
+# Ensure necessary directories exist
+RUN mkdir -p $HOME/.local/bin $HOME/.bun/bin $HOME/.local/state
 
-# RUN --mount=type=cache,target=/home/opencode/.bun/,uid=1000,gid=1000 \
-#     bun x oh-my-opencode install --no-tui --claude=no --openai=no --gemini=no --copilot=no --opencode-zen=no --zai-coding-plan=no
+# Ensure full XDG directory structure for uv / uvx
+RUN mkdir -p \
+    $HOME/.local/bin \
+    $HOME/.local/share/uv \
+    $HOME/.local/state \
+    $HOME/.cache \
+    && chown -R opencode:opencode $HOME/.local $HOME/.cache
 
-RUN --mount=type=cache,target=/home/opencode/.bun/,uid=1000,gid=1000 \
-    bun install @ast-grep/cli
+# Copy prebuilt binaries
+COPY --from=ghcr.io/astral-sh/uv:0.5.4 /uv /uvx $HOME/.local/bin/
+COPY --from=oven/bun:debian /usr/local/bin/bun $HOME/.local/bin/
 
+# Set PATH
+ENV PATH=$HOME/.local/bin:$HOME/.bun/bin:$PATH
+ENV OPENCODE_DISABLE_AUTOUPDATE=1
+
+# Install global Bun packages (no cache, binaries persist)
+RUN bun add -g opencode-ai@1.1.9 @ast-grep/cli
+
+WORKDIR /home/opencode/project
+
+# Copy project dependency files
 COPY pyproject.toml pyproject.toml
 COPY uv.lock uv.lock
 
-RUN --mount=type=cache,target=/home/opencode/.cache/uv,uid=1000,gid=1000 \
+# Sync Python project dependencies with cache
+RUN --mount=type=cache,target=$HOME/.cache/uv,uid=1000,gid=1000 \
     uv sync --no-install-project
 
-# CMD ["sleep", "infinity"] 
+# CMD ["sleep", "infinity"]
 ENTRYPOINT ["opencode"]
