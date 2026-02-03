@@ -2,14 +2,16 @@ import asyncio
 import logging
 from typing import Any, Generic, TypeVar
 
-from bot_detector.kafka import BaseConsumer, BaseProducer
+from bot_detector.kafka import ConsumerInterface, ProducerInterface
 from bot_detector.wide_event import WideEventLogger
 from pydantic import BaseModel
+
+from .interface import WorkerInterface
 
 T = TypeVar("T", bound=BaseModel)
 
 
-class BaseWorker(Generic[T]):
+class BaseWorker(Generic[T], WorkerInterface[T]):
     """Generic worker with minimal boilerplate and integrated logging.
 
     Usage:
@@ -39,8 +41,8 @@ class BaseWorker(Generic[T]):
 
     def __init__(
         self,
-        consumer: BaseConsumer[T],
-        producer: BaseProducer[T],
+        consumer: ConsumerInterface[T],
+        producer: ProducerInterface[T],
         max_messages: int = 10_000,
         max_interval_ms: int = 5_000,
         batch_processing: bool = False,
