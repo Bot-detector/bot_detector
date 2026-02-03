@@ -14,7 +14,7 @@ dependencies = [
     "sqlalchemy==2.0.44",
     "uvicorn==0.34.2",
     "asyncmy==0.2.11",
-    "orjson==3.10.16",
+    "orjson==3.11.5",
     "prometheus-client==0.22.0",
 ]
 
