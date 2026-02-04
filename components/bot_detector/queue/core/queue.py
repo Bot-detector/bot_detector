@@ -61,7 +61,7 @@ class QueueConsumer(Generic[T]):
         return await self._backend.get_many(count)
 
 
-class Queue(Generic[T]):
+class Queue(QueueConsumer[T], QueueProducer[T], Generic[T]):
     """
     High-level Queue class used by the application.
     It relies on Dependency Injection to get the specific backend.
@@ -77,20 +77,3 @@ class Queue(Generic[T]):
 
     def __init__(self, backend: QueueBackendProtocol):
         self._backend = backend
-
-    async def start(self):
-        print("Queue: Starting backend service...")
-        await self._backend.start()
-
-    async def stop(self):
-        print("Queue: Stopping backend service...")
-        await self._backend.stop()
-
-    async def put(self, message: list[T]):
-        await self._backend.put(message)
-
-    async def get_one(self) -> Optional[T] | Exception:
-        return await self._backend.get_one()
-
-    async def get_many(self, count: int) -> list[T] | Exception:
-        return await self._backend.get_many(count)

@@ -116,13 +116,15 @@ class AIOKafkaConsumerAdapter(_AIOKafkaProducerBase[T], QueueBackendConsumerProt
             await self.consumer.stop()
 
     async def get_one(self) -> Optional[T] | Exception:
-        assert self.consumer, "consumer can't be None"
+        if self.consumer is None:
+            return Exception("Consumer is None, did you start the consumer?")
         try:
             record = await self.consumer.getone()
         except Exception as e:
             return e
 
-        return self._validate(record=record)
+        message = self._validate(record=record)
+        return message
 
     async def get_many(self, count: int) -> list[T] | Exception:
         if self.consumer is None:
@@ -159,6 +161,11 @@ class AIOKafkaConsumerAdapter(_AIOKafkaProducerBase[T], QueueBackendConsumerProt
                         return _record
                     batcher.append(_record, auto=False)
         return batcher.flush()
+
+    async def commit(self) -> Optional[Exception]:
+        if self.consumer is None:
+            return Exception("Consumer is None, did you start the consumer?")
+        await self.consumer.commit()
 
 
 class AIOKafkaAdapter(Generic[T], QueueBackendProtocol):

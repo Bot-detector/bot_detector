@@ -8,7 +8,7 @@ T = TypeVar("T", bound=BaseModel)
 class KafkaConsumerConfig(BaseModel):
     group_id: str
     auto_offset_reset: str = "earliest"
-    enable_auto_commit: bool = True
+    enable_auto_commit: bool = False
     consume_timeout_ms: int
 
 

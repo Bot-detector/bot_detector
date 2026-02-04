@@ -17,7 +17,7 @@ T = TypeVar("T", bound=BaseModel)
 class _InMemoryBase(Generic[T]):
     def __init__(self, cls: Type[T], config: InMemoryConfig):
         self.cls = cls
-        self._queue: asyncio.Queue[T] = asyncio.Queue(config.maxsize)
+        self._queue = asyncio.Queue(config.maxsize)
         self.logger = logging.getLogger(cls.__name__)
 
     async def start(self) -> None:
@@ -55,6 +55,9 @@ class InMemoryConsumerAdapter(_InMemoryBase[T], QueueBackendConsumerProtocol):
             except asyncio.QueueEmpty:
                 break
         return results
+
+    async def commit(self) -> Optional[Exception]:
+        self._queue.task_done()
 
 
 class InMemoryProducerAdapter(_InMemoryBase[T], QueueBackendProducerProtocol):

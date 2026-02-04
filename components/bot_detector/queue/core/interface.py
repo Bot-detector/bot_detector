@@ -32,6 +32,8 @@ class QueueBackendConsumerProtocol(Generic[T], Protocol):
 
     async def get_many(self, count: int) -> list[T] | Exception: ...
 
+    async def commit(self) -> Optional[Exception]: ...
+
 
 class QueueBackendProtocol(
     QueueBackendProducerProtocol[T],
