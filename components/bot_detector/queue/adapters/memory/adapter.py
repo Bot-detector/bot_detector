@@ -1,20 +1,17 @@
 import asyncio
 import logging
-from typing import Generic, List, Optional, Type, TypeVar
+from typing import Generic, Optional, Type, TypeVar
 
-from pydantic import BaseModel, ValidationError
-
-from .interface import (
+from bot_detector.queue.core.interface import (
     QueueBackendConsumerProtocol,
     QueueBackendProducerProtocol,
     QueueBackendProtocol,
 )
+from pydantic import BaseModel, ValidationError
+
+from .config import InMemoryConfig
 
 T = TypeVar("T", bound=BaseModel)
-
-
-class InMemoryConfig(BaseModel):
-    maxsize: int = 100
 
 
 class _InMemoryBase(Generic[T]):
@@ -39,7 +36,6 @@ class _InMemoryBase(Generic[T]):
             return None
 
 
-# Consumer adapter
 class InMemoryConsumerAdapter(_InMemoryBase[T], QueueBackendConsumerProtocol):
     async def get_one(self) -> Optional[T]:
         try:
@@ -48,7 +44,7 @@ class InMemoryConsumerAdapter(_InMemoryBase[T], QueueBackendConsumerProtocol):
         except asyncio.QueueEmpty:
             return None
 
-    async def get_many(self, count: int) -> List[T]:
+    async def get_many(self, count: int) -> list[T]:
         results = []
         for _ in range(count):
             try:
@@ -61,14 +57,12 @@ class InMemoryConsumerAdapter(_InMemoryBase[T], QueueBackendConsumerProtocol):
         return results
 
 
-# Producer adapter
 class InMemoryProducerAdapter(_InMemoryBase[T], QueueBackendProducerProtocol):
-    async def put(self, messages: List[T]) -> None:
+    async def put(self, messages: list[T]) -> None:
         for message in messages:
             await self._queue.put(message)
 
 
-# Full adapter using composition
 class InMemoryAdapter(Generic[T], QueueBackendProtocol):
     def __init__(
         self,
@@ -91,11 +85,11 @@ class InMemoryAdapter(Generic[T], QueueBackendProtocol):
         await self.producer.stop()
         await self.consumer.stop()
 
-    async def put(self, messages: List[T]) -> None:
+    async def put(self, messages: list[T]) -> None:
         await self.producer.put(messages)
 
     async def get_one(self) -> Optional[T]:
         return await self.consumer.get_one()
 
-    async def get_many(self, count: int) -> List[T]:
+    async def get_many(self, count: int) -> list[T]:
         return await self.consumer.get_many(count)
