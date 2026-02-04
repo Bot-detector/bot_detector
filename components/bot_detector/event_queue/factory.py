@@ -1,7 +1,7 @@
 # Backend adapters
 from typing import Any, Literal, Type, TypeVar
 
-from bot_detector.queue.core import (
+from bot_detector.event_queue.core import (
     Queue,
     QueueConsumer,
     QueueProducer,
@@ -22,7 +22,7 @@ class QueueFactory:
         # Backend selection
         adapter = None
         if backend_type == "memory":
-            from bot_detector.queue.adapters.memory import (
+            from bot_detector.event_queue.adapters.memory import (
                 InMemoryAdapter,
                 InMemoryConfig,
                 InMemoryConsumerAdapter,

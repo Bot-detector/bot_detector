@@ -5,8 +5,8 @@ from typing import Generic, Optional, TypeVar
 import orjson
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer, ConsumerRecord
 from aiokafka.errors import KafkaTimeoutError
-from bot_detector.queue.core.batcher import Batcher
-from bot_detector.queue.core.interface import (
+from bot_detector.event_queue.core.batcher import Batcher
+from bot_detector.event_queue.core.interface import (
     QueueBackendConsumerProtocol,
     QueueBackendProducerProtocol,
     QueueBackendProtocol,
@@ -38,7 +38,9 @@ class _AIOKafkaProducerBase(Generic[T]):
             return ve
 
 
-class AIOKafkaProducerAdapter(_AIOKafkaProducerBase[T], QueueBackendProducerProtocol):
+class AIOKafkaProducerAdapter(
+    _AIOKafkaProducerBase[T], QueueBackendProducerProtocol[T]
+):
     """
     Adapts the aiokafka library to the QueueBackendProtocol.
     Manages both a Producer and a Consumer internally.
@@ -88,7 +90,9 @@ class AIOKafkaProducerAdapter(_AIOKafkaProducerBase[T], QueueBackendProducerProt
                         return e
 
 
-class AIOKafkaConsumerAdapter(_AIOKafkaProducerBase[T], QueueBackendConsumerProtocol):
+class AIOKafkaConsumerAdapter(
+    _AIOKafkaProducerBase[T], QueueBackendConsumerProtocol[T]
+):
     """
     Adapts the aiokafka library to the QueueBackendProtocol.
     Manages both a Producer and a Consumer internally.
@@ -168,7 +172,7 @@ class AIOKafkaConsumerAdapter(_AIOKafkaProducerBase[T], QueueBackendConsumerProt
         await self.consumer.commit()
 
 
-class AIOKafkaAdapter(Generic[T], QueueBackendProtocol):
+class AIOKafkaAdapter(QueueBackendProtocol[T]):
     """
     Adapts the aiokafka library to the QueueBackendProtocol.
     Manages both a Producer and a Consumer internally.

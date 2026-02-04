@@ -9,7 +9,7 @@ class KafkaConsumerConfig(BaseModel):
     group_id: str
     auto_offset_reset: str = "earliest"
     enable_auto_commit: bool = False
-    consume_timeout_ms: int
+    consume_timeout_ms: int = 5_000
 
 
 class KafkaProducerConfig(BaseModel):
@@ -30,6 +30,6 @@ class KafkaConfig(BaseModel):
     def check_config(self):
         if self.consumer and self.consumer_config is None:
             raise ValueError("consumer cannot be True when consumer_config is None")
-        if self.producer and self.consumer_config is None:
+        if self.producer and self.producer_config is None:
             raise ValueError("producer cannot be True when producer_config is None")
         return self

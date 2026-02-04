@@ -61,7 +61,7 @@ class QueueConsumer(Generic[T]):
         return await self._backend.get_many(count)
 
 
-class Queue(QueueConsumer[T], QueueProducer[T], Generic[T]):
+class Queue(QueueConsumer[T], QueueProducer[T]):
     """
     High-level Queue class used by the application.
     It relies on Dependency Injection to get the specific backend.

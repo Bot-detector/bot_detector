@@ -1,9 +1,9 @@
+from .event_queue import Queue, QueueConsumer, QueueProducer
 from .interface import (
     QueueBackendConsumerProtocol,
     QueueBackendProducerProtocol,
     QueueBackendProtocol,
 )
-from .queue import Queue, QueueConsumer, QueueProducer
 
 __all__ = [
     "QueueBackendConsumerProtocol",

@@ -1,10 +1,13 @@
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
-from bot_detector.queue.adapters.kafka import (
+from aiokafka.errors import KafkaTimeoutError
+from bot_detector.event_queue.adapters.kafka import (
     AIOKafkaConsumerAdapter,
     AIOKafkaProducerAdapter,
     KafkaConfig,
+    KafkaConsumerConfig,
+    KafkaProducerConfig,
 )
 from pydantic import BaseModel
 
@@ -22,18 +25,23 @@ async def test_producer_put_retries():
         consumer=False,
         producer=True,
         consumer_config=None,
-        producer_config=None,
+        producer_config=KafkaProducerConfig(partition_key_fn=lambda: 1),
     )
+
     adapter = AIOKafkaProducerAdapter(PlayerScraped, config)
 
-    # Patch producer.send to fail the first time, then succeed
-    mock_send = AsyncMock(side_effect=[Exception("fail"), None])
-    adapter.producer = AsyncMock()
-    adapter.producer.send = mock_send
+    # Patch AIOKafkaProducer in the adapter to prevent real network calls
+    with patch(
+        "bot_detector.event_queue.adapters.kafka.adapter.AIOKafkaProducer"
+    ) as MockProducer:
+        mock_producer = MockProducer.return_value
+        mock_producer.start = AsyncMock()
+        mock_producer.send = AsyncMock(side_effect=[KafkaTimeoutError("fail"), None])
+        mock_producer.stop = AsyncMock()
 
-    await adapter.start()
-    await adapter.put([PlayerScraped(username="Alice", score=100)])
-    assert mock_send.call_count == 2
+        await adapter.start()  # now uses the mock, no network call
+        await adapter.put([PlayerScraped(username="Alice", score=100)])
+        assert mock_producer.send.call_count == 2
 
 
 @pytest.mark.asyncio
@@ -41,9 +49,9 @@ async def test_consumer_get_one_validation():
     config = KafkaConfig(
         topic="",
         bootstrap_servers="",
-        consumer=False,
-        producer=True,
-        consumer_config=None,
+        consumer=True,
+        producer=False,
+        consumer_config=KafkaConsumerConfig(group_id=""),
         producer_config=None,
     )
     adapter = AIOKafkaConsumerAdapter(PlayerScraped, config)

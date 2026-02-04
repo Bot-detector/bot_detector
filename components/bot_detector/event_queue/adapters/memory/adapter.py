@@ -2,7 +2,7 @@ import asyncio
 import logging
 from typing import Generic, Optional, Type, TypeVar
 
-from bot_detector.queue.core.interface import (
+from bot_detector.event_queue.core.interface import (
     QueueBackendConsumerProtocol,
     QueueBackendProducerProtocol,
     QueueBackendProtocol,
