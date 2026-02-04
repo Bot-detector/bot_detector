@@ -118,7 +118,7 @@ flowchart TD
         ReportWorker --> MySQL[(MySQL)]
     end
 ```
-# intersting commands
+# interesting commands
 ```sh
 find . -type f -name "pyproject.toml" -not -path "*/.venv/*" -execdir sh -c 'echo "🔄 Updating lock in $(pwd)"; uv lock' \;
 ```
