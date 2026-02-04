@@ -20,6 +20,7 @@ dependencies = [
     "website",
     "job_hs_migration_v3",
     "job_prune_hs_data",
+    "pytest-asyncio>=0.25.0",
 ]
 
 [dependency-groups]

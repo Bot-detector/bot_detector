@@ -96,3 +96,6 @@ class InMemoryAdapter(Generic[T], QueueBackendProtocol):
 
     async def get_many(self, count: int) -> list[T]:
         return await self.consumer.get_many(count)
+
+    async def commit(self) -> Optional[Exception]:
+        return await self.consumer.commit()

@@ -199,3 +199,6 @@ class AIOKafkaAdapter(Generic[T], QueueBackendProtocol):
 
     async def get_many(self, count: int) -> list[T] | Exception:
         return await self.consumer.get_many(count)
+
+    async def commit(self) -> Optional[Exception]:
+        await self.consumer.commit()
