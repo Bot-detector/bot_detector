@@ -11,13 +11,16 @@ from pydantic import BaseModel
 T = TypeVar("T", bound=BaseModel)
 
 
+class InvalidConfig(Exception): ...
+
+
 class QueueFactory:
     @staticmethod
     def create_queue(
         model: Type[T],
         queue_type: Literal["queue", "producer", "consumer"],
         backend_type: Literal["memory", "kafka"],
-        config: dict | Any,
+        config: Any,
     ) -> Queue[T] | QueueProducer[T] | QueueConsumer[T] | Exception:
         # Backend selection
         adapter = None
@@ -29,15 +32,15 @@ class QueueFactory:
                 InMemoryProducerAdapter,
             )
 
-            if isinstance(config, dict):
-                _config = InMemoryConfig.model_validate(config)
-            elif isinstance(config, InMemoryConfig):
-                _config = config
+            if not isinstance(config, InMemoryConfig):
+                InvalidConfig(
+                    f"Expected config of type: InMemoryConfig but received: {type(config)}"
+                )
 
             adapter = {
-                "producer": InMemoryProducerAdapter[model](model, config=_config),
-                "consumer": InMemoryConsumerAdapter[model](model, config=_config),
-                "queue": InMemoryAdapter[model](model, config=_config),
+                "producer": InMemoryProducerAdapter[model](cls=model, config=config),
+                "consumer": InMemoryConsumerAdapter[model](cls=model, config=config),
+                "queue": InMemoryAdapter[model](cls=model, config=config),
             }[queue_type]
 
         if adapter is None:
