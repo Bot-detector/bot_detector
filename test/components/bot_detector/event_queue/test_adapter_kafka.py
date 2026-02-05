@@ -112,14 +112,13 @@ async def test_producer_batch_messages():
 
 @pytest.mark.asyncio
 async def test_producer_custom_partition_key():
-    partition_key_fn = lambda: "1"
     config = KafkaConfig(
         topic="players",
         bootstrap_servers="localhost:9092",
         consumer=False,
         producer=True,
         consumer_config=None,
-        producer_config=KafkaProducerConfig(partition_key_fn=partition_key_fn),
+        producer_config=KafkaProducerConfig(partition_key_fn=lambda: "1"),
     )
     adapter = AIOKafkaProducerAdapter(PlayerScraped, config)
 
@@ -235,6 +234,7 @@ async def test_consumer_get_batch():
     )
 
     result = await adapter.get_many(2)
+    assert not isinstance(result, Exception)
     assert [item.username for item in result] == ["Alice", "Bob"]
 
 
@@ -260,7 +260,8 @@ async def test_consumer_multiple_messages():
 
     first = await adapter.get_one()
     second = await adapter.get_one()
-
+    assert isinstance(first, PlayerScraped)
+    assert isinstance(second, PlayerScraped)
     assert first.username == "Alice"
     assert second.username == "Bob"
 
