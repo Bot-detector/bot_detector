@@ -11,9 +11,11 @@ from bot_detector.event_queue.adapters.kafka import (
     KafkaProducerConfig,
 )
 from bot_detector.event_queue.core.errors import (
+    ConsumerConfigError,
     ConsumerFetchError,
     ConsumerNotStartedError,
     MessageTypeError,
+    ProducerConfigError,
     ProducerNotStartedError,
 )
 from pydantic import BaseModel
@@ -372,3 +374,115 @@ async def test_consumer_invalid_message_type():
     result = await adapter.get_one()
 
     assert isinstance(result, MessageTypeError)
+
+
+@pytest.mark.asyncio
+async def test_producer_put_without_config():
+    config = KafkaConfig(
+        topic="players",
+        bootstrap_servers="localhost:9092",
+        consumer=False,
+        producer=True,
+        consumer_config=None,
+        producer_config=None,
+    )
+    adapter = AIOKafkaProducerAdapter(PlayerScraped, config)
+    adapter.producer = AsyncMock()
+
+    result = await adapter.put([PlayerScraped(id=1, username="Alice", score=100)])
+
+    assert isinstance(result, ProducerConfigError)
+
+
+@pytest.mark.asyncio
+async def test_consumer_get_many_without_config():
+    config = KafkaConfig(
+        topic="players",
+        bootstrap_servers="localhost:9092",
+        consumer=True,
+        producer=False,
+        consumer_config=None,
+        producer_config=None,
+    )
+    adapter = AIOKafkaConsumerAdapter(PlayerScraped, config)
+    adapter.consumer = AsyncMock()
+
+    result = await adapter.get_many(1)
+
+    assert isinstance(result, ConsumerConfigError)
+
+
+@pytest.mark.asyncio
+async def test_consumer_start_without_config():
+    config = KafkaConfig(
+        topic="players",
+        bootstrap_servers="localhost:9092",
+        consumer=True,
+        producer=False,
+        consumer_config=None,
+        producer_config=None,
+    )
+    adapter = AIOKafkaConsumerAdapter(PlayerScraped, config)
+
+    with pytest.raises(ConsumerConfigError):
+        await adapter.start()
+
+
+@pytest.mark.asyncio
+async def test_consumer_get_many_connection_error():
+    config = KafkaConfig(
+        topic="players",
+        bootstrap_servers="localhost:9092",
+        consumer=True,
+        producer=False,
+        consumer_config=KafkaConsumerConfig(group_id="group"),
+        producer_config=None,
+    )
+    adapter = AIOKafkaConsumerAdapter(PlayerScraped, config)
+    adapter.consumer = AsyncMock()
+    adapter.consumer.getmany = AsyncMock(side_effect=Exception("boom"))
+
+    result = await adapter.get_many(1)
+
+    assert isinstance(result, ConsumerFetchError)
+    assert isinstance(result.cause, Exception)
+
+
+@pytest.mark.asyncio
+async def test_consumer_get_many_invalid_message_type():
+    config = KafkaConfig(
+        topic="players",
+        bootstrap_servers="localhost:9092",
+        consumer=True,
+        producer=False,
+        consumer_config=KafkaConsumerConfig(group_id="group"),
+        producer_config=None,
+    )
+    adapter = AIOKafkaConsumerAdapter(PlayerScraped, config)
+
+    fake_record = AsyncMock()
+    fake_record.value = "not-a-dict"
+
+    adapter.consumer = AsyncMock()
+    adapter.consumer.getmany = AsyncMock(return_value={0: [fake_record]})
+
+    result = await adapter.get_many(1)
+
+    assert isinstance(result, MessageTypeError)
+
+
+@pytest.mark.asyncio
+async def test_consumer_commit_without_start():
+    config = KafkaConfig(
+        topic="players",
+        bootstrap_servers="localhost:9092",
+        consumer=True,
+        producer=False,
+        consumer_config=KafkaConsumerConfig(group_id="group"),
+        producer_config=None,
+    )
+    adapter = AIOKafkaConsumerAdapter(PlayerScraped, config)
+
+    result = await adapter.commit()
+
+    assert isinstance(result, ConsumerNotStartedError)
