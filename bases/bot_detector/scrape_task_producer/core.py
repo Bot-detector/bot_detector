@@ -6,13 +6,12 @@ from datetime import date, datetime, time, timedelta
 from bot_detector.database import Settings as DBSettings
 from bot_detector.database import get_session_factory
 from bot_detector.database.player import PlayerRepo
-from bot_detector.kafka import (
-    PlayersToScrapeConsumer,
-    PlayersToScrapeProducer,
-    ToScrapeStruct,
-)
 from bot_detector.kafka import Settings as KafkaSettings
 from bot_detector.structs import MetaData, PlayerStruct
+from bot_detector.event_queue.adapters.kafka import KafkaConfig, KafkaProducerConfig
+from bot_detector.event_queue.core import QueueProducer
+from bot_detector.event_queue.factory import QueueFactory
+from bot_detector.kafka import ToScrapeStruct
 from pydantic_settings import BaseSettings
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from typing_extensions import Literal
@@ -37,39 +36,59 @@ class FetchParams:
     done: bool = False
 
     def __post_init__(self):
-        self.first_date = date.today() - timedelta(days=365)
-        self.last_date = date.today() - timedelta(days=self.days - 1)
+        self._update_step_flags()
+        self.update_date(days=self.days, infinity=False)
 
-    def update_date(self, days, infinity: bool = False):
+    def update_date(self, days: int, infinity: bool = False) -> None:
         self.days = days
-
         delta = timedelta(days=365) if infinity else timedelta(days=self.days)
         self.first_date = date.today() - delta
         self.last_date = date.today() - timedelta(days=self.days - 1)
         assert self.first_date < self.last_date
 
+    def _update_step_flags(self) -> None:
+        match self.step:
+            case "normal":
+                self.possible_ban = False
+                self.confirmed_ban = False
+            case "possible_ban":
+                self.possible_ban = True
+                self.confirmed_ban = False
+            case "confirmed_ban":
+                self.possible_ban = True
+                self.confirmed_ban = True
+            case _:
+                raise ValueError(f"Invalid step: {self.step}")
+
+    def set_step(self, step: Literal["normal", "possible_ban", "confirmed_ban"]) -> None:
+        self.step = step
+        self._update_step_flags()
+
+    def reset_for_new_day(self, max_days: int) -> None:
+        self.set_step("normal")
+        self.update_date(days=max_days, infinity=True)
+        self.player_id = 0
+
 
 async def produce_players(
     players: list[PlayerStruct],
-    player_producer: PlayersToScrapeProducer,
+    player_producer: QueueProducer[ToScrapeStruct],
 ):
+    if not players:
+        return
+
     logger.info(f"Putting {len(players)} players in queue")
+    metadata = MetaData(version=1, source="scrape_task_producer")
     player_structs = [
-        ToScrapeStruct(
-            metadata=MetaData(version=1, source="scrape_task_producer"),
-            player_data=player,
-        )
+        ToScrapeStruct(metadata=metadata, player_data=player)
         for player in players
         if len(player.name) <= 13
     ]
-
-    for player in player_structs:
-        await player_producer.produce_one(
-            ToScrapeStruct(
-                metadata=MetaData(version=1, source="scrape_task_producer"),
-                player_data=player.player_data,
-            )
-        )
+    if not player_structs:
+        return
+    error = await player_producer.put(player_structs)
+    if isinstance(error, Exception):
+        raise error
 
 
 def _reduce_days(fetch_params: FetchParams) -> FetchParams:
@@ -78,24 +97,6 @@ def _reduce_days(fetch_params: FetchParams) -> FetchParams:
     fetch_params.update_date(days=_days)
     fetch_params.player_id = 0
     return fetch_params
-
-
-def _update_ban_flags(fetch_params: FetchParams) -> FetchParams:
-    match fetch_params.step:
-        case "normal":
-            fetch_params.possible_ban = False
-            fetch_params.confirmed_ban = False
-            return fetch_params
-        case "possible_ban":
-            fetch_params.possible_ban = True
-            fetch_params.confirmed_ban = False
-            return fetch_params
-        case "confirmed_ban":
-            fetch_params.possible_ban = True
-            fetch_params.confirmed_ban = True
-            return fetch_params
-        case _:
-            raise ValueError(f"Invalid step: {fetch_params.step}")
 
 
 def determine_fetch_params(
@@ -108,45 +109,40 @@ def determine_fetch_params(
     if players is None:
         return fetch_params
 
+    fetch_params._update_step_flags()
+
     if len(players) >= fetch_params.limit:
-        fetch_params = _update_ban_flags(fetch_params)
         fetch_params.player_id = players[-1].id
         return fetch_params
 
     match fetch_params.step:
         case "normal":
-            fetch_params = _update_ban_flags(fetch_params)
-
             if fetch_params.days > 1:
                 return _reduce_days(fetch_params)
 
             assert fetch_params.days <= 1
             logger.info("All normal scraped, going to step: possible bans")
-            fetch_params.step = "possible_ban"
+            fetch_params.set_step("possible_ban")
             fetch_params.update_date(days=max_days, infinity=True)
             return fetch_params
 
         case "possible_ban":
-            fetch_params = _update_ban_flags(fetch_params)
-
             if fetch_params.days > max_possible_ban_days:
                 return _reduce_days(fetch_params)
 
             assert fetch_params.days <= max_possible_ban_days
             logger.info("All possible bans scraped, going to step: confirmed bans")
-            fetch_params.step = "confirmed_ban"
+            fetch_params.set_step("confirmed_ban")
             fetch_params.update_date(days=max_days, infinity=True)
             return fetch_params
 
         case "confirmed_ban":
-            fetch_params = _update_ban_flags(fetch_params)
-
             if fetch_params.days > max_confirmed_ban_days:
                 return _reduce_days(fetch_params)
 
             assert fetch_params.days <= max_confirmed_ban_days
             logger.info("All confirmed bans scraped, going to step: normal")
-            fetch_params.step = "normal"
+            fetch_params.set_step("normal")
             fetch_params.update_date(days=max_days, infinity=True)
             fetch_params.done = True
             return fetch_params
@@ -155,8 +151,7 @@ def determine_fetch_params(
 async def process_players(
     async_session: async_sessionmaker[AsyncSession],
     player_repo: PlayerRepo,
-    player_producer: PlayersToScrapeProducer,
-    player_consumer: PlayersToScrapeConsumer,
+    player_producer: QueueProducer[ToScrapeStruct],
     limit: int = 10,
 ):
     max_days = 20
@@ -170,20 +165,10 @@ async def process_players(
     last_day = date.today()
 
     while True:
-        lag = await player_consumer.get_lag()
-
         if last_day != date.today():
             logger.info("New day detected, resetting days and confirmed_ban")
             last_day = date.today()
-            fp.days = max_days
-            fp.confirmed_ban = False
-            fp.possible_ban = False
-            fp.player_id = 0
-
-        if lag >= 100_000:
-            logger.info(f"{lag=} to high, sleeping(10)")
-            await asyncio.sleep(10)
-            continue
+            fp.reset_for_new_day(max_days)
 
         logger.info(f"{asdict(fp)}")
 
@@ -223,26 +208,37 @@ async def main():
     async_session, async_engine = get_session_factory(SETTINGS=DBSettings())
 
     bootstrap_servers = KafkaSettings().KAFKA_BOOTSTRAP_SERVERS
-    player_producer = PlayersToScrapeProducer(bootstrap_servers=bootstrap_servers)
-    player_consumer = PlayersToScrapeConsumer(
-        bootstrap_servers=bootstrap_servers, group_id="scraper"
+    queue = QueueFactory.create_queue(
+        model=ToScrapeStruct,
+        queue_type="producer",
+        backend_type="kafka",
+        config=KafkaConfig(
+            topic="players.to_scrape",
+            bootstrap_servers=bootstrap_servers,
+            producer=True,
+            consumer=False,
+            producer_config=KafkaProducerConfig(
+                partition_key_fn=lambda: "scrape_task_producer"
+            ),
+            consumer_config=None,
+        ),
     )
+    if isinstance(queue, Exception):
+        raise queue
+    player_producer = queue
 
     await player_producer.start()
-    await player_consumer.start()
 
     try:
         await process_players(
             async_session=async_session,
             player_repo=PlayerRepo(),
             player_producer=player_producer,
-            player_consumer=player_consumer,
             limit=Settings().LIMIT,
         )
     finally:
         await async_engine.dispose()
         await player_producer.stop()
-        await player_consumer.stop()
 
 
 async def run_async():
