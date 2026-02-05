@@ -33,8 +33,3 @@ class KafkaConfig(BaseModel):
         if self.producer and self.producer_config is None:
             raise ValueError("producer cannot be True when producer_config is None")
         return self
-
-    @classmethod
-    def build_unvalidated(cls, **kwargs: object) -> "KafkaConfig":
-        """Construct a KafkaConfig without running validation."""
-        return cls.model_construct(**kwargs)
