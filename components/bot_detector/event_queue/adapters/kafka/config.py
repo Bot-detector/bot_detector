@@ -13,7 +13,7 @@ class KafkaConsumerConfig(BaseModel):
 
 
 class KafkaProducerConfig(BaseModel):
-    partition_key_fn: Callable
+    partition_key_fn: Callable[[], bytes | str]
     MAX_PRODUCE_RETRIES: int = 3
     MAX_PRODUCE_RETRY_BACKOFF: int = 60
 

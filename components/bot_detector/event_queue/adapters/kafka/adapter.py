@@ -68,14 +68,20 @@ class AIOKafkaProducerAdapter(
         _config = self.config.producer_config
 
         for message in messages:
-            key: bytes = b""  #
+            raw_key = _config.partition_key_fn()
+            if isinstance(raw_key, bytes):
+                key = raw_key
+            elif isinstance(raw_key, str):
+                key = raw_key.encode("utf-8")
+            else:
+                raise ValueError("partition_key_fn must return bytes or str")
             retries = 0
             retry_backoff = 0
             while True:
                 try:
                     await self.producer.send(
                         topic=self.config.topic,
-                        value=message,
+                        value=message.model_dump(),
                         key=key,
                     )
                     break
@@ -126,6 +132,8 @@ class AIOKafkaConsumerAdapter(
             record = await self.consumer.getone()
         except Exception as e:
             return e
+        if record is None:
+            return None
 
         message = self._validate(record=record)
         return message
