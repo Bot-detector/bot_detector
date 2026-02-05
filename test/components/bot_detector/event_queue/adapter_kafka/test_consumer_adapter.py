@@ -1,169 +1,24 @@
 from unittest.mock import AsyncMock, patch
 
-import orjson
 import pytest
-from aiokafka.errors import KafkaTimeoutError
 from bot_detector.event_queue.adapters.kafka import (
     AIOKafkaConsumerAdapter,
-    AIOKafkaProducerAdapter,
     KafkaConfig,
     KafkaConsumerConfig,
-    KafkaProducerConfig,
 )
 from bot_detector.event_queue.core.errors import (
     ConsumerConfigError,
     ConsumerFetchError,
     ConsumerNotStartedError,
     MessageTypeError,
-    ProducerConfigError,
-    ProducerNotStartedError,
 )
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 
 class PlayerScraped(BaseModel):
     id: int
     username: str
     score: int
-
-
-@pytest.mark.asyncio
-async def test_producer_put_success():
-    config = KafkaConfig(
-        topic="players",
-        bootstrap_servers="localhost:9092",
-        consumer=False,
-        producer=True,
-        consumer_config=None,
-        producer_config=KafkaProducerConfig(partition_key_fn=lambda: "1"),
-    )
-    adapter = AIOKafkaProducerAdapter(PlayerScraped, config)
-
-    with patch(
-        "bot_detector.event_queue.adapters.kafka.adapter.AIOKafkaProducer"
-    ) as mock_producer_class:
-        mock_producer = mock_producer_class.return_value
-        mock_producer.start = AsyncMock()
-        mock_producer.send = AsyncMock()
-        mock_producer.stop = AsyncMock()
-
-        await adapter.start()
-        await adapter.put([PlayerScraped(id=1, username="Alice", score=100)])
-
-        mock_producer.send.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_producer_start_stop():
-    config = KafkaConfig(
-        topic="players",
-        bootstrap_servers="localhost:9092",
-        consumer=False,
-        producer=True,
-        consumer_config=None,
-        producer_config=KafkaProducerConfig(partition_key_fn=lambda: "1"),
-    )
-    adapter = AIOKafkaProducerAdapter(PlayerScraped, config)
-
-    with patch(
-        "bot_detector.event_queue.adapters.kafka.adapter.AIOKafkaProducer"
-    ) as mock_producer_class:
-        mock_producer = mock_producer_class.return_value
-        mock_producer.start = AsyncMock()
-        mock_producer.stop = AsyncMock()
-
-        await adapter.start()
-        await adapter.stop()
-
-        mock_producer.start.assert_awaited_once()
-        mock_producer.stop.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-async def test_producer_batch_messages():
-    config = KafkaConfig(
-        topic="players",
-        bootstrap_servers="localhost:9092",
-        consumer=False,
-        producer=True,
-        consumer_config=None,
-        producer_config=KafkaProducerConfig(partition_key_fn=lambda: "1"),
-    )
-    adapter = AIOKafkaProducerAdapter(PlayerScraped, config)
-
-    with patch(
-        "bot_detector.event_queue.adapters.kafka.adapter.AIOKafkaProducer"
-    ) as mock_producer_class:
-        mock_producer = mock_producer_class.return_value
-        mock_producer.start = AsyncMock()
-        mock_producer.send = AsyncMock()
-        mock_producer.stop = AsyncMock()
-
-        await adapter.start()
-        await adapter.put(
-            [
-                PlayerScraped(id=1, username="Alice", score=100),
-                PlayerScraped(id=2, username="Bob", score=200),
-            ]
-        )
-
-        assert mock_producer.send.call_count == 2
-
-
-@pytest.mark.asyncio
-async def test_producer_custom_partition_key():
-    config = KafkaConfig(
-        topic="players",
-        bootstrap_servers="localhost:9092",
-        consumer=False,
-        producer=True,
-        consumer_config=None,
-        producer_config=KafkaProducerConfig(partition_key_fn=lambda: "1"),
-    )
-    adapter = AIOKafkaProducerAdapter(PlayerScraped, config)
-
-    with patch(
-        "bot_detector.event_queue.adapters.kafka.adapter.AIOKafkaProducer"
-    ) as mock_producer_class:
-        mock_producer = mock_producer_class.return_value
-        mock_producer.start = AsyncMock()
-        mock_producer.send = AsyncMock()
-        mock_producer.stop = AsyncMock()
-
-        await adapter.start()
-        await adapter.put([PlayerScraped(id=9, username="Alice", score=100)])
-
-        expected_key = b"1"
-        mock_producer.send.assert_called_once_with(
-            topic="players",
-            value=PlayerScraped(id=9, username="Alice", score=100).model_dump(),
-            key=expected_key,
-        )
-
-
-@pytest.mark.asyncio
-async def test_producer_serialization():
-    config = KafkaConfig(
-        topic="players",
-        bootstrap_servers="localhost:9092",
-        consumer=False,
-        producer=True,
-        consumer_config=None,
-        producer_config=KafkaProducerConfig(partition_key_fn=lambda: "1"),
-    )
-    adapter = AIOKafkaProducerAdapter(PlayerScraped, config)
-
-    with patch(
-        "bot_detector.event_queue.adapters.kafka.adapter.AIOKafkaProducer"
-    ) as mock_producer_class:
-        mock_producer = mock_producer_class.return_value
-        mock_producer.start = AsyncMock()
-
-        await adapter.start()
-
-        serializer = mock_producer_class.call_args.kwargs["value_serializer"]
-        payload = PlayerScraped(id=1, username="Alice", score=100).model_dump()
-        assert serializer(payload) == orjson.dumps(payload)
 
 
 @pytest.mark.asyncio
@@ -183,6 +38,29 @@ async def test_consumer_get_one_empty():
 
     result = await adapter.get_one()
     assert result is None
+
+
+@pytest.mark.asyncio
+async def test_consumer_get_one_validation_error():
+    config = KafkaConfig(
+        topic="players",
+        bootstrap_servers="localhost:9092",
+        consumer=True,
+        producer=False,
+        consumer_config=KafkaConsumerConfig(group_id="group"),
+        producer_config=None,
+    )
+    adapter = AIOKafkaConsumerAdapter(PlayerScraped, config)
+
+    fake_record = AsyncMock()
+    fake_record.value = {"id": 1}
+
+    adapter.consumer = AsyncMock()
+    adapter.consumer.getone = AsyncMock(return_value=fake_record)
+
+    result = await adapter.get_one()
+
+    assert isinstance(result, ValidationError)
 
 
 @pytest.mark.asyncio
@@ -209,6 +87,59 @@ async def test_consumer_start_stop():
 
         mock_consumer.start.assert_awaited_once()
         mock_consumer.stop.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_consumer_start_noop_when_existing():
+    config = KafkaConfig(
+        topic="players",
+        bootstrap_servers="localhost:9092",
+        consumer=True,
+        producer=False,
+        consumer_config=KafkaConsumerConfig(group_id="group"),
+        producer_config=None,
+    )
+    adapter = AIOKafkaConsumerAdapter(PlayerScraped, config)
+    adapter.consumer = AsyncMock()
+
+    with patch(
+        "bot_detector.event_queue.adapters.kafka.adapter.AIOKafkaConsumer"
+    ) as mock_consumer_class:
+        await adapter.start()
+
+        mock_consumer_class.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_consumer_stop_noop_when_missing():
+    config = KafkaConfig(
+        topic="players",
+        bootstrap_servers="localhost:9092",
+        consumer=True,
+        producer=False,
+        consumer_config=KafkaConsumerConfig(group_id="group"),
+        producer_config=None,
+    )
+    adapter = AIOKafkaConsumerAdapter(PlayerScraped, config)
+
+    await adapter.stop()
+
+
+@pytest.mark.asyncio
+async def test_consumer_get_many_without_start():
+    config = KafkaConfig(
+        topic="players",
+        bootstrap_servers="localhost:9092",
+        consumer=True,
+        producer=False,
+        consumer_config=KafkaConsumerConfig(group_id="group"),
+        producer_config=None,
+    )
+    adapter = AIOKafkaConsumerAdapter(PlayerScraped, config)
+
+    result = await adapter.get_many(1)
+
+    assert isinstance(result, ConsumerNotStartedError)
 
 
 @pytest.mark.asyncio
@@ -239,7 +170,26 @@ async def test_consumer_get_batch():
 
 
 @pytest.mark.asyncio
-async def test_consumer_multiple_messages():
+async def test_consumer_get_many_timeout_break():
+    class FakeBatcher:
+        def __class_getitem__(cls, item: object) -> "FakeBatcher":
+            return cls
+
+        def __init__(self, batch_size: int, timeout_ms: int) -> None:
+            self.batch_size = batch_size
+            self.timeout_ms = timeout_ms
+            self.size = 0
+            self.time_left = 0.0
+
+        def check_flush(self) -> bool:
+            return False
+
+        def append(self, event: PlayerScraped, auto: bool = True) -> None:
+            return None
+
+        def flush(self) -> list[PlayerScraped]:
+            return []
+
     config = KafkaConfig(
         topic="players",
         bootstrap_servers="localhost:9092",
@@ -249,56 +199,65 @@ async def test_consumer_multiple_messages():
         producer_config=None,
     )
     adapter = AIOKafkaConsumerAdapter(PlayerScraped, config)
-
-    fake_record_one = AsyncMock()
-    fake_record_one.value = {"id": 1, "username": "Alice", "score": 100}
-    fake_record_two = AsyncMock()
-    fake_record_two.value = {"id": 2, "username": "Bob", "score": 200}
-
     adapter.consumer = AsyncMock()
-    adapter.consumer.getone = AsyncMock(side_effect=[fake_record_one, fake_record_two])
 
-    first = await adapter.get_one()
-    second = await adapter.get_one()
-    assert isinstance(first, PlayerScraped)
-    assert isinstance(second, PlayerScraped)
-    assert first.username == "Alice"
-    assert second.username == "Bob"
+    with patch(
+        "bot_detector.event_queue.adapters.kafka.adapter.Batcher",
+        FakeBatcher,
+    ):
+        result = await adapter.get_many(1)
+
+    assert result == []
 
 
 @pytest.mark.asyncio
-async def test_producer_send_failure():
+async def test_consumer_get_many_empty_records_sleeps():
+    class FakeBatcher:
+        def __class_getitem__(cls, item: object) -> "FakeBatcher":
+            return cls
+
+        def __init__(self, batch_size: int, timeout_ms: int) -> None:
+            self.batch_size = batch_size
+            self.timeout_ms = timeout_ms
+            self.size = 0
+            self.time_left = 1.0
+            self._checks = iter([False, True])
+
+        def check_flush(self) -> bool:
+            return next(self._checks)
+
+        def append(self, event: PlayerScraped, auto: bool = True) -> None:
+            return None
+
+        def flush(self) -> list[PlayerScraped]:
+            return []
+
     config = KafkaConfig(
         topic="players",
         bootstrap_servers="localhost:9092",
-        consumer=False,
-        producer=True,
-        consumer_config=None,
-        producer_config=KafkaProducerConfig(
-            partition_key_fn=lambda: "1",
-            MAX_PRODUCE_RETRIES=1,
-        ),
+        consumer=True,
+        producer=False,
+        consumer_config=KafkaConsumerConfig(group_id="group"),
+        producer_config=None,
     )
-    adapter = AIOKafkaProducerAdapter(PlayerScraped, config)
+    adapter = AIOKafkaConsumerAdapter(PlayerScraped, config)
+    adapter.consumer = AsyncMock()
+    adapter.consumer.getmany = AsyncMock(return_value={})
 
     with (
         patch(
-            "bot_detector.event_queue.adapters.kafka.adapter.AIOKafkaProducer"
-        ) as mock_producer_class,
+            "bot_detector.event_queue.adapters.kafka.adapter.Batcher",
+            FakeBatcher,
+        ),
         patch(
             "bot_detector.event_queue.adapters.kafka.adapter.asyncio.sleep",
             new=AsyncMock(),
-        ),
+        ) as sleep_mock,
     ):
-        mock_producer = mock_producer_class.return_value
-        mock_producer.start = AsyncMock()
-        mock_producer.send = AsyncMock(side_effect=KafkaTimeoutError("fail"))
-        mock_producer.stop = AsyncMock()
+        result = await adapter.get_many(1)
 
-        await adapter.start()
-        result = await adapter.put([PlayerScraped(id=1, username="Alice", score=100)])
-
-        assert isinstance(result, KafkaTimeoutError)
+    assert result == []
+    sleep_mock.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -319,23 +278,6 @@ async def test_consumer_connection_error():
     result = await adapter.get_one()
     assert isinstance(result, ConsumerFetchError)
     assert isinstance(result.cause, Exception)
-
-
-@pytest.mark.asyncio
-async def test_producer_put_without_start():
-    config = KafkaConfig(
-        topic="players",
-        bootstrap_servers="localhost:9092",
-        consumer=False,
-        producer=True,
-        consumer_config=None,
-        producer_config=KafkaProducerConfig(partition_key_fn=lambda: "1"),
-    )
-    adapter = AIOKafkaProducerAdapter(PlayerScraped, config)
-
-    result = await adapter.put([PlayerScraped(id=1, username="Alice", score=100)])
-
-    assert isinstance(result, ProducerNotStartedError)
 
 
 @pytest.mark.asyncio
@@ -376,24 +318,6 @@ async def test_consumer_invalid_message_type():
     result = await adapter.get_one()
 
     assert isinstance(result, MessageTypeError)
-
-
-@pytest.mark.asyncio
-async def test_producer_put_without_config():
-    config = KafkaConfig.model_construct(
-        topic="players",
-        bootstrap_servers="localhost:9092",
-        consumer=False,
-        producer=True,
-        consumer_config=None,
-        producer_config=None,
-    )
-    adapter = AIOKafkaProducerAdapter(PlayerScraped, config)
-    adapter.producer = AsyncMock()
-
-    result = await adapter.put([PlayerScraped(id=1, username="Alice", score=100)])
-
-    assert isinstance(result, ProducerConfigError)
 
 
 @pytest.mark.asyncio
@@ -488,3 +412,22 @@ async def test_consumer_commit_without_start():
     result = await adapter.commit()
 
     assert isinstance(result, ConsumerNotStartedError)
+
+
+@pytest.mark.asyncio
+async def test_consumer_commit_success():
+    config = KafkaConfig(
+        topic="players",
+        bootstrap_servers="localhost:9092",
+        consumer=True,
+        producer=False,
+        consumer_config=KafkaConsumerConfig(group_id="group"),
+        producer_config=None,
+    )
+    adapter = AIOKafkaConsumerAdapter(PlayerScraped, config)
+    adapter.consumer = AsyncMock()
+    adapter.consumer.commit = AsyncMock()
+
+    await adapter.commit()
+
+    adapter.consumer.commit.assert_awaited_once()
