@@ -36,7 +36,10 @@ class _InMemoryBase(Generic[T]):
             return None
 
 
-class InMemoryConsumerAdapter(_InMemoryBase[T], QueueBackendConsumerProtocol):
+class InMemoryConsumerAdapter(
+    _InMemoryBase[T],
+    QueueBackendConsumerProtocol[T],
+):
     async def get_one(self) -> Optional[T]:
         try:
             item = self._queue.get_nowait()
@@ -60,7 +63,10 @@ class InMemoryConsumerAdapter(_InMemoryBase[T], QueueBackendConsumerProtocol):
         self._queue.task_done()
 
 
-class InMemoryProducerAdapter(_InMemoryBase[T], QueueBackendProducerProtocol):
+class InMemoryProducerAdapter(
+    _InMemoryBase[T],
+    QueueBackendProducerProtocol[T],
+):
     async def put(self, messages: list[T]) -> None:
         for message in messages:
             await self._queue.put(message)
