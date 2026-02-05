@@ -33,7 +33,7 @@ class QueueFactory:
             )
 
             if not isinstance(config, InMemoryConfig):
-                InvalidConfig(
+                return InvalidConfig(
                     f"Expected config of type: InMemoryConfig but received: {type(config)}"
                 )
 
@@ -41,6 +41,24 @@ class QueueFactory:
                 "producer": InMemoryProducerAdapter[model](cls=model, config=config),
                 "consumer": InMemoryConsumerAdapter[model](cls=model, config=config),
                 "queue": InMemoryAdapter[model](cls=model, config=config),
+            }[queue_type]
+        elif backend_type == "kafka":
+            from bot_detector.event_queue.adapters.kafka import (
+                AIOKafkaAdapter,
+                AIOKafkaConsumerAdapter,
+                AIOKafkaProducerAdapter,
+                KafkaConfig,
+            )
+
+            if not isinstance(config, KafkaConfig):
+                return InvalidConfig(
+                    f"Expected config of type: KafkaConfig but received: {type(config)}"
+                )
+
+            adapter = {
+                "producer": AIOKafkaProducerAdapter[model](cls=model, config=config),
+                "consumer": AIOKafkaConsumerAdapter[model](cls=model, config=config),
+                "queue": AIOKafkaAdapter[model](cls=model, config=config),
             }[queue_type]
 
         if adapter is None:
