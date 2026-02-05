@@ -1,4 +1,15 @@
-from .core import BaseWorker
-from .interface import WorkerInterface
+from .core import BaseWorker, ConsumerWorker, ProducerWorker
+from .interface import (
+    ConsumerWorkerInterface,
+    ProducerWorkerInterface,
+    WorkerInterface,
+)
 
-__all__ = ["BaseWorker", "WorkerInterface"]
+__all__ = [
+    "BaseWorker",
+    "ConsumerWorker",
+    "ConsumerWorkerInterface",
+    "ProducerWorker",
+    "ProducerWorkerInterface",
+    "WorkerInterface",
+]

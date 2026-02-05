@@ -15,7 +15,7 @@ class DummyConsumer:
     Simulates a Kafka consumer. Uses a list of dicts to simulate messages and errors.
     Each item in `queue` is either:
         {"message": TestMessage(...)}  -> a normal message
-        {"error": "some error"}        -> a consumer error
+        {"error": Exception(...)}      -> a consumer error
     """
 
     def __init__(self, queue: list[dict] | None = None) -> None:
@@ -25,25 +25,21 @@ class DummyConsumer:
         self.commit = AsyncMock()
         self.get_consumer = AsyncMock()
 
-    async def consume_one(self) -> tuple[TestMessage | None, str | None]:
+    async def get_one(self) -> TestMessage | None | Exception:
         if not self.queue:
-            return None, None
+            return None
         item = self.queue.pop(0)
-        return item.get("message"), item.get("error")
+        return item.get("message") or item.get("error")
 
-    async def consume_many(
-        self, max_records: int, timeout_ms: int
-    ) -> tuple[list[TestMessage], list[str]]:
+    async def get_many(self, count: int) -> list[TestMessage] | Exception:
         batch: list[TestMessage] = []
-        errors: list[str] = []
-
-        for _ in range(min(max_records, len(self.queue))):
+        for _ in range(min(count, len(self.queue))):
             item = self.queue.pop(0)
             if "message" in item:
                 batch.append(item["message"])
             elif "error" in item:
-                errors.append(item["error"])
-        return batch, errors
+                return item["error"]
+        return batch
 
     async def get_lag(self) -> int:
         return 0
@@ -56,4 +52,12 @@ class DummyProducer:
         self.start = AsyncMock()
         self.stop = AsyncMock()
         self.get_producer = AsyncMock()
-        self.produce_one = AsyncMock()
+        self.put = AsyncMock()
+
+
+class DummyQueue(DummyConsumer, DummyProducer):
+    """Simulates a Queue with both consumer and producer capabilities."""
+
+    def __init__(self, queue: list[dict] | None = None) -> None:
+        DummyConsumer.__init__(self, queue=queue)
+        DummyProducer.__init__(self)
