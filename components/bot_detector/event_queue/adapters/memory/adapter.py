@@ -25,8 +25,6 @@ class _InMemoryBase(Generic[T]):
 
     async def stop(self) -> None:
         self.logger.info("[Memory] Queue cleared/stopped")
-        while not self._queue.empty():
-            await self._queue.get()
 
     async def _validate(self, item) -> Optional[T]:
         try:
