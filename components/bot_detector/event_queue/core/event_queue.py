@@ -2,7 +2,11 @@ from typing import Generic, Optional, TypeVar
 
 from pydantic import BaseModel
 
-from .interface import QueueBackendProtocol
+from .interface import (
+    QueueBackendConsumerProtocol,
+    QueueBackendProducerProtocol,
+    QueueBackendProtocol,
+)
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -19,7 +23,7 @@ class QueueProducer(Generic[T]):
         await queue.put()
     """
 
-    def __init__(self, backend: QueueBackendProtocol):
+    def __init__(self, backend: QueueBackendProducerProtocol):
         self._backend = backend
 
     async def start(self):
@@ -45,7 +49,7 @@ class QueueConsumer(Generic[T]):
         await queue.get_many()
     """
 
-    def __init__(self, backend: QueueBackendProtocol):
+    def __init__(self, backend: QueueBackendConsumerProtocol):
         self._backend = backend
 
     async def start(self):

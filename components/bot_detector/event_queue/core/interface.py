@@ -1,10 +1,11 @@
-from typing import Generic, Optional, Protocol, TypeVar
+from typing import Generic, Optional, Protocol, TypeVar, runtime_checkable
 
 from pydantic import BaseModel
 
 T = TypeVar("T", bound=BaseModel)
 
 
+@runtime_checkable
 class QueueBackendProducerProtocol(Generic[T], Protocol):
     """
     This defines the contract that ALL adapters must follow.
@@ -18,6 +19,7 @@ class QueueBackendProducerProtocol(Generic[T], Protocol):
     async def put(self, messages: list[T]) -> Optional[Exception]: ...
 
 
+@runtime_checkable
 class QueueBackendConsumerProtocol(Generic[T], Protocol):
     """
     This defines the contract that ALL adapters must follow.
@@ -35,6 +37,7 @@ class QueueBackendConsumerProtocol(Generic[T], Protocol):
     async def commit(self) -> Optional[Exception]: ...
 
 
+@runtime_checkable
 class QueueBackendProtocol(
     QueueBackendProducerProtocol[T],
     QueueBackendConsumerProtocol[T],
