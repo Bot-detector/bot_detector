@@ -47,7 +47,8 @@ class _AIOKafkaProducerBase(Generic[T]):
 
 
 class AIOKafkaProducerAdapter(
-    _AIOKafkaProducerBase[T], QueueBackendProducerProtocol[T]
+    _AIOKafkaProducerBase[T],
+    QueueBackendProducerProtocol[T],
 ):
     """
     Adapts the aiokafka library to the QueueBackendProtocol.
@@ -107,7 +108,8 @@ class AIOKafkaProducerAdapter(
 
 
 class AIOKafkaConsumerAdapter(
-    _AIOKafkaProducerBase[T], QueueBackendConsumerProtocol[T]
+    _AIOKafkaProducerBase[T],
+    QueueBackendConsumerProtocol[T],
 ):
     """
     Adapts the aiokafka library to the QueueBackendProtocol.
