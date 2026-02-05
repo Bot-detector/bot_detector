@@ -27,7 +27,7 @@ async def test_producer_put_success():
         consumer=False,
         producer=True,
         consumer_config=None,
-        producer_config=KafkaProducerConfig(partition_key_fn=lambda _: "1"),
+        producer_config=KafkaProducerConfig(partition_key_fn=lambda: "1"),
     )
     adapter = AIOKafkaProducerAdapter(PlayerScraped, config)
 
@@ -53,7 +53,7 @@ async def test_producer_start_stop():
         consumer=False,
         producer=True,
         consumer_config=None,
-        producer_config=KafkaProducerConfig(partition_key_fn=lambda _: "1"),
+        producer_config=KafkaProducerConfig(partition_key_fn=lambda: "1"),
     )
     adapter = AIOKafkaProducerAdapter(PlayerScraped, config)
 
@@ -79,7 +79,7 @@ async def test_producer_batch_messages():
         consumer=False,
         producer=True,
         consumer_config=None,
-        producer_config=KafkaProducerConfig(partition_key_fn=lambda _: "1"),
+        producer_config=KafkaProducerConfig(partition_key_fn=lambda: "1"),
     )
     adapter = AIOKafkaProducerAdapter(PlayerScraped, config)
 
@@ -104,8 +104,7 @@ async def test_producer_batch_messages():
 
 @pytest.mark.asyncio
 async def test_producer_custom_partition_key():
-    num_partitions = 8
-    partition_key_fn = lambda message: str(message.id % num_partitions).encode("utf-8")
+    partition_key_fn = lambda: "1"
     config = KafkaConfig(
         topic="players",
         bootstrap_servers="localhost:9092",
@@ -143,7 +142,7 @@ async def test_producer_serialization():
         consumer=False,
         producer=True,
         consumer_config=None,
-        producer_config=KafkaProducerConfig(partition_key_fn=lambda _: "1"),
+        producer_config=KafkaProducerConfig(partition_key_fn=lambda: "1"),
     )
     adapter = AIOKafkaProducerAdapter(PlayerScraped, config)
 
@@ -269,7 +268,7 @@ async def test_producer_send_failure():
         producer=True,
         consumer_config=None,
         producer_config=KafkaProducerConfig(
-            partition_key_fn=lambda _: "1",
+            partition_key_fn=lambda: "1",
             MAX_PRODUCE_RETRIES=1,
         ),
     )
