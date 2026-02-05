@@ -378,7 +378,7 @@ async def test_consumer_invalid_message_type():
 
 @pytest.mark.asyncio
 async def test_producer_put_without_config():
-    config = KafkaConfig(
+    config = KafkaConfig.build_unvalidated(
         topic="players",
         bootstrap_servers="localhost:9092",
         consumer=False,
@@ -396,7 +396,7 @@ async def test_producer_put_without_config():
 
 @pytest.mark.asyncio
 async def test_consumer_get_many_without_config():
-    config = KafkaConfig(
+    config = KafkaConfig.build_unvalidated(
         topic="players",
         bootstrap_servers="localhost:9092",
         consumer=True,
@@ -414,7 +414,7 @@ async def test_consumer_get_many_without_config():
 
 @pytest.mark.asyncio
 async def test_consumer_start_without_config():
-    config = KafkaConfig(
+    config = KafkaConfig.build_unvalidated(
         topic="players",
         bootstrap_servers="localhost:9092",
         consumer=True,
