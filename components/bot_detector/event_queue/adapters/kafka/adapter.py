@@ -6,6 +6,14 @@ import orjson
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer, ConsumerRecord
 from aiokafka.errors import KafkaTimeoutError
 from bot_detector.event_queue.core.batcher import Batcher
+from bot_detector.event_queue.core.errors import (
+    ConsumerConfigError,
+    ConsumerFetchError,
+    ConsumerNotStartedError,
+    MessageTypeError,
+    ProducerConfigError,
+    ProducerNotStartedError,
+)
 from bot_detector.event_queue.core.interface import (
     QueueBackendConsumerProtocol,
     QueueBackendProducerProtocol,
@@ -31,7 +39,7 @@ class _AIOKafkaProducerBase(Generic[T]):
 
     def _validate(self, record: ConsumerRecord) -> T | Exception:
         if not isinstance(record.value, dict):
-            return Exception("Message must be of type dict")
+            return MessageTypeError("Message must be of type dict")
         try:
             return self.cls.model_validate(record.value)
         except ValidationError as ve:
@@ -62,9 +70,11 @@ class AIOKafkaProducerAdapter(
 
     async def put(self, messages: list[T]) -> Optional[Exception]:
         if self.producer is None:
-            return Exception("Producer is None, did you start the producer?")
+            return ProducerNotStartedError(
+                "Producer is None, did you start the producer?"
+            )
         if self.config.producer_config is None:
-            return Exception("Producer Configuration is None")
+            return ProducerConfigError("Producer Configuration is None")
         _config = self.config.producer_config
 
         for message in messages:
@@ -108,7 +118,7 @@ class AIOKafkaConsumerAdapter(
 
     async def start(self) -> None:
         if self.config.consumer_config is None:
-            raise Exception("Consumer Configuration is None")
+            raise ConsumerConfigError("Consumer Configuration is None")
         if self.consumer is None:
             _config = self.config.consumer_config
             self.consumer = AIOKafkaConsumer(
@@ -127,11 +137,13 @@ class AIOKafkaConsumerAdapter(
 
     async def get_one(self) -> Optional[T] | Exception:
         if self.consumer is None:
-            return Exception("Consumer is None, did you start the consumer?")
+            return ConsumerNotStartedError(
+                "Consumer is None, did you start the consumer?"
+            )
         try:
             record = await self.consumer.getone()
         except Exception as e:
-            return e
+            return ConsumerFetchError("Failed to fetch message", cause=e)
         if record is None:
             return None
 
@@ -140,9 +152,11 @@ class AIOKafkaConsumerAdapter(
 
     async def get_many(self, count: int) -> list[T] | Exception:
         if self.consumer is None:
-            return Exception("Consumer is None, did you start the consumer?")
+            return ConsumerNotStartedError(
+                "Consumer is None, did you start the consumer?"
+            )
         if self.config.consumer_config is None:
-            return Exception("Consumer Configuration is None")
+            return ConsumerConfigError("Consumer Configuration is None")
         _config = self.config.consumer_config
 
         batcher = Batcher[T](
@@ -160,7 +174,7 @@ class AIOKafkaConsumerAdapter(
                     max_records=count - batcher.size,
                 )
             except Exception as e:
-                return e
+                return ConsumerFetchError("Failed to fetch messages", cause=e)
 
             if not records:
                 await asyncio.sleep(1)  # prevent busy-loop
@@ -176,7 +190,9 @@ class AIOKafkaConsumerAdapter(
 
     async def commit(self) -> Optional[Exception]:
         if self.consumer is None:
-            return Exception("Consumer is None, did you start the consumer?")
+            return ConsumerNotStartedError(
+                "Consumer is None, did you start the consumer?"
+            )
         await self.consumer.commit()
 
 
