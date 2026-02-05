@@ -84,7 +84,7 @@ class AIOKafkaProducerAdapter(
         _config = self.config.producer_config
 
         for message in messages:
-            raw_key = _config.partition_key_fn()
+            raw_key = _config.partition_key_fn(message)
             if isinstance(raw_key, bytes):
                 key = raw_key
             elif isinstance(raw_key, str):

@@ -13,7 +13,7 @@ from bot_detector.event_queue.adapters.kafka import (
     KafkaConsumerConfig,
     KafkaProducerConfig,
 )
-from bot_detector.event_queue.core import QueueConsumer, QueueProducer
+from bot_detector.event_queue.core import Queue
 from bot_detector.event_queue.factory import QueueFactory
 from bot_detector.kafka import ToScrapeStruct
 from pydantic_settings import BaseSettings
@@ -76,7 +76,7 @@ class FetchParams:
 
 async def produce_players(
     players: list[PlayerStruct],
-    player_producer: QueueProducer[ToScrapeStruct],
+    player_queue: Queue[ToScrapeStruct],
 ):
     if not players:
         return
@@ -90,7 +90,7 @@ async def produce_players(
     ]
     if not player_structs:
         return
-    error = await player_producer.put(player_structs)
+    error = await player_queue.put(player_structs)
     if isinstance(error, Exception):
         raise error
 
@@ -155,8 +155,7 @@ def determine_fetch_params(
 async def process_players(
     async_session: async_sessionmaker[AsyncSession],
     player_repo: PlayerRepo,
-    player_producer: QueueProducer[ToScrapeStruct],
-    player_consumer: QueueConsumer[ToScrapeStruct],
+    player_queue: Queue[ToScrapeStruct],
     limit: int = 10,
 ):
     max_days = 20
@@ -170,7 +169,7 @@ async def process_players(
     last_day = date.today()
 
     while True:
-        lag = await player_consumer.lag()
+        lag = await player_queue.lag()
         if last_day != date.today():
             logger.info("New day detected, resetting days and confirmed_ban")
             last_day = date.today()
@@ -195,7 +194,7 @@ async def process_players(
                 limit=fp.limit,
             )
 
-        await produce_players(players=players, player_producer=player_producer)
+        await produce_players(players=players, player_queue=player_queue)
 
         fp = determine_fetch_params(
             fetch_params=fp,
@@ -219,57 +218,37 @@ async def main():
     async_session, async_engine = get_session_factory(SETTINGS=DBSettings())
 
     bootstrap_servers = KafkaSettings().KAFKA_BOOTSTRAP_SERVERS
-    queue_producer = QueueFactory.create_queue(
+    queue = QueueFactory.create_queue(
         model=ToScrapeStruct,
-        queue_type="producer",
+        queue_type="queue",
         backend_type="kafka",
         config=KafkaConfig(
             topic="players.to_scrape",
             bootstrap_servers=bootstrap_servers,
             producer=True,
-            consumer=False,
-            producer_config=KafkaProducerConfig(
-                partition_key_fn=lambda: "scrape_task_producer"
-            ),
-            consumer_config=None,
-        ),
-    )
-    if isinstance(queue_producer, Exception):
-        raise queue_producer
-    player_producer = queue_producer
-
-    queue_consumer = QueueFactory.create_queue(
-        model=ToScrapeStruct,
-        queue_type="consumer",
-        backend_type="kafka",
-        config=KafkaConfig(
-            topic="players.to_scrape",
-            bootstrap_servers=bootstrap_servers,
-            producer=False,
             consumer=True,
-            producer_config=None,
+            producer_config=KafkaProducerConfig(
+                partition_key_fn=lambda message: str(message.player_data.id % 10)
+            ),
             consumer_config=KafkaConsumerConfig(group_id="scraper"),
         ),
     )
-    if isinstance(queue_consumer, Exception):
-        raise queue_consumer
-    player_consumer = queue_consumer
+    if isinstance(queue, Exception):
+        raise queue
+    player_queue = queue
 
-    await player_producer.start()
-    await player_consumer.start()
+    await player_queue.start()
 
     try:
         await process_players(
             async_session=async_session,
             player_repo=PlayerRepo(),
-            player_producer=player_producer,
-            player_consumer=player_consumer,
+            player_queue=player_queue,
             limit=Settings().LIMIT,
         )
     finally:
         await async_engine.dispose()
-        await player_producer.stop()
-        await player_consumer.stop()
+        await player_queue.stop()
 
 
 async def run_async():
