@@ -40,11 +40,11 @@ clean-test: ## cleanup pytests leftovers
 uv-cache:
 	docker volume inspect uv_cache >/dev/null 2>&1 || docker volume create uv_cache
 
-dev-restart: ## restart containers
+docker-dev-restart: ## restart containers
 	$(DOCKER_ENV) docker compose -f 'docker-compose-dev.yml' down
 	$(DOCKER_ENV) docker compose -f 'docker-compose-dev.yml' up -d --build
 
-restart: uv-cache## restart containers
+docker-restart: uv-cache## restart containers
 	$(DOCKER_ENV) docker compose -f 'docker-compose.yml' down
 	$(DOCKER_ENV) docker compose -f 'docker-compose.yml' up -d --build
 
@@ -67,10 +67,3 @@ docs: ## opens your browser to the webapps testing docs
 	open http://localhost:5000/docs
 	xdg-open http://localhost:5000/docs
 	. http://localhost:5000/docs
-opencode:
-<<<<<<< Updated upstream
-	docker compose -f docker-compose-oc.yml down
-	docker compose -f docker-compose-oc.yml run --rm --build opencode
-=======
-	docker compose -f docker-compose.opencode.yml run --rm opencode
->>>>>>> Stashed changes

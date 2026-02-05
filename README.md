@@ -120,16 +120,16 @@ flowchart TD
 ```
 # interesting commands
 ```sh
-find . -type f -name "pyproject.toml" -not -path "*/.venv/*" -execdir sh -c 'echo "🔄 Updating lock in $(pwd)"; uv lock' \;
+find . -type f -name "pyproject.toml" -not -path "*/.venv/*" -path "*/projects/*" -execdir sh -c 'echo "🔄 Updating lock in $(pwd)"; uv lock' \;
 ```
 ```sh
-find . -type f -name "pyproject.toml" -not -path "*/.venv/*" -execdir sh -c 'echo "🔄 syncing in $(pwd)"; uv sync' \;
+find . -type f -name "pyproject.toml" -not -path "*/.venv/*" -path "*/projects/*" -execdir sh -c 'echo "🔄 syncing in $(pwd)"; uv sync' \;
 ```
 ```sh
-find . -type f -name "pyproject.toml" -not -path "*/.venv/*" -execdir sh -c 'echo "🔄 Removing venv in $(pwd)"; rm -rf .venv/' \;
+find . -type f -name "pyproject.toml" -not -path "*/.venv/*" -path "*/projects/*" -execdir sh -c 'echo "🔄 Removing venv in $(pwd)"; rm -rf .venv/' \;
 ```
 ```sh
-find . -type f -name "pyproject.toml" -not -path "*/.venv/*" -execdir sh -c 'echo "🔄 Removing Dockerfile.bak in $(pwd)"; rm Dockerfile.bak' \;
+find . -type f -name "pyproject.toml" -not -path "*/.venv/*" -path "*/projects/*" -execdir sh -c 'echo "🔄 Removing Dockerfile.bak in $(pwd)"; rm Dockerfile.bak' \;
 ```
 list all branches that are gone in the remote
 ```sh
