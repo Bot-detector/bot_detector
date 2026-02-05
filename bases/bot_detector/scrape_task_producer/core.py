@@ -8,6 +8,7 @@ from bot_detector.database import get_session_factory
 from bot_detector.database.player import PlayerRepo
 from bot_detector.kafka import Settings as KafkaSettings
 from bot_detector.structs import MetaData, PlayerStruct
+from bot_detector.wide_event import WideEventLogger
 from bot_detector.event_queue.adapters.kafka import (
     KafkaConfig,
     KafkaConsumerConfig,
@@ -21,6 +22,20 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from typing_extensions import Literal
 
 logger = logging.getLogger(__name__)
+wide_event = WideEventLogger(sample_ratio=0.1)
+
+
+def _log_event(
+    data: dict[str, object],
+    *,
+    force: bool = False,
+    error: Exception | None = None,
+) -> None:
+    if error is not None:
+        logger.error({**data, "error": str(error)})
+        return
+    if force or wide_event.sample():
+        logger.info(data)
 
 
 class Settings(BaseSettings):
@@ -81,7 +96,7 @@ async def produce_players(
     if not players:
         return
 
-    logger.info(f"Putting {len(players)} players in queue")
+    _log_event({"event": "queue_players", "count": len(players)})
     metadata = MetaData(version=1, source="scrape_task_producer")
     player_structs = [
         ToScrapeStruct(metadata=metadata, player_data=player)
@@ -96,7 +111,7 @@ async def produce_players(
 
 
 def _reduce_days(fetch_params: FetchParams) -> FetchParams:
-    logger.info(f"Reducing days for {asdict(fetch_params)}")
+    _log_event({"event": "reduce_days", "fetch_params": asdict(fetch_params)})
     _days = fetch_params.days - 1 if fetch_params.days > 1 else 1
     fetch_params.update_date(days=_days)
     fetch_params.player_id = 0
@@ -125,7 +140,14 @@ def determine_fetch_params(
                 return _reduce_days(fetch_params)
 
             assert fetch_params.days <= 1
-            logger.info("All normal scraped, going to step: possible bans")
+            _log_event(
+                {
+                    "event": "set_step",
+                    "from": fetch_params.step,
+                    "to": "possible_ban",
+                },
+                force=True,
+            )
             fetch_params.set_step("possible_ban")
             fetch_params.update_date(days=max_days, infinity=True)
             return fetch_params
@@ -135,7 +157,14 @@ def determine_fetch_params(
                 return _reduce_days(fetch_params)
 
             assert fetch_params.days <= max_possible_ban_days
-            logger.info("All possible bans scraped, going to step: confirmed bans")
+            _log_event(
+                {
+                    "event": "set_step",
+                    "from": fetch_params.step,
+                    "to": "confirmed_ban",
+                },
+                force=True,
+            )
             fetch_params.set_step("confirmed_ban")
             fetch_params.update_date(days=max_days, infinity=True)
             return fetch_params
@@ -145,7 +174,14 @@ def determine_fetch_params(
                 return _reduce_days(fetch_params)
 
             assert fetch_params.days <= max_confirmed_ban_days
-            logger.info("All confirmed bans scraped, going to step: normal")
+            _log_event(
+                {
+                    "event": "set_step",
+                    "from": fetch_params.step,
+                    "to": "normal",
+                },
+                force=True,
+            )
             fetch_params.set_step("normal")
             fetch_params.update_date(days=max_days, infinity=True)
             fetch_params.done = True
@@ -169,49 +205,59 @@ async def process_players(
     last_day = date.today()
 
     while True:
-        lag = await player_queue.lag()
-        if last_day != date.today():
-            logger.info("New day detected, resetting days and confirmed_ban")
-            last_day = date.today()
-            fp.reset_for_new_day(max_days)
+        try:
+            lag = await player_queue.lag()
+            if last_day != date.today():
+                _log_event({"event": "new_day_reset"}, force=True)
+                last_day = date.today()
+                fp.reset_for_new_day(max_days)
 
-        if lag >= 100_000:
-            logger.info(f"{lag=} to high, sleeping(10)")
-            await asyncio.sleep(10)
-            continue
+            if lag >= 100_000:
+                _log_event({"event": "lag_throttle", "lag": lag})
+                await asyncio.sleep(10)
+                continue
 
-        logger.info(f"{asdict(fp)}")
+            _log_event({"event": "fetch_params", "data": asdict(fp)})
 
-        async with async_session() as session:
-            players = await player_repo.select_player(
-                async_session=session,
-                player_id=fp.player_id,
-                possible_ban=fp.possible_ban,
-                confirmed_ban=fp.confirmed_ban,
-                or_none=fp.step == "normal",
-                first_date=fp.first_date,
-                last_date=fp.last_date,
-                limit=fp.limit,
+            async with async_session() as session:
+                players = await player_repo.select_player(
+                    async_session=session,
+                    player_id=fp.player_id,
+                    possible_ban=fp.possible_ban,
+                    confirmed_ban=fp.confirmed_ban,
+                    or_none=fp.step == "normal",
+                    first_date=fp.first_date,
+                    last_date=fp.last_date,
+                    limit=fp.limit,
+                )
+
+            await produce_players(players=players, player_queue=player_queue)
+
+            fp = determine_fetch_params(
+                fetch_params=fp,
+                players=players,
+                max_days=max_days,
             )
 
-        await produce_players(players=players, player_queue=player_queue)
+            if fp.done:
+                fp.done = False
+                now = datetime.now()
+                end_of_today = datetime.combine(now.date(), time.max)
 
-        fp = determine_fetch_params(
-            fetch_params=fp,
-            players=players,
-            max_days=max_days,
-        )
-
-        if fp.done:
-            fp.done = False
-            now = datetime.now()
-            end_of_today = datetime.combine(now.date(), time.max)
-
-            time_remaining = end_of_today - now
-            sleep_time = int(time_remaining.total_seconds())
-            sleep_time = max(sleep_time, 1)  # Ensure at least 1 second sleep
-            logger.info(f"Sleeping for {sleep_time} seconds until end of day")
-            await asyncio.sleep(sleep_time)
+                time_remaining = end_of_today - now
+                sleep_time = int(time_remaining.total_seconds())
+                sleep_time = max(sleep_time, 1)  # Ensure at least 1 second sleep
+                _log_event(
+                    {
+                        "event": "done_for_day",
+                        "sleep_seconds": sleep_time,
+                    },
+                    force=True,
+                )
+                await asyncio.sleep(sleep_time)
+        except Exception as exc:
+            _log_event({"event": "scrape_task_producer_error"}, error=exc)
+            raise
 
 
 async def main():
