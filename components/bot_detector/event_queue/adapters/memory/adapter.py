@@ -66,7 +66,7 @@ class InMemoryProducerAdapter(_InMemoryBase[T], QueueBackendProducerProtocol):
             await self._queue.put(message)
 
 
-class InMemoryAdapter(Generic[T], QueueBackendProtocol):
+class InMemoryAdapter(QueueBackendProtocol[T]):
     def __init__(
         self,
         cls: Type[T],
