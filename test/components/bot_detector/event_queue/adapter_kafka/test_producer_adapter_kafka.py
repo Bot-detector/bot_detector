@@ -29,7 +29,7 @@ async def test_producer_start_stop():
         consumer=False,
         producer=True,
         consumer_config=None,
-        producer_config=KafkaProducerConfig(partition_key_fn=lambda: "1"),
+        producer_config=KafkaProducerConfig(partition_key_fn=lambda _: "1"),
     )
     adapter = AIOKafkaProducerAdapter(PlayerScraped, config)
 
@@ -55,7 +55,7 @@ async def test_producer_custom_partition_key():
         consumer=False,
         producer=True,
         consumer_config=None,
-        producer_config=KafkaProducerConfig(partition_key_fn=lambda: "1"),
+        producer_config=KafkaProducerConfig(partition_key_fn=lambda _: "1"),
     )
     adapter = AIOKafkaProducerAdapter(PlayerScraped, config)
 
@@ -86,7 +86,7 @@ async def test_producer_partition_key_bytes():
         consumer=False,
         producer=True,
         consumer_config=None,
-        producer_config=KafkaProducerConfig(partition_key_fn=lambda: b"bytes"),
+        producer_config=KafkaProducerConfig(partition_key_fn=lambda _: b"bytes"),
     )
     adapter = AIOKafkaProducerAdapter(PlayerScraped, config)
 
@@ -110,7 +110,7 @@ async def test_producer_partition_key_invalid_type():
         consumer=False,
         producer=True,
         consumer_config=None,
-        producer_config=KafkaProducerConfig(partition_key_fn=lambda: 123),
+        producer_config=KafkaProducerConfig(partition_key_fn=lambda _: 123),
     )
     adapter = AIOKafkaProducerAdapter(PlayerScraped, config)
     adapter.producer = AsyncMock()
@@ -128,7 +128,7 @@ async def test_producer_serialization():
         consumer=False,
         producer=True,
         consumer_config=None,
-        producer_config=KafkaProducerConfig(partition_key_fn=lambda: "1"),
+        producer_config=KafkaProducerConfig(partition_key_fn=lambda _: "1"),
     )
     adapter = AIOKafkaProducerAdapter(PlayerScraped, config)
 
@@ -153,7 +153,7 @@ async def test_producer_start_noop_when_existing():
         consumer=False,
         producer=True,
         consumer_config=None,
-        producer_config=KafkaProducerConfig(partition_key_fn=lambda: "1"),
+        producer_config=KafkaProducerConfig(partition_key_fn=lambda _: "1"),
     )
     adapter = AIOKafkaProducerAdapter(PlayerScraped, config)
     adapter.producer = AsyncMock()
@@ -174,7 +174,7 @@ async def test_producer_stop_noop_when_missing():
         consumer=False,
         producer=True,
         consumer_config=None,
-        producer_config=KafkaProducerConfig(partition_key_fn=lambda: "1"),
+        producer_config=KafkaProducerConfig(partition_key_fn=lambda _: "1"),
     )
     adapter = AIOKafkaProducerAdapter(PlayerScraped, config)
 
@@ -190,7 +190,7 @@ async def test_producer_send_failure():
         producer=True,
         consumer_config=None,
         producer_config=KafkaProducerConfig(
-            partition_key_fn=lambda: "1",
+            partition_key_fn=lambda _: "1",
             MAX_PRODUCE_RETRIES=1,
         ),
     )
@@ -224,7 +224,7 @@ async def test_producer_put_without_start():
         consumer=False,
         producer=True,
         consumer_config=None,
-        producer_config=KafkaProducerConfig(partition_key_fn=lambda: "1"),
+        producer_config=KafkaProducerConfig(partition_key_fn=lambda _: "1"),
     )
     adapter = AIOKafkaProducerAdapter(PlayerScraped, config)
 

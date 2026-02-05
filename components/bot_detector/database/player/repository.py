@@ -3,11 +3,12 @@ from dataclasses import asdict
 from datetime import date
 
 import sqlalchemy as sqla
-from .interface import playerInterface
-from .structs import PlayersTableStruct
 from bot_detector.structs import PlayerStruct
 from sqlalchemy import TextClause
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from .interface import playerInterface
+from .structs import PlayersTableStruct
 
 logger = logging.getLogger(__name__)
 
@@ -32,10 +33,6 @@ class PlayerRepo(playerInterface):
         player_id: int | None = None,
         limit: int = 10_000,
     ) -> list[PlayerStruct]:
-        logger.info(
-            f"{player_id=}, {confirmed_ban=}, {possible_ban=}, {first_date=}, {last_date=}, {limit=}"
-        )
-
         sql = sqla.select(PlayersTableStruct)
 
         # length of the name should be <= 13

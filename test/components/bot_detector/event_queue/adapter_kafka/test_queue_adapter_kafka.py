@@ -24,7 +24,7 @@ async def test_queue_adapter_wiring():
         consumer=True,
         producer=True,
         consumer_config=KafkaConsumerConfig(group_id="group"),
-        producer_config=KafkaProducerConfig(partition_key_fn=lambda: "1"),
+        producer_config=KafkaProducerConfig(partition_key_fn=lambda _: "1"),
     )
     adapter = AIOKafkaAdapter(PlayerScraped, config)
     adapter.producer.start = AsyncMock()
