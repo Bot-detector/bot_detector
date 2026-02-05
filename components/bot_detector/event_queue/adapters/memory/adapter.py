@@ -25,8 +25,6 @@ class _InMemoryBase(Generic[T]):
 
     async def stop(self) -> None:
         self.logger.info("[Memory] Queue cleared/stopped")
-        while not self._queue.empty():
-            await self._queue.get()
 
     async def _validate(self, item) -> Optional[T]:
         try:
@@ -36,7 +34,10 @@ class _InMemoryBase(Generic[T]):
             return None
 
 
-class InMemoryConsumerAdapter(_InMemoryBase[T], QueueBackendConsumerProtocol):
+class InMemoryConsumerAdapter(
+    _InMemoryBase[T],
+    QueueBackendConsumerProtocol[T],
+):
     async def get_one(self) -> Optional[T]:
         try:
             item = self._queue.get_nowait()
@@ -60,13 +61,16 @@ class InMemoryConsumerAdapter(_InMemoryBase[T], QueueBackendConsumerProtocol):
         self._queue.task_done()
 
 
-class InMemoryProducerAdapter(_InMemoryBase[T], QueueBackendProducerProtocol):
+class InMemoryProducerAdapter(
+    _InMemoryBase[T],
+    QueueBackendProducerProtocol[T],
+):
     async def put(self, messages: list[T]) -> None:
         for message in messages:
             await self._queue.put(message)
 
 
-class InMemoryAdapter(Generic[T], QueueBackendProtocol):
+class InMemoryAdapter(QueueBackendProtocol[T]):
     def __init__(
         self,
         cls: Type[T],

@@ -1,8 +1,10 @@
-# Backend adapters
 from typing import Any, Literal, Type, TypeVar
 
 from bot_detector.event_queue.core import (
     Queue,
+    QueueBackendConsumerProtocol,
+    QueueBackendProducerProtocol,
+    QueueBackendProtocol,
     QueueConsumer,
     QueueProducer,
 )
@@ -11,42 +13,86 @@ from pydantic import BaseModel
 T = TypeVar("T", bound=BaseModel)
 
 
+class InvalidConfig(Exception): ...
+
+
+def create_adapter_memory(
+    model: Type[T],
+    config: Any,
+    queue_type: Literal["queue", "producer", "consumer"],
+) -> (
+    QueueBackendProtocol[T]
+    | QueueBackendProducerProtocol[T]
+    | QueueBackendConsumerProtocol[T]
+):
+    from bot_detector.event_queue.adapters.memory import (
+        InMemoryAdapter,
+        InMemoryConfig,
+        InMemoryConsumerAdapter,
+        InMemoryProducerAdapter,
+    )
+
+    if not isinstance(config, InMemoryConfig):
+        raise InvalidConfig(f"Expected InMemoryConfig but got {type(config)}")
+
+    if queue_type == "queue":
+        return InMemoryAdapter[model](cls=model, config=config)
+    elif queue_type == "producer":
+        return InMemoryProducerAdapter[model](cls=model, config=config)
+    else:  # consumer
+        return InMemoryConsumerAdapter[model](cls=model, config=config)
+
+
+def create_adapter_kafka(
+    model: Type[T],
+    config: Any,
+    queue_type: Literal["queue", "producer", "consumer"],
+) -> (
+    QueueBackendProtocol[T]
+    | QueueBackendProducerProtocol[T]
+    | QueueBackendConsumerProtocol[T]
+):
+    from bot_detector.event_queue.adapters.kafka import (
+        AIOKafkaAdapter,
+        AIOKafkaConsumerAdapter,
+        AIOKafkaProducerAdapter,
+        KafkaConfig,
+    )
+
+    if not isinstance(config, KafkaConfig):
+        raise InvalidConfig(f"Expected KafkaConfig but got {type(config)}")
+
+    if queue_type == "queue":
+        return AIOKafkaAdapter[model](cls=model, config=config)
+    elif queue_type == "producer":
+        return AIOKafkaProducerAdapter[model](cls=model, config=config)
+    else:  # consumer
+        return AIOKafkaConsumerAdapter[model](cls=model, config=config)
+
+
 class QueueFactory:
     @staticmethod
     def create_queue(
         model: Type[T],
         queue_type: Literal["queue", "producer", "consumer"],
         backend_type: Literal["memory", "kafka"],
-        config: dict | Any,
+        config: Any,
     ) -> Queue[T] | QueueProducer[T] | QueueConsumer[T] | Exception:
-        # Backend selection
-        adapter = None
-        if backend_type == "memory":
-            from bot_detector.event_queue.adapters.memory import (
-                InMemoryAdapter,
-                InMemoryConfig,
-                InMemoryConsumerAdapter,
-                InMemoryProducerAdapter,
-            )
+        match backend_type:
+            case "memory":
+                adapter = create_adapter_memory(model, config, queue_type)
+            case "kafka":
+                adapter = create_adapter_kafka(model, config, queue_type)
+            case _:
+                return ValueError(f"Unknown backend_type: {backend_type}")
 
-            if isinstance(config, dict):
-                _config = InMemoryConfig.model_validate(config)
-            elif isinstance(config, InMemoryConfig):
-                _config = config
-
-            adapter = {
-                "producer": InMemoryProducerAdapter[model](model, config=_config),
-                "consumer": InMemoryConsumerAdapter[model](model, config=_config),
-                "queue": InMemoryAdapter[model](model, config=_config),
-            }[queue_type]
-
-        if adapter is None:
-            raise ValueError(f"Unknown backend: {backend_type=}, {queue_type=}")
-
-        # Queue type selection
-        queue = {
-            "producer": QueueProducer[model](adapter),
-            "consumer": QueueConsumer[model](adapter),
-            "queue": Queue[model](adapter),
-        }[queue_type]
+        match queue_type:
+            case "queue" if isinstance(adapter, QueueBackendProtocol):
+                queue = Queue[model](adapter)
+            case "producer" if isinstance(adapter, QueueBackendProducerProtocol):
+                queue = QueueProducer[model](adapter)
+            case "consumer" if isinstance(adapter, QueueBackendConsumerProtocol):
+                queue = QueueConsumer[model](adapter)
+            case _:
+                return ValueError(f"Unknown queue_type: {queue_type}")
         return queue
