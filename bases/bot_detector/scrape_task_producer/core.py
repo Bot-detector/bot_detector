@@ -6,9 +6,6 @@ from datetime import date, datetime, time, timedelta
 from bot_detector.database import Settings as DBSettings
 from bot_detector.database import get_session_factory
 from bot_detector.database.player import PlayerRepo
-from bot_detector.kafka import Settings as KafkaSettings
-from bot_detector.structs import MetaData, PlayerStruct
-from bot_detector.wide_event import WideEventLogger
 from bot_detector.event_queue.adapters.kafka import (
     KafkaConfig,
     KafkaConsumerConfig,
@@ -16,17 +13,16 @@ from bot_detector.event_queue.adapters.kafka import (
 )
 from bot_detector.event_queue.core import Queue
 from bot_detector.event_queue.factory import QueueFactory
+from bot_detector.kafka import Settings as KafkaSettings
 from bot_detector.kafka import ToScrapeStruct
+from bot_detector.structs import MetaData, PlayerStruct
+from bot_detector.wide_event import WideEventLogger
 from pydantic_settings import BaseSettings
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from typing_extensions import Literal
 
 logger = logging.getLogger(__name__)
 wide_event = WideEventLogger()
-
-
-def _add_event(data: dict[str, object]) -> None:
-    wide_event.add(data)
 
 
 def _force_log() -> None:
@@ -74,7 +70,9 @@ class FetchParams:
             case _:
                 raise ValueError(f"Invalid step: {self.step}")
 
-    def set_step(self, step: Literal["normal", "possible_ban", "confirmed_ban"]) -> None:
+    def set_step(
+        self, step: Literal["normal", "possible_ban", "confirmed_ban"]
+    ) -> None:
         self.step = step
         self._update_step_flags()
 
@@ -91,7 +89,7 @@ async def produce_players(
     if not players:
         return
 
-    _add_event({"queue_players": {"count": len(players)}})
+    wide_event.add({"queue_players": {"count": len(players)}})
     metadata = MetaData(version=1, source="scrape_task_producer")
     player_structs = [
         ToScrapeStruct(metadata=metadata, player_data=player)
@@ -106,7 +104,7 @@ async def produce_players(
 
 
 def _reduce_days(fetch_params: FetchParams) -> FetchParams:
-    _add_event({"reduce_days": {"fetch_params": asdict(fetch_params)}})
+    wide_event.add({"reduce_days": {"fetch_params": asdict(fetch_params)}})
     _days = fetch_params.days - 1 if fetch_params.days > 1 else 1
     fetch_params.update_date(days=_days)
     fetch_params.player_id = 0
@@ -135,13 +133,8 @@ def determine_fetch_params(
                 return _reduce_days(fetch_params)
 
             assert fetch_params.days <= 1
-            _add_event(
-                {
-                    "set_step": {
-                        "from": fetch_params.step,
-                        "to": "possible_ban",
-                    }
-                }
+            wide_event.add(
+                {"set_step": {"from": fetch_params.step, "to": "confirmed_ban"}}
             )
             _force_log()
             fetch_params.set_step("possible_ban")
@@ -153,13 +146,8 @@ def determine_fetch_params(
                 return _reduce_days(fetch_params)
 
             assert fetch_params.days <= max_possible_ban_days
-            _add_event(
-                {
-                    "set_step": {
-                        "from": fetch_params.step,
-                        "to": "confirmed_ban",
-                    }
-                }
+            wide_event.add(
+                {"set_step": {"from": fetch_params.step, "to": "confirmed_ban"}}
             )
             _force_log()
             fetch_params.set_step("confirmed_ban")
@@ -171,13 +159,8 @@ def determine_fetch_params(
                 return _reduce_days(fetch_params)
 
             assert fetch_params.days <= max_confirmed_ban_days
-            _add_event(
-                {
-                    "set_step": {
-                        "from": fetch_params.step,
-                        "to": "normal",
-                    }
-                }
+            wide_event.add(
+                {"set_step": {"from": fetch_params.step, "to": "confirmed_ban"}}
             )
             _force_log()
             fetch_params.set_step("normal")
@@ -207,17 +190,21 @@ async def process_players(
         try:
             lag = await player_queue.lag()
             if last_day != date.today():
-                _add_event({"new_day_reset": True})
+                wide_event.add({"new_day_reset": True})
                 _force_log()
                 last_day = date.today()
                 fp.reset_for_new_day(max_days)
 
             if lag >= 100_000:
-                _add_event({"lag_throttle": {"lag": lag}})
+                wide_event.add({"lag_throttle": {"lag": lag}})
                 await asyncio.sleep(10)
                 continue
 
-            _add_event({"fetch_params": asdict(fp)})
+            fp_dict = asdict(fp)
+            fp_dict.update(
+                {"first_date": str(fp.first_date), "last_date": str(fp.last_date)}
+            )
+            wide_event.add({"fetch_params": fp_dict})
 
             async with async_session() as session:
                 players = await player_repo.select_player(
@@ -247,18 +234,22 @@ async def process_players(
                 time_remaining = end_of_today - now
                 sleep_time = int(time_remaining.total_seconds())
                 sleep_time = max(sleep_time, 1)  # Ensure at least 1 second sleep
-                _add_event({"done_for_day": {"sleep_seconds": sleep_time}})
+                wide_event.add({"done_for_day": {"sleep_seconds": sleep_time}})
                 _force_log()
                 await asyncio.sleep(sleep_time)
         except Exception as exc:
-            _add_event({"error": {"message": str(exc)}})
+            wide_event.add({"error": {"message": str(exc)}})
             raise
         finally:
             final_ctx = wide_event.get()
             force_log = bool(final_ctx.pop("force_log", False))
             if "error" in final_ctx:
                 logger.error(final_ctx)
-            elif force_log or wide_event.sample():
+            elif force_log:
+                final_ctx.update({"log_reason": "force"})
+                logger.info(final_ctx)
+            elif wide_event.sample():
+                final_ctx.update({"log_reason": "sample"})
                 logger.info(final_ctx)
             wide_event.reset(token)
 
