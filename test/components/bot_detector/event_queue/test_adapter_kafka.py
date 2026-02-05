@@ -10,6 +10,12 @@ from bot_detector.event_queue.adapters.kafka import (
     KafkaConsumerConfig,
     KafkaProducerConfig,
 )
+from bot_detector.event_queue.core.errors import (
+    ConsumerFetchError,
+    ConsumerNotStartedError,
+    MessageTypeError,
+    ProducerNotStartedError,
+)
 from pydantic import BaseModel
 
 
@@ -307,4 +313,62 @@ async def test_consumer_connection_error():
     adapter.consumer.getone = AsyncMock(side_effect=Exception("boom"))
 
     result = await adapter.get_one()
-    assert isinstance(result, Exception)
+    assert isinstance(result, ConsumerFetchError)
+    assert isinstance(result.cause, Exception)
+
+
+@pytest.mark.asyncio
+async def test_producer_put_without_start():
+    config = KafkaConfig(
+        topic="players",
+        bootstrap_servers="localhost:9092",
+        consumer=False,
+        producer=True,
+        consumer_config=None,
+        producer_config=KafkaProducerConfig(partition_key_fn=lambda: "1"),
+    )
+    adapter = AIOKafkaProducerAdapter(PlayerScraped, config)
+
+    result = await adapter.put([PlayerScraped(id=1, username="Alice", score=100)])
+
+    assert isinstance(result, ProducerNotStartedError)
+
+
+@pytest.mark.asyncio
+async def test_consumer_get_one_without_start():
+    config = KafkaConfig(
+        topic="players",
+        bootstrap_servers="localhost:9092",
+        consumer=True,
+        producer=False,
+        consumer_config=KafkaConsumerConfig(group_id="group"),
+        producer_config=None,
+    )
+    adapter = AIOKafkaConsumerAdapter(PlayerScraped, config)
+
+    result = await adapter.get_one()
+
+    assert isinstance(result, ConsumerNotStartedError)
+
+
+@pytest.mark.asyncio
+async def test_consumer_invalid_message_type():
+    config = KafkaConfig(
+        topic="players",
+        bootstrap_servers="localhost:9092",
+        consumer=True,
+        producer=False,
+        consumer_config=KafkaConsumerConfig(group_id="group"),
+        producer_config=None,
+    )
+    adapter = AIOKafkaConsumerAdapter(PlayerScraped, config)
+
+    fake_record = AsyncMock()
+    fake_record.value = ["not", "a", "dict"]
+
+    adapter.consumer = AsyncMock()
+    adapter.consumer.getone = AsyncMock(return_value=fake_record)
+
+    result = await adapter.get_one()
+
+    assert isinstance(result, MessageTypeError)
