@@ -256,9 +256,7 @@ async def test_consumer_multiple_messages():
     fake_record_two.value = {"id": 2, "username": "Bob", "score": 200}
 
     adapter.consumer = AsyncMock()
-    adapter.consumer.getone = AsyncMock(
-        side_effect=[fake_record_one, fake_record_two]
-    )
+    adapter.consumer.getone = AsyncMock(side_effect=[fake_record_one, fake_record_two])
 
     first = await adapter.get_one()
     second = await adapter.get_one()
@@ -282,11 +280,14 @@ async def test_producer_send_failure():
     )
     adapter = AIOKafkaProducerAdapter(PlayerScraped, config)
 
-    with patch(
-        "bot_detector.event_queue.adapters.kafka.adapter.AIOKafkaProducer"
-    ) as mock_producer_class, patch(
-        "bot_detector.event_queue.adapters.kafka.adapter.asyncio.sleep",
-        new=AsyncMock(),
+    with (
+        patch(
+            "bot_detector.event_queue.adapters.kafka.adapter.AIOKafkaProducer"
+        ) as mock_producer_class,
+        patch(
+            "bot_detector.event_queue.adapters.kafka.adapter.asyncio.sleep",
+            new=AsyncMock(),
+        ),
     ):
         mock_producer = mock_producer_class.return_value
         mock_producer.start = AsyncMock()
@@ -378,57 +379,54 @@ async def test_consumer_invalid_message_type():
 
 @pytest.mark.asyncio
 async def test_producer_put_without_config():
-    with patch.object(KafkaConfig, "check_config", lambda self: self):
-        config = KafkaConfig(
-            topic="players",
-            bootstrap_servers="localhost:9092",
-            consumer=False,
-            producer=True,
-            consumer_config=None,
-            producer_config=None,
-        )
-        adapter = AIOKafkaProducerAdapter(PlayerScraped, config)
-        adapter.producer = AsyncMock()
+    config = KafkaConfig.model_construct(
+        topic="players",
+        bootstrap_servers="localhost:9092",
+        consumer=False,
+        producer=True,
+        consumer_config=None,
+        producer_config=None,
+    )
+    adapter = AIOKafkaProducerAdapter(PlayerScraped, config)
+    adapter.producer = AsyncMock()
 
-        result = await adapter.put([PlayerScraped(id=1, username="Alice", score=100)])
+    result = await adapter.put([PlayerScraped(id=1, username="Alice", score=100)])
 
-        assert isinstance(result, ProducerConfigError)
+    assert isinstance(result, ProducerConfigError)
 
 
 @pytest.mark.asyncio
 async def test_consumer_get_many_without_config():
-    with patch.object(KafkaConfig, "check_config", lambda self: self):
-        config = KafkaConfig(
-            topic="players",
-            bootstrap_servers="localhost:9092",
-            consumer=True,
-            producer=False,
-            consumer_config=None,
-            producer_config=None,
-        )
-        adapter = AIOKafkaConsumerAdapter(PlayerScraped, config)
-        adapter.consumer = AsyncMock()
+    config = KafkaConfig.model_construct(
+        topic="players",
+        bootstrap_servers="localhost:9092",
+        consumer=True,
+        producer=False,
+        consumer_config=None,
+        producer_config=None,
+    )
+    adapter = AIOKafkaConsumerAdapter(PlayerScraped, config)
+    adapter.consumer = AsyncMock()
 
-        result = await adapter.get_many(1)
+    result = await adapter.get_many(1)
 
-        assert isinstance(result, ConsumerConfigError)
+    assert isinstance(result, ConsumerConfigError)
 
 
 @pytest.mark.asyncio
 async def test_consumer_start_without_config():
-    with patch.object(KafkaConfig, "check_config", lambda self: self):
-        config = KafkaConfig(
-            topic="players",
-            bootstrap_servers="localhost:9092",
-            consumer=True,
-            producer=False,
-            consumer_config=None,
-            producer_config=None,
-        )
-        adapter = AIOKafkaConsumerAdapter(PlayerScraped, config)
+    config = KafkaConfig.model_construct(
+        topic="players",
+        bootstrap_servers="localhost:9092",
+        consumer=True,
+        producer=False,
+        consumer_config=None,
+        producer_config=None,
+    )
+    adapter = AIOKafkaConsumerAdapter(PlayerScraped, config)
 
-        with pytest.raises(ConsumerConfigError):
-            await adapter.start()
+    with pytest.raises(ConsumerConfigError):
+        await adapter.start()
 
 
 @pytest.mark.asyncio
