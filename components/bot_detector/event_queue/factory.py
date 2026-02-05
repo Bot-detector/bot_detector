@@ -78,23 +78,21 @@ class QueueFactory:
         backend_type: Literal["memory", "kafka"],
         config: Any,
     ) -> Queue[T] | QueueProducer[T] | QueueConsumer[T] | Exception:
-        if backend_type == "memory":
-            adapter = create_adapter_memory(model, config, queue_type)
-        elif backend_type == "kafka":
-            adapter = create_adapter_kafka(model, config, queue_type)
-        else:
-            return ValueError(f"Unknown backend_type: {backend_type}")
+        match backend_type:
+            case "memory":
+                adapter = create_adapter_memory(model, config, queue_type)
+            case "kafka":
+                adapter = create_adapter_kafka(model, config, queue_type)
+            case _:
+                return ValueError(f"Unknown backend_type: {backend_type}")
 
-        if queue_type == "queue" and isinstance(adapter, QueueBackendProtocol):
-            queue = Queue[model](adapter)
-        elif queue_type == "producer" and isinstance(
-            adapter, QueueBackendProducerProtocol
-        ):
-            queue = QueueProducer[model](adapter)
-        elif queue_type == "consumer" and isinstance(
-            adapter, QueueBackendConsumerProtocol
-        ):
-            queue = QueueConsumer[model](adapter)
-        else:
-            queue = ValueError(f"Unknown queue_type: {backend_type}")
+        match queue_type:
+            case "queue" if isinstance(adapter, QueueBackendProtocol):
+                queue = Queue[model](adapter)
+            case "producer" if isinstance(adapter, QueueBackendProducerProtocol):
+                queue = QueueProducer[model](adapter)
+            case "consumer" if isinstance(adapter, QueueBackendConsumerProtocol):
+                queue = QueueConsumer[model](adapter)
+            case _:
+                return ValueError(f"Unknown queue_type: {queue_type}")
         return queue

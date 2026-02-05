@@ -1,6 +1,10 @@
 import pytest
 from bot_detector.event_queue.adapters.memory import InMemoryAdapter, InMemoryConfig
-from bot_detector.event_queue.core.event_queue import Queue, QueueConsumer, QueueProducer
+from bot_detector.event_queue.core.event_queue import (
+    Queue,
+    QueueConsumer,
+    QueueProducer,
+)
 from bot_detector.event_queue.factory import InvalidConfig, QueueFactory
 from pydantic import BaseModel
 
@@ -76,7 +80,7 @@ def test_queue_factory_returns_error_for_unknown_queue_type():
     )
 
     assert isinstance(queue, ValueError)
-    assert str(queue) == "Unknown queue_type: memory"
+    assert str(queue) == "Unknown queue_type: invalid"
 
 
 def test_queue_factory_raises_invalid_config():
@@ -87,4 +91,3 @@ def test_queue_factory_raises_invalid_config():
             backend_type="memory",
             config=object(),
         )
-
