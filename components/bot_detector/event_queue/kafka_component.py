@@ -1,21 +1,18 @@
-import logging
-from typing import Generic, TypeVar
+from typing import Generic, TypeVar, cast
 
 from bot_detector.event_queue.adapters.kafka import (
-    AIOKafkaConsumerAdapter,
-    AIOKafkaProducerAdapter,
     KafkaConfig,
     KafkaConsumerConfig,
     KafkaProducerConfig,
 )
+from bot_detector.event_queue.core import QueueConsumer, QueueProducer
+from bot_detector.event_queue.factory import QueueFactory
 from bot_detector.structs._metadata import MetaData
 from bot_detector.structs.hiscore import HighscoreBaseStruct
 from bot_detector.structs.player import PlayerStruct
 from bot_detector.structs.reports import ParsedDetection
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
-
-logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -135,26 +132,74 @@ class DataToPredictStruct(BaseModel):
     data: HighScoreStruct
 
 
+def _create_producer(
+    model: type[T],
+    topic: str,
+    bootstrap_servers: str,
+    partition_key_fn,
+) -> QueueProducer[T]:
+    queue = QueueFactory.create_queue(
+        model=model,
+        queue_type="producer",
+        backend_type="kafka",
+        config=KafkaConfig(
+            topic=topic,
+            bootstrap_servers=bootstrap_servers,
+            producer=True,
+            consumer=False,
+            producer_config=KafkaProducerConfig(partition_key_fn=partition_key_fn),
+            consumer_config=None,
+        ),
+    )
+    if isinstance(queue, Exception):
+        raise queue
+    return cast(QueueProducer[T], queue)
+
+
+def _create_consumer(
+    model: type[T],
+    topic: str,
+    group_id: str,
+    bootstrap_servers: str,
+    enable_auto_commit: bool,
+    timeout_ms: int,
+) -> tuple[QueueConsumer[T], KafkaConfig]:
+    config = KafkaConfig(
+        topic=topic,
+        bootstrap_servers=bootstrap_servers,
+        producer=False,
+        consumer=True,
+        producer_config=None,
+        consumer_config=KafkaConsumerConfig(
+            group_id=group_id,
+            enable_auto_commit=enable_auto_commit,
+            consume_timeout_ms=timeout_ms,
+        ),
+    )
+    queue = QueueFactory.create_queue(
+        model=model,
+        queue_type="consumer",
+        backend_type="kafka",
+        config=config,
+    )
+    if isinstance(queue, Exception):
+        raise queue
+    return cast(QueueConsumer[T], queue), config
+
+
 class BaseQueueProducer(Generic[T]):
     def __init__(
         self,
         model: type[T],
         topic: str,
         bootstrap_servers: str,
-        max_async_actions: int = 10,
-        partition_key_fn=None,
+        partition_key_fn,
     ):
-        key_fn = partition_key_fn or (lambda _: "0")
-        self._producer = AIOKafkaProducerAdapter(
-            model,
-            KafkaConfig(
-                topic=topic,
-                bootstrap_servers=bootstrap_servers,
-                producer=True,
-                consumer=False,
-                producer_config=KafkaProducerConfig(partition_key_fn=key_fn),
-                consumer_config=None,
-            ),
+        self._producer = _create_producer(
+            model=model,
+            topic=topic,
+            bootstrap_servers=bootstrap_servers,
+            partition_key_fn=partition_key_fn,
         )
 
     async def start(self):
@@ -165,9 +210,7 @@ class BaseQueueProducer(Generic[T]):
 
     async def produce_one(self, message: T, topic: str | None = None, **_kwargs):
         _ = topic
-        error = await self._producer.put([message])
-        if isinstance(error, Exception):
-            raise error
+        await self._producer.put([message])
 
 
 class BaseQueueConsumer(Generic[T]):
@@ -179,19 +222,13 @@ class BaseQueueConsumer(Generic[T]):
         bootstrap_servers: str,
         enable_auto_commit: bool = True,
     ):
-        self._consumer = AIOKafkaConsumerAdapter(
-            model,
-            KafkaConfig(
-                topic=topic,
-                bootstrap_servers=bootstrap_servers,
-                producer=False,
-                consumer=True,
-                producer_config=None,
-                consumer_config=KafkaConsumerConfig(
-                    group_id=group_id,
-                    enable_auto_commit=enable_auto_commit,
-                ),
-            ),
+        self._consumer, self._consumer_config = _create_consumer(
+            model=model,
+            topic=topic,
+            group_id=group_id,
+            bootstrap_servers=bootstrap_servers,
+            enable_auto_commit=enable_auto_commit,
+            timeout_ms=5_000,
         )
 
     async def start(self):
@@ -201,23 +238,25 @@ class BaseQueueConsumer(Generic[T]):
         await self._consumer.stop()
 
     async def consume_many(self, max_records: int, timeout_ms: int):
-        self._consumer.config.consumer_config.consume_timeout_ms = timeout_ms
+        self._consumer_config.consumer_config.consume_timeout_ms = timeout_ms
         result = await self._consumer.get_many(count=max_records)
         if isinstance(result, Exception):
             return [], [str(result)]
         return result, []
 
     async def commit(self):
-        await self._consumer.commit()
+        error = await self._consumer.commit()
+        if isinstance(error, Exception):
+            raise error
 
 
 class PlayersToScrapeProducer(BaseQueueProducer[ToScrapeStruct]):
     def __init__(self, bootstrap_servers: str, max_async_actions: int = 10):
+        _ = max_async_actions
         super().__init__(
             ToScrapeStruct,
             "players.to_scrape",
             bootstrap_servers,
-            max_async_actions=max_async_actions,
             partition_key_fn=lambda message: str(message.player_data.id % 10),
         )
 
@@ -237,11 +276,11 @@ class PlayersToScrapeConsumer(BaseQueueConsumer[ToScrapeStruct]):
 
 class PlayersScrapedProducer(BaseQueueProducer[ScrapedStruct]):
     def __init__(self, bootstrap_servers: str, max_async_actions: int = 10):
+        _ = max_async_actions
         super().__init__(
             ScrapedStruct,
             "players.scraped",
             bootstrap_servers,
-            max_async_actions=max_async_actions,
             partition_key_fn=lambda message: str(message.player_data.id % 10),
         )
 
@@ -261,11 +300,11 @@ class PlayersScrapedConsumer(BaseQueueConsumer[ScrapedStruct]):
 
 class PlayersNotFoundProducer(BaseQueueProducer[NotFoundStruct]):
     def __init__(self, bootstrap_servers: str, max_async_actions: int = 10):
+        _ = max_async_actions
         super().__init__(
             NotFoundStruct,
             "players.not_found",
             bootstrap_servers,
-            max_async_actions=max_async_actions,
             partition_key_fn=lambda message: str(message.player_data.id % 10),
         )
 
@@ -285,11 +324,11 @@ class PlayersNotFoundConsumer(BaseQueueConsumer[NotFoundStruct]):
 
 class ReportsToInsertProducer(BaseQueueProducer[ReportsToInsertStruct]):
     def __init__(self, bootstrap_servers: str, max_async_actions: int = 10):
+        _ = max_async_actions
         super().__init__(
             ReportsToInsertStruct,
             "reports.to_insert",
             bootstrap_servers,
-            max_async_actions=max_async_actions,
             partition_key_fn=lambda message: str(message.report.reported_ts),
         )
 
@@ -309,11 +348,11 @@ class ReportsToInsertConsumer(BaseQueueConsumer[ReportsToInsertStruct]):
 
 class DataToPredictProducer(BaseQueueProducer[DataToPredictStruct]):
     def __init__(self, bootstrap_servers: str, max_async_actions: int = 10):
+        _ = max_async_actions
         super().__init__(
             DataToPredictStruct,
             "data.to_predict",
             bootstrap_servers,
-            max_async_actions=max_async_actions,
             partition_key_fn=lambda message: str(message.player_id % 10),
         )
 
