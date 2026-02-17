@@ -6,7 +6,7 @@ import aiohttp
 from bot_detector.database import Settings as DBSettings
 from bot_detector.database import get_session_factory
 from bot_detector.database.prediction import PredictionLatestRepo, PredictionRepo
-from bot_detector.kafka import (
+from bot_detector.event_queue import (
     DataToPredictConsumer,
     DataToPredictProducer,
     DataToPredictStruct,
@@ -14,7 +14,7 @@ from bot_detector.kafka import (
     PlayersScrapedProducer,
     ScrapedStruct,
 )
-from bot_detector.kafka import Settings as KafkaSettings
+from bot_detector.event_queue import Settings as KafkaSettings
 from bot_detector.ml_api import InputData, MLApiClient, Prediction
 from bot_detector.structs import PredictionCreate
 from bot_detector.worker_ml.settings import Settings

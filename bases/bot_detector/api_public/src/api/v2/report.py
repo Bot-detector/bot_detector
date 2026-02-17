@@ -2,8 +2,12 @@ from bot_detector.api_public.src.app.repositories.player import Player
 from bot_detector.api_public.src.app.repositories.report import CustomError, Report
 from bot_detector.api_public.src.app.views.response.ok import Ok
 from bot_detector.api_public.src.core._cache import SimpleALRUCache
+from bot_detector.api_public.src.core.fastapi.dependencies.kafka import (
+    get_reports_to_insert_producer,
+)
 from bot_detector.api_public.src.core.fastapi.dependencies import wide_event
 from bot_detector.api_public.src.core.fastapi.dependencies.session import get_session
+from bot_detector.event_queue import ReportsToInsertProducer
 from bot_detector.structs import Detection, ParsedDetection
 from fastapi import APIRouter, Depends, status
 from fastapi.exceptions import HTTPException
@@ -18,6 +22,7 @@ player_cache = SimpleALRUCache(max_size=100_000)
 async def post_reports(
     detections: list[Detection],
     session: AsyncSession = Depends(get_session),
+    report_producer: ReportsToInsertProducer = Depends(get_reports_to_insert_producer),
 ):
     global player_cache
     report_repo = Report()
@@ -83,7 +88,7 @@ async def post_reports(
 
     # print(_data)
     try:
-        await report_repo.send_to_kafka(data=_data)
+        await report_repo.send_to_kafka(data=_data, producer=report_producer)
     except CustomError:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

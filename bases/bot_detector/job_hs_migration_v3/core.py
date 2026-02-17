@@ -7,8 +7,8 @@ from datetime import timedelta
 import sqlalchemy as sqla
 from bot_detector.database import Settings as DBSettings
 from bot_detector.database import get_session_factory
-from bot_detector.kafka import PlayersScrapedProducer, ScrapedStruct
-from bot_detector.kafka import Settings as KafkaSettings
+from bot_detector.event_queue import PlayersScrapedProducer, ScrapedStruct
+from bot_detector.event_queue import Settings as KafkaSettings
 from bot_detector.structs import (
     HighscoreBaseStruct,
     MetaData,

@@ -1,3 +1,41 @@
 from .factory import QueueFactory
+from .kafka_component import (
+    DataToPredictConsumer,
+    DataToPredictProducer,
+    DataToPredictStruct,
+    HighScoreStruct,
+    NotFoundStruct,
+    PlayersNotFoundConsumer,
+    PlayersNotFoundProducer,
+    PlayersScrapedConsumer,
+    PlayersScrapedProducer,
+    PlayersToScrapeConsumer,
+    PlayersToScrapeProducer,
+    ReportsToInsertConsumer,
+    ReportsToInsertProducer,
+    ReportsToInsertStruct,
+    ScrapedStruct,
+    Settings,
+    ToScrapeStruct,
+)
 
-__all__ = ["QueueFactory"]
+__all__ = [
+    "QueueFactory",
+    "Settings",
+    "ToScrapeStruct",
+    "ScrapedStruct",
+    "NotFoundStruct",
+    "ReportsToInsertStruct",
+    "HighScoreStruct",
+    "DataToPredictStruct",
+    "PlayersToScrapeProducer",
+    "PlayersToScrapeConsumer",
+    "PlayersScrapedProducer",
+    "PlayersScrapedConsumer",
+    "PlayersNotFoundProducer",
+    "PlayersNotFoundConsumer",
+    "ReportsToInsertProducer",
+    "ReportsToInsertConsumer",
+    "DataToPredictProducer",
+    "DataToPredictConsumer",
+]

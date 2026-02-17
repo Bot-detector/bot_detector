@@ -6,12 +6,12 @@ from asyncio import Queue
 from bot_detector import database as db
 from bot_detector.database import Settings as DBSettings
 from bot_detector.database.report import ReportRepo
-from bot_detector.kafka import (
+from bot_detector.event_queue import (
     ReportsToInsertConsumer,
     ReportsToInsertProducer,
     ReportsToInsertStruct,
 )
-from bot_detector.kafka import Settings as KafkaSettings
+from bot_detector.event_queue import Settings as KafkaSettings
 from bot_detector.structs import ParsedDetection
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker

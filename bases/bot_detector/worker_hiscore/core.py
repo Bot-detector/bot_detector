@@ -6,13 +6,13 @@ from bot_detector import database as db
 from bot_detector.database import Settings as DBSettings
 from bot_detector.database.hiscore import HighscoreDataRepo
 from bot_detector.database.player import PlayerRepo
-from bot_detector.kafka import (
+from bot_detector.event_queue import (
     PlayersScrapedConsumer,
     PlayersScrapedProducer,
     ScrapedStruct,
 )
-from bot_detector.kafka import Settings as KafkaSettings
-from bot_detector.kafka.data_to_predict import (
+from bot_detector.event_queue import Settings as KafkaSettings
+from bot_detector.event_queue import (
     DataToPredictProducer,
     DataToPredictStruct,
     HighScoreStruct,

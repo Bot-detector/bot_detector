@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta
 
 import aiohttp
 from aiohttp import ClientSession
-from bot_detector.kafka import (
+from bot_detector.event_queue import (
     NotFoundStruct,
     PlayersNotFoundProducer,
     PlayersScrapedProducer,
@@ -13,7 +13,7 @@ from bot_detector.kafka import (
     ScrapedStruct,
     ToScrapeStruct,
 )
-from bot_detector.kafka import Settings as KafkaSettings
+from bot_detector.event_queue import Settings as KafkaSettings
 from bot_detector.proxy_manager import ProxyManager
 from bot_detector.proxy_manager import Settings as ProxySettings
 from bot_detector.structs import (
