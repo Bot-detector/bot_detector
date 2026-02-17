@@ -27,8 +27,8 @@ def make_middleware() -> list[Middleware]:
         Middleware(
             CORSMiddleware,
             allow_origins=[
-                "http://osrsbotdetector.com/",
-                "https://osrsbotdetector.com/",
+                "http://osrsbotdetector.com",
+                "https://osrsbotdetector.com",
                 "http://localhost",
                 "http://localhost:8080",
             ],
