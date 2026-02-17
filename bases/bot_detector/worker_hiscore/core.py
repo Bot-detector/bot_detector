@@ -7,8 +7,7 @@ from bot_detector.database import Settings as DBSettings
 from bot_detector.database.hiscore import HighscoreDataRepo
 from bot_detector.database.player import PlayerRepo
 from bot_detector.event_queue import (
-    PlayersScrapedConsumer,
-    PlayersScrapedProducer,
+    PlayersScrapedQueue,
     ScrapedStruct,
 )
 from bot_detector.event_queue import Settings as KafkaSettings
@@ -125,8 +124,8 @@ async def consume_many_task(
     worker_id: int,
     max_messages: int,
     max_interval_ms: int,
-    player_sc_consumer: PlayersScrapedConsumer,
-    player_sc_producer: PlayersScrapedProducer,
+    player_sc_consumer: PlayersScrapedQueue,
+    player_sc_producer: PlayersScrapedQueue,
     data_to_predict_producer: DataToPredictProducer,
     highscore_repo: HighscoreDataRepo,
     player_repo: PlayerRepo,
@@ -199,21 +198,18 @@ async def main():
     player_repo = PlayerRepo()
     highscore_repo = HighscoreDataRepo()
 
-    ## consumer
-    player_sc_consumer = PlayersScrapedConsumer(
+    ## queue
+    player_sc_queue = PlayersScrapedQueue(
         bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
         group_id="highscore_worker",
     )
-    ## producer
-    player_sc_producer = PlayersScrapedProducer(
-        bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
-    )
+    player_sc_consumer = player_sc_queue
+    player_sc_producer = player_sc_queue
     data_to_predict_producer = DataToPredictProducer(
         bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
     )
     # start kafka producers and consumers
-    await player_sc_consumer.start()
-    await player_sc_producer.start()
+    await player_sc_queue.start()
     await data_to_predict_producer.start()
 
     # start workers

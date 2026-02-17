@@ -147,6 +147,12 @@ class BaseConsumerFacade(Generic[T]):
     async def stop(self):
         await self._consumer.stop()
 
+    async def consume_one(self) -> tuple[T | None, str | None]:
+        result = await self._consumer.get_one()
+        if isinstance(result, Exception):
+            return None, str(result)
+        return result, None
+
     async def consume_many(self, max_records: int, timeout_ms: int):
         if isinstance(self._consumer_config, KafkaConfig):
             self._consumer_config.consumer_config.consume_timeout_ms = timeout_ms
@@ -199,6 +205,12 @@ class BaseQueueFacade(Generic[T]):
 
     async def stop(self):
         await self._queue.stop()
+
+    async def consume_one(self) -> tuple[T | None, str | None]:
+        result = await self._queue.get_one()
+        if isinstance(result, Exception):
+            return None, str(result)
+        return result, None
 
     async def produce_one(self, message: T, topic: str | None = None, **_kwargs):
         _ = topic
