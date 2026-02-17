@@ -8,7 +8,7 @@ from bot_detector.event_queue.adapters.kafka import (
 from bot_detector.event_queue.adapters.memory import InMemoryConfig
 from bot_detector.event_queue.core import Queue, QueueConsumer, QueueProducer
 from bot_detector.event_queue.factory import QueueFactory
-from bot_detector.event_queue.topics import (
+from bot_detector.event_queue.structs import (
     DataToPredictStruct,
     HighScoreStruct,
     NotFoundStruct,
