@@ -29,6 +29,6 @@ packages = ["bot_detector"]
 [tool.polylith.bricks]
 "../../bases/bot_detector/hiscore_scraper" = "bot_detector/hiscore_scraper"
 "../../components/bot_detector/proxy_manager" = "bot_detector/proxy_manager"
-"../../components/bot_detector/kafka" = "bot_detector/kafka"
+"../../components/bot_detector/event_queue" = "bot_detector/event_queue"
 "../../components/bot_detector/structs" = "bot_detector/structs"
 "../../components/bot_detector/logfmt" = "bot_detector/logfmt"

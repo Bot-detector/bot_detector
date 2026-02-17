@@ -29,7 +29,6 @@ packages = ["bot_detector"]
 [tool.polylith.bricks]
 "../../bases/bot_detector/scrape_task_producer" = "bot_detector/scrape_task_producer"
 "../../components/bot_detector/database" = "bot_detector/database"
-"../../components/bot_detector/kafka" = "bot_detector/kafka"
 "../../components/bot_detector/event_queue" = "bot_detector/event_queue"
 "../../components/bot_detector/wide_event" = "bot_detector/wide_event"
 "../../components/bot_detector/structs" = "bot_detector/structs"

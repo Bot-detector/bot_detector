@@ -6,15 +6,13 @@ import aiohttp
 from bot_detector.database import Settings as DBSettings
 from bot_detector.database import get_session_factory
 from bot_detector.database.prediction import PredictionLatestRepo, PredictionRepo
-from bot_detector.kafka import (
-    DataToPredictConsumer,
-    DataToPredictProducer,
+from bot_detector.event_queue import (
+    DataToPredictQueue,
     DataToPredictStruct,
-    PlayersScrapedConsumer,
-    PlayersScrapedProducer,
+    PlayersScrapedQueue,
     ScrapedStruct,
 )
-from bot_detector.kafka import Settings as KafkaSettings
+from bot_detector.event_queue import Settings as KafkaSettings
 from bot_detector.ml_api import InputData, MLApiClient, Prediction
 from bot_detector.structs import PredictionCreate
 from bot_detector.worker_ml.settings import Settings
@@ -92,8 +90,8 @@ def transform_data_to_predict_struct(data: DataToPredictStruct) -> InputData:
 async def consume_data_to_predict(
     max_messages: int,
     max_interval_ms: int,
-    data_to_predict_consumer: DataToPredictConsumer,
-    data_to_predict_producer: DataToPredictProducer,
+    data_to_predict_consumer: DataToPredictQueue,
+    data_to_predict_producer: DataToPredictQueue,
     api: MLApiClient,
     session_factory: async_sessionmaker[AsyncSession],
     model_name: str = "multi_model_v1",
@@ -167,8 +165,8 @@ async def consume_data_to_predict(
 async def consume_player_scraped(
     max_messages: int,
     max_interval_ms: int,
-    player_sc_consumer: PlayersScrapedConsumer,
-    player_sc_producer: PlayersScrapedProducer,
+    player_sc_consumer: PlayersScrapedQueue,
+    player_sc_producer: PlayersScrapedQueue,
     api: MLApiClient,
     session_factory: async_sessionmaker[AsyncSession],
     model_name: str = "multi_model_v1",
@@ -254,15 +252,13 @@ async def main():
 
     tasks = []
     if CONSUME_PLAYER_SCRAPED:
-        player_sc_consumer = PlayersScrapedConsumer(
+        player_sc_queue = PlayersScrapedQueue(
             bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
             group_id="ml_worker",
         )
-        player_sc_producer = PlayersScrapedProducer(
-            bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
-        )
-        await player_sc_consumer.start()
-        await player_sc_producer.start()
+        player_sc_consumer = player_sc_queue
+        player_sc_producer = player_sc_queue
+        await player_sc_queue.start()
         tasks.append(
             asyncio.create_task(
                 consume_player_scraped(
@@ -278,15 +274,13 @@ async def main():
         )
 
     if CONSUME_DATA_TO_PREDICT:
-        data_to_predict_consumer = DataToPredictConsumer(
+        data_to_predict_queue = DataToPredictQueue(
             bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
             group_id="ml_worker",
         )
-        data_to_predict_producer = DataToPredictProducer(
-            bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
-        )
-        await data_to_predict_consumer.start()
-        await data_to_predict_producer.start()
+        data_to_predict_consumer = data_to_predict_queue
+        data_to_predict_producer = data_to_predict_queue
+        await data_to_predict_queue.start()
         tasks.append(
             asyncio.create_task(
                 consume_data_to_predict(
@@ -303,12 +297,10 @@ async def main():
     await asyncio.gather(*tasks)
 
     if CONSUME_PLAYER_SCRAPED:
-        await player_sc_consumer.stop()
-        await player_sc_producer.stop()
+        await player_sc_queue.stop()
 
     if CONSUME_DATA_TO_PREDICT:
-        await data_to_predict_consumer.stop()
-        await data_to_predict_producer.stop()
+        await data_to_predict_queue.stop()
 
     await http_session.close()
     await engine.dispose()

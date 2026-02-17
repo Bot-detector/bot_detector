@@ -2,13 +2,12 @@ import logging
 from contextlib import asynccontextmanager
 
 from bot_detector.api_public.src import api
-from bot_detector.api_public.src.core.fastapi.dependencies.kafka import kafka_manager
 from bot_detector.api_public.src.core.fastapi.middleware import (
     LoggingMiddleware,
     PrometheusMiddleware,
 )
-from bot_detector.kafka import ReportsToInsertProducer
-from bot_detector.kafka import Settings as KafkaSettings
+from bot_detector.event_queue import ReportsToInsertProducer
+from bot_detector.event_queue import Settings as KafkaSettings
 from fastapi import FastAPI
 from fastapi.middleware import Middleware
 from fastapi.middleware.cors import CORSMiddleware
@@ -46,14 +45,11 @@ def make_middleware() -> list[Middleware]:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("startup initiated")
-    kafka_manager.set_producer(
-        key="reports_to_insert",
-        producer=ReportsToInsertProducer(
-            bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
-            max_async_actions=Settings().KAFKA_MAX_ASYNC_CALLS,
-        ),
+    app.state.reports_to_insert_producer = ReportsToInsertProducer(
+        bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
+        max_async_actions=Settings().KAFKA_MAX_ASYNC_CALLS,
     )
-    producer = kafka_manager.get_producer(key="reports_to_insert")
+    producer = app.state.reports_to_insert_producer
     await producer.start()
     yield
     await producer.stop()

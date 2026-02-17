@@ -4,16 +4,15 @@ from datetime import date, datetime, timedelta
 
 import aiohttp
 from aiohttp import ClientSession
-from bot_detector.kafka import (
+from bot_detector.event_queue import (
     NotFoundStruct,
     PlayersNotFoundProducer,
     PlayersScrapedProducer,
-    PlayersToScrapeConsumer,
-    PlayersToScrapeProducer,
+    PlayersToScrapeQueue,
     ScrapedStruct,
     ToScrapeStruct,
 )
-from bot_detector.kafka import Settings as KafkaSettings
+from bot_detector.event_queue import Settings as KafkaSettings
 from bot_detector.proxy_manager import ProxyManager
 from bot_detector.proxy_manager import Settings as ProxySettings
 from bot_detector.structs import (
@@ -49,7 +48,7 @@ async def scrape_player(
     hiscore_instance: Hiscore,
     proxy: str,
     player_nf_producer: PlayersNotFoundProducer,
-    player_ts_producer: PlayersToScrapeProducer,
+    player_ts_producer: PlayersToScrapeQueue,
 ) -> tuple[PlayerStats | None, bool]:
     """
     Scrape player stats from hiscores.
@@ -111,7 +110,7 @@ async def scrape_player(
 async def transform_player_stats(
     player_stats: PlayerStats,
     player: PlayerStruct,
-    player_ts_producer: PlayersToScrapeProducer,
+    player_ts_producer: PlayersToScrapeQueue,
 ) -> ScrapedStruct | None:
     player.updated_at = datetime.now()
     player.possible_ban = False
@@ -191,7 +190,7 @@ async def get_proxy(
 
 async def get_player_to_scrape(
     worker_id: int,
-    player_ts_consumer: PlayersToScrapeConsumer,
+    player_ts_consumer: PlayersToScrapeQueue,
 ) -> ToScrapeStruct | None:
     player_to_scrape, error = await player_ts_consumer.consume_one()
     if error:
@@ -206,8 +205,8 @@ async def get_player_to_scrape(
 async def work(
     worker_id: int,
     proxy_manager: ProxyManager,
-    player_ts_consumer: PlayersToScrapeConsumer,
-    player_ts_producer: PlayersToScrapeProducer,
+    player_ts_consumer: PlayersToScrapeQueue,
+    player_ts_producer: PlayersToScrapeQueue,
     player_nf_producer: PlayersNotFoundProducer,
     player_sc_producer: PlayersScrapedProducer,
 ):
@@ -289,17 +288,17 @@ async def main():
     # initialize kafka producers and consumers
     b_server = KafkaSettings().KAFKA_BOOTSTRAP_SERVERS
     ## consumer
-    player_ts_consumer = PlayersToScrapeConsumer(
+    player_ts_queue = PlayersToScrapeQueue(
         bootstrap_servers=b_server, group_id="scraper"
     )
-    ## producer
-    player_ts_producer = PlayersToScrapeProducer(bootstrap_servers=b_server)
+    ## queue
+    player_ts_consumer = player_ts_queue
+    player_ts_producer = player_ts_queue
     player_nf_producer = PlayersNotFoundProducer(bootstrap_servers=b_server)
     player_sc_producer = PlayersScrapedProducer(bootstrap_servers=b_server)
 
     # start kafka producers and consumers
-    await player_ts_consumer.start()
-    await player_ts_producer.start()
+    await player_ts_queue.start()
     await player_nf_producer.start()
     await player_sc_producer.start()
     # start workers

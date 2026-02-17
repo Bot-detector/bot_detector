@@ -2,10 +2,7 @@ import os
 from datetime import datetime, timedelta
 
 import pytest
-from bot_detector.runemetrics_api.core import (
-    RuneMetricsError,
-    RuneMetricsResponse,
-)
+from bot_detector.runemetrics_api.core import RuneMetricsError, RuneMetricsResponse
 from bot_detector.runemetrics_scraper import core
 from bot_detector.structs import PlayerStruct
 from pydantic import BaseModel
@@ -66,7 +63,3 @@ async def test_update_player(player_struct: PlayerStruct, error_value, expected_
     assert updated.possible_ban == 1
     assert updated.confirmed_player == 0
     assert isinstance(updated.updated_at, datetime)
-
-
-def test_sample():
-    assert core is not None

@@ -31,6 +31,6 @@ packages = ["bot_detector"]
 "../../bases/bot_detector/worker_ml" = "bot_detector/worker_ml"
 "../../components/bot_detector/ml_api" = "bot_detector/ml_api"
 "../../components/bot_detector/database" = "bot_detector/database"
-"../../components/bot_detector/kafka" = "bot_detector/kafka"
+"../../components/bot_detector/event_queue" = "bot_detector/event_queue"
 "../../components/bot_detector/structs" = "bot_detector/structs"
 "../../components/bot_detector/logfmt" = "bot_detector/logfmt"

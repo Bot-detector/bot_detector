@@ -5,13 +5,12 @@ from datetime import datetime
 
 import aiohttp
 from aiohttp import ClientSession
-from bot_detector.kafka import (
-    PlayersNotFoundConsumer,
-    PlayersNotFoundProducer,
+from bot_detector.event_queue import (
+    PlayersNotFoundQueue,
     PlayersScrapedProducer,
     ScrapedStruct,
 )
-from bot_detector.kafka import Settings as KafkaSettings
+from bot_detector.event_queue import Settings as KafkaSettings
 from bot_detector.proxy_manager import ProxyManager
 from bot_detector.proxy_manager import Settings as ProxySettings
 from bot_detector.runemetrics_api import RuneMetrics, RuneMetricsResponse
@@ -150,8 +149,8 @@ async def work(
     worker_id: int,
     proxy_manager: ProxyManager,
     rate_limiter: RateLimiter,
-    player_nf_consumer: PlayersNotFoundConsumer,
-    player_nf_producer: PlayersNotFoundProducer,
+    player_nf_consumer: PlayersNotFoundQueue,
+    player_nf_producer: PlayersNotFoundQueue,
     player_sc_producer: PlayersScrapedProducer,
 ):
     async with ClientSession() as session:
@@ -246,18 +245,16 @@ async def main():
     # initialize kafka producers and consumers
     b_server = KafkaSettings().KAFKA_BOOTSTRAP_SERVERS
 
-    ## consumer
-    player_nf_consumer = PlayersNotFoundConsumer(
+    ## queue
+    player_nf_queue = PlayersNotFoundQueue(
         bootstrap_servers=b_server, group_id="runemetrics_scraper"
     )
-
-    ## producer
-    player_nf_producer = PlayersNotFoundProducer(bootstrap_servers=b_server)
+    player_nf_consumer = player_nf_queue
+    player_nf_producer = player_nf_queue
     player_sc_producer = PlayersScrapedProducer(bootstrap_servers=b_server)
 
     # start kafka producers and consumers
-    await player_nf_consumer.start()
-    await player_nf_producer.start()
+    await player_nf_queue.start()
     await player_sc_producer.start()
 
     # start workers

@@ -13,8 +13,8 @@ from bot_detector.event_queue.adapters.kafka import (
 )
 from bot_detector.event_queue.core import Queue
 from bot_detector.event_queue.factory import QueueFactory
-from bot_detector.kafka import Settings as KafkaSettings
-from bot_detector.kafka import ToScrapeStruct
+from bot_detector.event_queue import Settings as KafkaSettings
+from bot_detector.event_queue import ToScrapeStruct
 from bot_detector.structs import MetaData, PlayerStruct
 from bot_detector.wide_event import WideEventLogger
 from pydantic_settings import BaseSettings
