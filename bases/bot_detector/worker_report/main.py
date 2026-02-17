@@ -7,8 +7,7 @@ from bot_detector import database as db
 from bot_detector.database import Settings as DBSettings
 from bot_detector.database.report import ReportRepo
 from bot_detector.event_queue import (
-    ReportsToInsertConsumer,
-    ReportsToInsertProducer,
+    ReportsToInsertQueue,
     ReportsToInsertStruct,
 )
 from bot_detector.event_queue import Settings as KafkaSettings
@@ -66,7 +65,7 @@ async def parse_detections(
 
 
 async def consume_many_task(
-    report_consumer: ReportsToInsertConsumer,
+    report_consumer: ReportsToInsertQueue,
     max_messages: int,
     max_interval_ms: int,
     session_factory: async_sessionmaker[AsyncSession],
@@ -111,7 +110,7 @@ async def consume_many_task(
             await asyncio.sleep(5)
 
 
-async def error_task(error_queue: Queue, report_producer: ReportsToInsertProducer):
+async def error_task(error_queue: Queue, report_producer: ReportsToInsertQueue):
     while True:
         report: ReportsToInsertStruct = await error_queue.get()
         if not isinstance(report, ReportsToInsertStruct):
@@ -131,26 +130,19 @@ async def main():
     # initialize kafka producers and consumers
     b_server = KafkaSettings().KAFKA_BOOTSTRAP_SERVERS
     ## consumer
-    report_consumer = ReportsToInsertConsumer(
+    report_queue = ReportsToInsertQueue(
         bootstrap_servers=b_server,
         group_id="report_worker",
     )
 
-    ## producer
-    report_producer = ReportsToInsertProducer(
-        bootstrap_servers=b_server,
-        max_async_actions=100,
-    )
-
-    # start kafka producers and consumers
-    await report_consumer.start()
-    await report_producer.start()
+    # start kafka queue
+    await report_queue.start()
 
     # start tasks
     tasks = [
         asyncio.create_task(
             consume_many_task(
-                report_consumer=report_consumer,
+                report_consumer=report_queue,
                 report_repo=report_repo,
                 max_messages=MAX_BATCH_SIZE,
                 max_interval_ms=MAX_INTERVAL_MS,
@@ -161,7 +153,7 @@ async def main():
         asyncio.create_task(
             error_task(
                 error_queue=error_queue,
-                report_producer=report_producer,
+                report_producer=report_queue,
             )
         ),
     ]
