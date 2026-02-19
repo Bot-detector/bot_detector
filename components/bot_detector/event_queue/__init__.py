@@ -1,26 +1,11 @@
+from .adapters.kafka import KafkaSettings as Settings
 from .factory import QueueFactory
-from .facade import (
-    DataToPredictConsumer,
-    DataToPredictProducer,
-    DataToPredictQueue,
+from .structs import (
     DataToPredictStruct,
     HighScoreStruct,
     NotFoundStruct,
-    PlayersNotFoundConsumer,
-    PlayersNotFoundProducer,
-    PlayersNotFoundQueue,
-    PlayersScrapedConsumer,
-    PlayersScrapedProducer,
-    PlayersScrapedQueue,
-    PlayersToScrapeConsumer,
-    PlayersToScrapeProducer,
-    PlayersToScrapeQueue,
-    ReportsToInsertConsumer,
-    ReportsToInsertProducer,
-    ReportsToInsertQueue,
     ReportsToInsertStruct,
     ScrapedStruct,
-    Settings,
     ToScrapeStruct,
 )
 
@@ -33,19 +18,4 @@ __all__ = [
     "ReportsToInsertStruct",
     "HighScoreStruct",
     "DataToPredictStruct",
-    "PlayersToScrapeProducer",
-    "PlayersToScrapeConsumer",
-    "PlayersToScrapeQueue",
-    "PlayersScrapedProducer",
-    "PlayersScrapedConsumer",
-    "PlayersScrapedQueue",
-    "PlayersNotFoundProducer",
-    "PlayersNotFoundConsumer",
-    "PlayersNotFoundQueue",
-    "ReportsToInsertProducer",
-    "ReportsToInsertConsumer",
-    "ReportsToInsertQueue",
-    "DataToPredictProducer",
-    "DataToPredictConsumer",
-    "DataToPredictQueue",
 ]
