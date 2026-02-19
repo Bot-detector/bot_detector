@@ -8,8 +8,8 @@ from bot_detector.event_queue.adapters.kafka import (
     KafkaConfig,
     KafkaConsumerConfig,
     KafkaProducerConfig,
+    KafkaSettings,
 )
-from bot_detector.event_queue.adapters.kafka import KafkaSettings
 from bot_detector.event_queue.core import Queue, QueueProducer
 from bot_detector.event_queue.factory import QueueFactory
 from bot_detector.event_queue.structs import (
@@ -299,6 +299,7 @@ async def main():
             bootstrap_servers=b_server,
             producer=True,
             consumer=True,
+            producer_config=KafkaProducerConfig(partition_key_fn=None),
             consumer_config=KafkaConsumerConfig(group_id="scraper"),
         ),
     )
@@ -310,6 +311,7 @@ async def main():
             topic="players.not_found",
             bootstrap_servers=b_server,
             producer=True,
+            producer_config=KafkaProducerConfig(partition_key_fn=None),
         ),
     )
     player_sc_producer = QueueFactory.create_queue(

@@ -6,8 +6,12 @@ import aiohttp
 from bot_detector.database import Settings as DBSettings
 from bot_detector.database import get_session_factory
 from bot_detector.database.prediction import PredictionLatestRepo, PredictionRepo
-from bot_detector.event_queue.adapters.kafka import KafkaConfig, KafkaConsumerConfig
-from bot_detector.event_queue.adapters.kafka import KafkaSettings
+from bot_detector.event_queue.adapters.kafka import (
+    KafkaConfig,
+    KafkaConsumerConfig,
+    KafkaProducerConfig,
+    KafkaSettings,
+)
 from bot_detector.event_queue.core import Queue
 from bot_detector.event_queue.factory import QueueFactory
 from bot_detector.event_queue.structs import DataToPredictStruct, ScrapedStruct
@@ -156,6 +160,7 @@ async def consume_data_to_predict(
             )
             await data_to_predict_queue.commit()
             await asyncio.sleep(15)
+            continue
         await data_to_predict_queue.commit()
 
 
@@ -229,6 +234,7 @@ async def consume_player_scraped(
             logger.error(f"Error consuming scrapes: {e}")
             logger.debug(f"Traceback: \n{traceback.format_exc()}")
             await asyncio.gather(*[player_sc_queue.produce_one(b) for b in batch])
+            await player_sc_queue.commit()
             await asyncio.sleep(15)
 
 
@@ -255,6 +261,7 @@ async def main():
                 bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
                 producer=True,
                 consumer=True,
+                producer_config=KafkaProducerConfig(partition_key_fn=None),
                 consumer_config=KafkaConsumerConfig(group_id="ml_worker"),
             ),
         )
@@ -284,6 +291,7 @@ async def main():
                 bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
                 producer=True,
                 consumer=True,
+                producer_config=KafkaProducerConfig(partition_key_fn=None),
                 consumer_config=KafkaConsumerConfig(group_id="ml_worker"),
             ),
         )

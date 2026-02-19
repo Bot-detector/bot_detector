@@ -9,8 +9,8 @@ from bot_detector.event_queue.adapters.kafka import (
     KafkaConfig,
     KafkaConsumerConfig,
     KafkaProducerConfig,
+    KafkaSettings,
 )
-from bot_detector.event_queue.adapters.kafka import KafkaSettings
 from bot_detector.event_queue.core import Queue, QueueProducer
 from bot_detector.event_queue.factory import QueueFactory
 from bot_detector.event_queue.structs import NotFoundStruct, ScrapedStruct
@@ -256,6 +256,7 @@ async def main():
             bootstrap_servers=b_server,
             producer=True,
             consumer=True,
+            producer_config=KafkaProducerConfig(partition_key_fn=None),
             consumer_config=KafkaConsumerConfig(group_id="runemetrics_scraper"),
         ),
     )

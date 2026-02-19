@@ -6,8 +6,11 @@ from bot_detector.api_public.src.core.fastapi.middleware import (
     LoggingMiddleware,
     PrometheusMiddleware,
 )
-from bot_detector.event_queue.adapters.kafka import KafkaConfig, KafkaProducerConfig
-from bot_detector.event_queue.adapters.kafka import KafkaSettings
+from bot_detector.event_queue.adapters.kafka import (
+    KafkaConfig,
+    KafkaProducerConfig,
+    KafkaSettings,
+)
 from bot_detector.event_queue.factory import QueueFactory
 from bot_detector.event_queue.structs import ReportsToInsertStruct
 from fastapi import FastAPI

@@ -6,8 +6,12 @@ from asyncio import Queue
 from bot_detector import database as db
 from bot_detector.database import Settings as DBSettings
 from bot_detector.database.report import ReportRepo
-from bot_detector.event_queue.adapters.kafka import KafkaConfig, KafkaConsumerConfig
-from bot_detector.event_queue.adapters.kafka import KafkaSettings
+from bot_detector.event_queue.adapters.kafka import (
+    KafkaConfig,
+    KafkaConsumerConfig,
+    KafkaProducerConfig,
+    KafkaSettings,
+)
 from bot_detector.event_queue.core import Queue as EventQueue
 from bot_detector.event_queue.factory import QueueFactory
 from bot_detector.event_queue.structs import ReportsToInsertStruct
@@ -139,6 +143,7 @@ async def main():
             bootstrap_servers=b_server,
             producer=True,
             consumer=True,
+            producer_config=KafkaProducerConfig(partition_key_fn=None),
             consumer_config=KafkaConsumerConfig(group_id="report_worker"),
         ),
     )

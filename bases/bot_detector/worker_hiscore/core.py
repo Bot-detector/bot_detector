@@ -10,8 +10,8 @@ from bot_detector.event_queue.adapters.kafka import (
     KafkaConfig,
     KafkaConsumerConfig,
     KafkaProducerConfig,
+    KafkaSettings,
 )
-from bot_detector.event_queue.adapters.kafka import KafkaSettings
 from bot_detector.event_queue.core import Queue, QueueProducer
 from bot_detector.event_queue.factory import QueueFactory
 from bot_detector.event_queue.structs import (
@@ -224,6 +224,7 @@ async def main():
             topic="data.to_predict",
             bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
             producer=True,
+            producer_config=KafkaProducerConfig(partition_key_fn=None),
         ),
     )
     for queue in (player_sc_queue, data_to_predict_producer):
