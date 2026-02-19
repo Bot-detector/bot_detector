@@ -98,10 +98,11 @@ async def consume_data_to_predict(
     model_name: str = "multi_model_v1",
 ):
     while True:
-        _batch, errors = await data_to_predict_queue.consume_many(
-            max_records=max_messages,
-            timeout_ms=max_interval_ms,
-        )
+        _batch = await data_to_predict_queue.get_many(count=max_messages)
+
+        if isinstance(_batch, Exception):
+            raise _batch
+
         logger.info(f"Consumed {len(_batch)} records")
 
         if not _batch:
@@ -126,9 +127,7 @@ async def consume_data_to_predict(
                     "error": str(e),
                 }
             )
-            await asyncio.gather(
-                *[data_to_predict_queue.produce_one(b) for b in _batch]
-            )
+            await data_to_predict_queue.put(_batch)
             await data_to_predict_queue.commit()
             await asyncio.sleep(15)
             continue
@@ -155,9 +154,7 @@ async def consume_data_to_predict(
                     "error": str(e),
                 }
             )
-            await asyncio.gather(
-                *[data_to_predict_queue.produce_one(b) for b in _batch]
-            )
+            await data_to_predict_queue.put(_batch)
             await data_to_predict_queue.commit()
             await asyncio.sleep(15)
             continue
@@ -166,21 +163,20 @@ async def consume_data_to_predict(
 
 async def consume_player_scraped(
     max_messages: int,
-    max_interval_ms: int,
     player_sc_queue: Queue[ScrapedStruct],
     api: MLApiClient,
     session_factory: async_sessionmaker[AsyncSession],
     model_name: str = "multi_model_v1",
 ):
     while True:
+        batch = []
         try:
-            batch, errors = await player_sc_queue.consume_many(
-                max_records=max_messages,
-                timeout_ms=max_interval_ms,
-            )
+            batch = await player_sc_queue.get_many(count=max_messages)
+            if isinstance(batch, Exception):
+                logger.error(f"Errors during consumption: {batch}")
+                raise batch
+
             logger.info(f"Consumed {len(batch)} records")
-            if errors:
-                logger.error(f"Errors during consumption: {errors}")
 
             if not batch:
                 logger.info("No highscore data to process.")
@@ -219,7 +215,7 @@ async def consume_player_scraped(
                         "error": str(e),
                     }
                 )
-                await asyncio.gather(*[player_sc_queue.produce_one(b) for b in batch])
+                await player_sc_queue.put(batch)
                 await player_sc_queue.commit()
                 await asyncio.sleep(15)
                 continue
@@ -233,8 +229,9 @@ async def consume_player_scraped(
         except Exception as e:
             logger.error(f"Error consuming scrapes: {e}")
             logger.debug(f"Traceback: \n{traceback.format_exc()}")
-            await asyncio.gather(*[player_sc_queue.produce_one(b) for b in batch])
-            await player_sc_queue.commit()
+            if not isinstance(batch, Exception):
+                await player_sc_queue.put(batch)
+                await player_sc_queue.commit()
             await asyncio.sleep(15)
 
 
@@ -258,21 +255,26 @@ async def main():
             backend_type="kafka",
             config=KafkaConfig(
                 topic="players.scraped",
-                bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
+                bootstrap_servers=KafkaSettings().bootstrap_servers,
                 producer=True,
                 consumer=True,
                 producer_config=KafkaProducerConfig(partition_key_fn=None),
-                consumer_config=KafkaConsumerConfig(group_id="ml_worker"),
+                consumer_config=KafkaConsumerConfig(
+                    group_id="ml_worker",
+                    consume_timeout_ms=Settings().MAX_INTERVAL_MS,
+                ),
             ),
         )
         if isinstance(player_sc_queue, Exception):
             raise player_sc_queue
+
+        assert isinstance(player_sc_queue, Queue)
+
         await player_sc_queue.start()
         tasks.append(
             asyncio.create_task(
                 consume_player_scraped(
                     max_messages=Settings().MAX_MESSAGES,
-                    max_interval_ms=Settings().MAX_INTERVAL_MS,
                     player_sc_queue=player_sc_queue,
                     api=api,
                     session_factory=session_factory,  # type: ignore
@@ -288,21 +290,24 @@ async def main():
             backend_type="kafka",
             config=KafkaConfig(
                 topic="data.to_predict",
-                bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
+                bootstrap_servers=KafkaSettings().bootstrap_servers,
                 producer=True,
                 consumer=True,
                 producer_config=KafkaProducerConfig(partition_key_fn=None),
-                consumer_config=KafkaConsumerConfig(group_id="ml_worker"),
+                consumer_config=KafkaConsumerConfig(
+                    group_id="ml_worker",
+                    consume_timeout_ms=Settings().MAX_INTERVAL_MS,
+                ),
             ),
         )
         if isinstance(data_to_predict_queue, Exception):
             raise data_to_predict_queue
+        assert isinstance(data_to_predict_queue, Queue)
         await data_to_predict_queue.start()
         tasks.append(
             asyncio.create_task(
                 consume_data_to_predict(
                     max_messages=Settings().MAX_MESSAGES,
-                    max_interval_ms=Settings().MAX_INTERVAL_MS,
                     data_to_predict_queue=data_to_predict_queue,
                     api=api,
                     session_factory=session_factory,  # type: ignore
