@@ -77,15 +77,13 @@ async def consume_many_task(
 ):
     while True:
         try:
-            reports, errors = await report_consumer.consume_many(
-                max_records=max_messages,
-                timeout_ms=max_interval_ms,
-            )
+            reports = await report_consumer.get_many(count=max_messages)
+
+            if isinstance(reports, Exception):
+                logger.error(f"Errors during consumption: {reports}")
+                raise reports
+
             logger.debug(f"consumed {len(reports)} reports")
-
-            if errors:
-                logger.error(f"Errors during consumption: {errors}")
-
             parsed_detections = await parse_detections(reports)
 
             if not parsed_detections:
