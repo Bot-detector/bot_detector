@@ -6,14 +6,18 @@ from bot_detector.api_public.src.core.fastapi.middleware import (
     LoggingMiddleware,
     PrometheusMiddleware,
 )
-from bot_detector.event_queue import ReportsToInsertProducer
-from bot_detector.event_queue import Settings as KafkaSettings
+from bot_detector.event_queue.adapters.kafka import (
+    KafkaConfig,
+    KafkaProducerConfig,
+    KafkaSettings,
+)
+from bot_detector.event_queue.factory import QueueFactory
+from bot_detector.event_queue.structs import ReportsToInsertStruct
 from fastapi import FastAPI
 from fastapi.middleware import Middleware
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import start_http_server
 
-from .config import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -45,10 +49,20 @@ def make_middleware() -> list[Middleware]:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("startup initiated")
-    app.state.reports_to_insert_producer = ReportsToInsertProducer(
-        bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
-        max_async_actions=Settings().KAFKA_MAX_ASYNC_CALLS,
+    queue = QueueFactory.create_queue(
+        model=ReportsToInsertStruct,
+        queue_type="producer",
+        backend_type="kafka",
+        config=KafkaConfig(
+            topic="reports.to_insert",
+            bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
+            producer=True,
+            producer_config=KafkaProducerConfig(partition_key_fn=None),
+        ),
     )
+    if isinstance(queue, Exception):
+        raise queue
+    app.state.reports_to_insert_producer = queue
     producer = app.state.reports_to_insert_producer
     await producer.start()
     yield

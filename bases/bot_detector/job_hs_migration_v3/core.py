@@ -7,8 +7,14 @@ from datetime import timedelta
 import sqlalchemy as sqla
 from bot_detector.database import Settings as DBSettings
 from bot_detector.database import get_session_factory
-from bot_detector.event_queue import PlayersScrapedProducer, ScrapedStruct
-from bot_detector.event_queue import Settings as KafkaSettings
+from bot_detector.event_queue.adapters.kafka import (
+    KafkaConfig,
+    KafkaProducerConfig,
+    KafkaSettings,
+)
+from bot_detector.event_queue.core import QueueProducer
+from bot_detector.event_queue.factory import QueueFactory
+from bot_detector.event_queue.structs import ScrapedStruct
 from bot_detector.structs import (
     HighscoreBaseStruct,
     MetaData,
@@ -144,7 +150,7 @@ def json_to_struct(data: list[dict]) -> list[ScrapedStruct]:
 
 
 async def producer_send(
-    producer: PlayersScrapedProducer,
+    producer: QueueProducer[ScrapedStruct],
     stop_event: asyncio.Event,
     queue: asyncio.Queue,
 ):
@@ -157,15 +163,14 @@ async def producer_send(
             start_time = time.time()
 
             while data:
-                tasks = [
-                    producer.produce_one(
-                        d, partition_key=str(d.player_data.id % 10).encode("utf-8")
-                    )
-                    for d in data
-                ]
-                results = await asyncio.gather(*tasks, return_exceptions=True)
+                put_results = await asyncio.gather(
+                    *[producer.put([d]) for d in data],
+                    return_exceptions=True,
+                )
                 # Filter out failed messages for retry
-                data = [d for d, r in zip(data, results) if isinstance(r, Exception)]
+                data = [
+                    d for d, r in zip(data, put_results) if isinstance(r, Exception)
+                ]
 
                 if data:
                     logger.warning(f"{len(data)} messages failed, retrying...")
@@ -181,7 +186,22 @@ async def producer_send(
 async def main():
     async_session, async_engine = get_session_factory(SETTINGS=DBSettings())
     b_server = KafkaSettings().KAFKA_BOOTSTRAP_SERVERS
-    player_sc_producer = PlayersScrapedProducer(bootstrap_servers=b_server)
+    queue = QueueFactory.create_queue(
+        model=ScrapedStruct,
+        queue_type="producer",
+        backend_type="kafka",
+        config=KafkaConfig(
+            topic="players.scraped",
+            bootstrap_servers=b_server,
+            producer=True,
+            producer_config=KafkaProducerConfig(
+                partition_key_fn=lambda message: str(message.player_data.id % 10)
+            ),
+        ),
+    )
+    if isinstance(queue, Exception):
+        raise queue
+    player_sc_producer = queue
     produce_queue = asyncio.Queue(maxsize=1)
     stop_event = asyncio.Event()
 
