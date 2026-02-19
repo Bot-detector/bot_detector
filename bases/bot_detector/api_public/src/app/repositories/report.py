@@ -3,7 +3,8 @@ import logging
 import time
 
 from bot_detector.api_public.src.core.fastapi.dependencies import wide_event
-from bot_detector.event_queue import ReportsToInsertProducer, ReportsToInsertStruct
+from bot_detector.event_queue.core import QueueProducer
+from bot_detector.event_queue.structs import ReportsToInsertStruct
 from bot_detector.structs import (
     Detection,
     MetaData,
@@ -98,7 +99,7 @@ class Report:
     async def send_to_kafka(
         self,
         data: list[ParsedDetection],
-        producer: ReportsToInsertProducer,
+        producer: QueueProducer[ReportsToInsertStruct],
     ) -> None:
         tasks = []
 

@@ -1,8 +1,11 @@
-from bot_detector.event_queue import ReportsToInsertProducer
+from bot_detector.event_queue.core import QueueProducer
+from bot_detector.event_queue.structs import ReportsToInsertStruct
 from fastapi import HTTPException, Request, status
 
 
-def get_reports_to_insert_producer(request: Request) -> ReportsToInsertProducer:
+def get_reports_to_insert_producer(
+    request: Request,
+) -> QueueProducer[ReportsToInsertStruct]:
     producer = getattr(request.app.state, "reports_to_insert_producer", None)
     if producer is None:
         raise HTTPException(

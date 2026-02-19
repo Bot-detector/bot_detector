@@ -4,15 +4,19 @@ from datetime import date, datetime, timedelta
 
 import aiohttp
 from aiohttp import ClientSession
-from bot_detector.event_queue import (
+from bot_detector.event_queue.adapters.kafka import (
+    KafkaConfig,
+    KafkaConsumerConfig,
+    KafkaProducerConfig,
+)
+from bot_detector.event_queue.adapters.kafka import KafkaSettings
+from bot_detector.event_queue.core import Queue, QueueProducer
+from bot_detector.event_queue.factory import QueueFactory
+from bot_detector.event_queue.structs import (
     NotFoundStruct,
-    PlayersNotFoundProducer,
-    PlayersScrapedProducer,
-    PlayersToScrapeQueue,
     ScrapedStruct,
     ToScrapeStruct,
 )
-from bot_detector.event_queue import Settings as KafkaSettings
 from bot_detector.proxy_manager import ProxyManager
 from bot_detector.proxy_manager import Settings as ProxySettings
 from bot_detector.structs import (
@@ -47,8 +51,8 @@ async def scrape_player(
     session: ClientSession,
     hiscore_instance: Hiscore,
     proxy: str,
-    player_nf_producer: PlayersNotFoundProducer,
-    player_ts_producer: PlayersToScrapeQueue,
+    player_nf_producer: QueueProducer[NotFoundStruct],
+    player_ts_producer: Queue[ToScrapeStruct],
 ) -> tuple[PlayerStats | None, bool]:
     """
     Scrape player stats from hiscores.
@@ -110,7 +114,7 @@ async def scrape_player(
 async def transform_player_stats(
     player_stats: PlayerStats,
     player: PlayerStruct,
-    player_ts_producer: PlayersToScrapeQueue,
+    player_ts_producer: Queue[ToScrapeStruct],
 ) -> ScrapedStruct | None:
     player.updated_at = datetime.now()
     player.possible_ban = False
@@ -190,9 +194,9 @@ async def get_proxy(
 
 async def get_player_to_scrape(
     worker_id: int,
-    player_ts_consumer: PlayersToScrapeQueue,
+    player_ts_queue: Queue[ToScrapeStruct],
 ) -> ToScrapeStruct | None:
-    player_to_scrape, error = await player_ts_consumer.consume_one()
+    player_to_scrape, error = await player_ts_queue.consume_one()
     if error:
         logger.error(f"[{worker_id}]: Error consuming player to scrape: {error}")
         return None
@@ -205,10 +209,9 @@ async def get_player_to_scrape(
 async def work(
     worker_id: int,
     proxy_manager: ProxyManager,
-    player_ts_consumer: PlayersToScrapeQueue,
-    player_ts_producer: PlayersToScrapeQueue,
-    player_nf_producer: PlayersNotFoundProducer,
-    player_sc_producer: PlayersScrapedProducer,
+    player_ts_queue: Queue[ToScrapeStruct],
+    player_nf_producer: QueueProducer[NotFoundStruct],
+    player_sc_producer: QueueProducer[ScrapedStruct],
 ):
     retry_tracker = RetryTracker(base_delay=1.0, max_delay=300.0, decay_window=300.0)
     rate_limiter = RateLimiter(
@@ -228,7 +231,7 @@ async def work(
             _proxy = proxy.split("@")[1]
 
             # get player from kafka
-            player_to_scrape = await get_player_to_scrape(worker_id, player_ts_consumer)
+            player_to_scrape = await get_player_to_scrape(worker_id, player_ts_queue)
             if player_to_scrape is None:
                 await asyncio.sleep(10)
                 continue
@@ -250,7 +253,7 @@ async def work(
                 proxy=_proxy,
                 worker_id=worker_id,
                 player_nf_producer=player_nf_producer,
-                player_ts_producer=player_ts_producer,
+                player_ts_producer=player_ts_queue,
             )
             if player_stats is None:
                 if retry:
@@ -263,7 +266,7 @@ async def work(
             scraped_data = await transform_player_stats(
                 player_stats=player_stats,
                 player=player_data,
-                player_ts_producer=player_ts_producer,
+                player_ts_producer=player_ts_queue,
             )
 
             if scraped_data is None:
@@ -287,17 +290,45 @@ async def main():
 
     # initialize kafka producers and consumers
     b_server = KafkaSettings().KAFKA_BOOTSTRAP_SERVERS
-    ## consumer
-    player_ts_queue = PlayersToScrapeQueue(
-        bootstrap_servers=b_server, group_id="scraper"
+    player_ts_queue = QueueFactory.create_queue(
+        model=ToScrapeStruct,
+        queue_type="queue",
+        backend_type="kafka",
+        config=KafkaConfig(
+            topic="players.to_scrape",
+            bootstrap_servers=b_server,
+            producer=True,
+            consumer=True,
+            consumer_config=KafkaConsumerConfig(group_id="scraper"),
+        ),
     )
-    ## queue
-    player_ts_consumer = player_ts_queue
-    player_ts_producer = player_ts_queue
-    player_nf_producer = PlayersNotFoundProducer(bootstrap_servers=b_server)
-    player_sc_producer = PlayersScrapedProducer(bootstrap_servers=b_server)
+    player_nf_producer = QueueFactory.create_queue(
+        model=NotFoundStruct,
+        queue_type="producer",
+        backend_type="kafka",
+        config=KafkaConfig(
+            topic="players.not_found",
+            bootstrap_servers=b_server,
+            producer=True,
+        ),
+    )
+    player_sc_producer = QueueFactory.create_queue(
+        model=ScrapedStruct,
+        queue_type="producer",
+        backend_type="kafka",
+        config=KafkaConfig(
+            topic="players.scraped",
+            bootstrap_servers=b_server,
+            producer=True,
+            producer_config=KafkaProducerConfig(
+                partition_key_fn=lambda message: str(message.player_data.id % 10)
+            ),
+        ),
+    )
+    for queue in (player_ts_queue, player_nf_producer, player_sc_producer):
+        if isinstance(queue, Exception):
+            raise queue
 
-    # start kafka producers and consumers
     await player_ts_queue.start()
     await player_nf_producer.start()
     await player_sc_producer.start()
@@ -306,8 +337,7 @@ async def main():
         work(
             worker_id=worker_id,
             proxy_manager=proxy_manager,
-            player_ts_consumer=player_ts_consumer,
-            player_ts_producer=player_ts_producer,
+            player_ts_queue=player_ts_queue,
             player_nf_producer=player_nf_producer,
             player_sc_producer=player_sc_producer,
         )

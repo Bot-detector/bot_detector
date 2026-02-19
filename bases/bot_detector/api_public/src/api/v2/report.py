@@ -7,7 +7,8 @@ from bot_detector.api_public.src.core.fastapi.dependencies.kafka import (
 )
 from bot_detector.api_public.src.core.fastapi.dependencies import wide_event
 from bot_detector.api_public.src.core.fastapi.dependencies.session import get_session
-from bot_detector.event_queue import ReportsToInsertProducer
+from bot_detector.event_queue.core import QueueProducer
+from bot_detector.event_queue.structs import ReportsToInsertStruct
 from bot_detector.structs import Detection, ParsedDetection
 from fastapi import APIRouter, Depends, status
 from fastapi.exceptions import HTTPException
@@ -22,7 +23,9 @@ player_cache = SimpleALRUCache(max_size=100_000)
 async def post_reports(
     detections: list[Detection],
     session: AsyncSession = Depends(get_session),
-    report_producer: ReportsToInsertProducer = Depends(get_reports_to_insert_producer),
+    report_producer: QueueProducer[ReportsToInsertStruct] = Depends(
+        get_reports_to_insert_producer
+    ),
 ):
     global player_cache
     report_repo = Report()

@@ -6,11 +6,11 @@ from asyncio import Queue
 from bot_detector import database as db
 from bot_detector.database import Settings as DBSettings
 from bot_detector.database.report import ReportRepo
-from bot_detector.event_queue import (
-    ReportsToInsertQueue,
-    ReportsToInsertStruct,
-)
-from bot_detector.event_queue import Settings as KafkaSettings
+from bot_detector.event_queue.adapters.kafka import KafkaConfig, KafkaConsumerConfig
+from bot_detector.event_queue.adapters.kafka import KafkaSettings
+from bot_detector.event_queue.core import Queue as EventQueue
+from bot_detector.event_queue.factory import QueueFactory
+from bot_detector.event_queue.structs import ReportsToInsertStruct
 from bot_detector.structs import ParsedDetection
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -56,7 +56,6 @@ async def parse_detections(
         if not isinstance(report, ReportsToInsertStruct):
             logger.warning(f"Invalid report type: {report.__class__}")
             continue
-        # this allows us to handle different versions of the report
         if report.metadata.version == 1:
             parsed_detections.append(report.report)
         else:
@@ -65,7 +64,7 @@ async def parse_detections(
 
 
 async def consume_many_task(
-    report_consumer: ReportsToInsertQueue,
+    report_consumer: EventQueue[ReportsToInsertStruct],
     max_messages: int,
     max_interval_ms: int,
     session_factory: async_sessionmaker[AsyncSession],
@@ -110,7 +109,10 @@ async def consume_many_task(
             await asyncio.sleep(5)
 
 
-async def error_task(error_queue: Queue, report_producer: ReportsToInsertQueue):
+async def error_task(
+    error_queue: Queue,
+    report_producer: EventQueue[ReportsToInsertStruct],
+):
     while True:
         report: ReportsToInsertStruct = await error_queue.get()
         if not isinstance(report, ReportsToInsertStruct):
@@ -122,30 +124,37 @@ async def error_task(error_queue: Queue, report_producer: ReportsToInsertQueue):
 async def main():
     session_factory, async_engine = db.get_session_factory(SETTINGS=DBSettings())
     report_repo = ReportRepo()
-    MAX_BATCH_SIZE = 10_000  # TODO: env variable?
-    MAX_INTERVAL_MS = 1_000  # TODO: env variable?
+    max_batch_size = 10_000
+    max_interval_ms = 1_000
 
     error_queue = Queue()
 
-    # initialize kafka producers and consumers
     b_server = KafkaSettings().KAFKA_BOOTSTRAP_SERVERS
-    ## consumer
-    report_queue = ReportsToInsertQueue(
-        bootstrap_servers=b_server,
-        group_id="report_worker",
+    queue = QueueFactory.create_queue(
+        model=ReportsToInsertStruct,
+        queue_type="queue",
+        backend_type="kafka",
+        config=KafkaConfig(
+            topic="reports.to_insert",
+            bootstrap_servers=b_server,
+            producer=True,
+            consumer=True,
+            consumer_config=KafkaConsumerConfig(group_id="report_worker"),
+        ),
     )
+    if isinstance(queue, Exception):
+        raise queue
+    report_queue = queue
 
-    # start kafka queue
     await report_queue.start()
 
-    # start tasks
     tasks = [
         asyncio.create_task(
             consume_many_task(
                 report_consumer=report_queue,
                 report_repo=report_repo,
-                max_messages=MAX_BATCH_SIZE,
-                max_interval_ms=MAX_INTERVAL_MS,
+                max_messages=max_batch_size,
+                max_interval_ms=max_interval_ms,
                 session_factory=session_factory,
                 error_queue=error_queue,
             )
@@ -158,6 +167,7 @@ async def main():
         ),
     ]
     await asyncio.gather(*tasks)
+    await async_engine.dispose()
 
 
 async def run_async():
