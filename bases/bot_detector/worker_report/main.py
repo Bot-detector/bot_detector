@@ -68,16 +68,15 @@ async def parse_detections(
 
 
 async def consume_many_task(
-    report_consumer: EventQueue[ReportsToInsertStruct],
+    report_queue: EventQueue[ReportsToInsertStruct],
     max_messages: int,
-    max_interval_ms: int,
     session_factory: async_sessionmaker[AsyncSession],
     report_repo: ReportRepo,
     error_queue: Queue,
 ):
     while True:
         try:
-            reports = await report_consumer.get_many(count=max_messages)
+            reports = await report_queue.get_many(count=max_messages)
 
             if isinstance(reports, Exception):
                 logger.error(f"Errors during consumption: {reports}")
@@ -99,28 +98,30 @@ async def consume_many_task(
                 session_factory=session_factory,
             )
             if error:
+                # the error queue will add the messages at the end of the queue
                 logger.error(error)
                 await asyncio.gather(
                     *[add_to_error_queue(report=r, queue=error_queue) for r in reports]
                 )
                 await asyncio.sleep(15)
-            await report_consumer.commit()
         except Exception as e:
             logger.error(f"Error consuming reports: {e}")
             logger.debug(f"Traceback: \n{traceback.format_exc()}")
             await asyncio.sleep(5)
+        finally:
+            await report_queue.commit()
 
 
 async def error_task(
     error_queue: Queue,
-    report_producer: EventQueue[ReportsToInsertStruct],
+    report_queue: EventQueue[ReportsToInsertStruct],
 ):
     while True:
         report: ReportsToInsertStruct = await error_queue.get()
         if not isinstance(report, ReportsToInsertStruct):
             logger.warning(f"invalid {report=}")
             continue
-        await report_producer.produce_one(report)
+        await report_queue.put(message=[report])
 
 
 async def main():
@@ -131,8 +132,8 @@ async def main():
 
     error_queue = Queue()
 
-    b_server = KafkaSettings().KAFKA_BOOTSTRAP_SERVERS
-    queue = QueueFactory.create_queue(
+    b_server = KafkaSettings().bootstrap_servers
+    report_queue = QueueFactory.create_queue(
         model=ReportsToInsertStruct,
         queue_type="queue",
         backend_type="kafka",
@@ -142,22 +143,25 @@ async def main():
             producer=True,
             consumer=True,
             producer_config=KafkaProducerConfig(partition_key_fn=None),
-            consumer_config=KafkaConsumerConfig(group_id="report_worker"),
+            consumer_config=KafkaConsumerConfig(
+                group_id="report_worker",
+                consume_timeout_ms=max_interval_ms,
+            ),
         ),
     )
-    if isinstance(queue, Exception):
-        raise queue
-    report_queue = queue
+    if isinstance(report_queue, Exception):
+        raise report_queue
+
+    assert isinstance(report_queue, EventQueue)
 
     await report_queue.start()
 
     tasks = [
         asyncio.create_task(
             consume_many_task(
-                report_consumer=report_queue,
+                report_queue=report_queue,
                 report_repo=report_repo,
                 max_messages=max_batch_size,
-                max_interval_ms=max_interval_ms,
                 session_factory=session_factory,
                 error_queue=error_queue,
             )
@@ -165,7 +169,7 @@ async def main():
         asyncio.create_task(
             error_task(
                 error_queue=error_queue,
-                report_producer=report_queue,
+                report_queue=report_queue,
             )
         ),
     ]
