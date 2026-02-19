@@ -84,13 +84,15 @@ class AIOKafkaProducerAdapter(
         _config = self.config.producer_config
 
         for message in messages:
-            raw_key = _config.partition_key_fn(message)
-            if isinstance(raw_key, bytes):
-                key = raw_key
-            elif isinstance(raw_key, str):
-                key = raw_key.encode("utf-8")
-            else:
-                raise ValueError("partition_key_fn must return bytes or str")
+            key = None
+            if _config.partition_key_fn is not None:
+                raw_key = _config.partition_key_fn(message)
+                if isinstance(raw_key, bytes):
+                    key = raw_key
+                elif isinstance(raw_key, str):
+                    key = raw_key.encode("utf-8")
+                else:
+                    raise ValueError("partition_key_fn must return bytes or str")
             retries = 0
             retry_backoff = 0
             while True:

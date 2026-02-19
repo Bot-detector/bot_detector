@@ -13,7 +13,7 @@ class KafkaConsumerConfig(BaseModel):
 
 
 class KafkaProducerConfig(BaseModel):
-    partition_key_fn: Callable[[T], bytes | str]
+    partition_key_fn: Callable[[T], bytes | str] | None
     MAX_PRODUCE_RETRIES: int = 3
     MAX_PRODUCE_RETRY_BACKOFF: int = 60
 
@@ -21,8 +21,8 @@ class KafkaProducerConfig(BaseModel):
 class KafkaConfig(BaseModel):
     topic: str
     bootstrap_servers: str
-    consumer: bool = True
-    producer: bool = True
+    consumer: bool = False
+    producer: bool = False
     producer_config: Optional[KafkaProducerConfig]
     consumer_config: Optional[KafkaConsumerConfig]
 
