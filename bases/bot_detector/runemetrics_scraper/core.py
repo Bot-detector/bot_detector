@@ -209,6 +209,8 @@ async def work(
                     logger.error(
                         f"[{worker_id}]: Failed to requeue player: {produce_error}"
                     )
+                else:
+                    await player_nf_queue.commit()
                 await asyncio.sleep(10)
                 continue
 
@@ -232,6 +234,8 @@ async def work(
                     logger.error(
                         f"[{worker_id}]: Failed to requeue player: {produce_error}"
                     )
+                else:
+                    await player_nf_queue.commit()
                 continue
 
             # push data to kafka
@@ -242,6 +246,7 @@ async def work(
                     f"[{worker_id}]: Failed to produce scraped player: {produce_error}"
                 )
                 continue
+            await player_nf_queue.commit()
             logger.debug(
                 f"[{worker_id}][{player_data.name}]: {player_data.label_jagex=}"
             )
