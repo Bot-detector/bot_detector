@@ -17,10 +17,16 @@ from bot_detector.event_queue.factory import QueueFactory
 from bot_detector.event_queue.structs import DataToPredictStruct, ScrapedStruct
 from bot_detector.ml_api import InputData, MLApiClient, Prediction
 from bot_detector.structs import PredictionCreate
-from bot_detector.worker_ml.settings import Settings
+from bot_detector.worker_ml.settings import Settings as MLSettings
+from pydantic_settings import BaseSettings
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 logger = logging.getLogger(__name__)
+
+
+class Settings(BaseSettings):
+    CONSUME_PLAYER_SCRAPED: bool = False
+    CONSUME_DATA_TO_PREDICT: bool = True
 
 
 async def insert_prediction_results(
@@ -91,7 +97,6 @@ def transform_data_to_predict_struct(data: DataToPredictStruct) -> InputData:
 
 async def consume_data_to_predict(
     max_messages: int,
-    max_interval_ms: int,
     data_to_predict_queue: Queue[DataToPredictStruct],
     api: MLApiClient,
     session_factory: async_sessionmaker[AsyncSession],
@@ -235,92 +240,108 @@ async def consume_player_scraped(
             await asyncio.sleep(15)
 
 
-async def main():
-    CONSUME_PLAYER_SCRAPED = False
-    CONSUME_DATA_TO_PREDICT = True
-    assert any((CONSUME_PLAYER_SCRAPED, CONSUME_DATA_TO_PREDICT))
+async def main_player_scraped(
+    api: MLApiClient, session_factory
+) -> tuple[asyncio.Task, Queue]:
+    player_sc_queue = QueueFactory.create_queue(
+        model=ScrapedStruct,
+        queue_type="queue",
+        backend_type="kafka",
+        config=KafkaConfig(
+            topic="players.scraped",
+            bootstrap_servers=KafkaSettings().bootstrap_servers,
+            producer=True,
+            consumer=True,
+            producer_config=KafkaProducerConfig(partition_key_fn=None),
+            consumer_config=KafkaConsumerConfig(
+                group_id="ml_worker",
+                consume_timeout_ms=MLSettings().MAX_INTERVAL_MS,
+            ),
+        ),
+    )
+    if isinstance(player_sc_queue, Exception):
+        raise player_sc_queue
 
+    assert isinstance(player_sc_queue, Queue)
+
+    await player_sc_queue.start()
+
+    task = asyncio.create_task(
+        consume_player_scraped(
+            max_messages=MLSettings().MAX_MESSAGES,
+            player_sc_queue=player_sc_queue,
+            api=api,
+            session_factory=session_factory,  # type: ignore
+            model_name=MLSettings().MODEL_NAME,
+        )
+    )
+    return task, player_sc_queue
+
+
+async def main_data_to_predict(
+    api: MLApiClient, session_factory
+) -> tuple[asyncio.Task, Queue]:
+    data_to_predict_queue = QueueFactory.create_queue(
+        model=DataToPredictStruct,
+        queue_type="queue",
+        backend_type="kafka",
+        config=KafkaConfig(
+            topic="data.to_predict",
+            bootstrap_servers=KafkaSettings().bootstrap_servers,
+            producer=True,
+            consumer=True,
+            producer_config=KafkaProducerConfig(partition_key_fn=None),
+            consumer_config=KafkaConsumerConfig(
+                group_id="ml_worker",
+                consume_timeout_ms=Settings().MAX_INTERVAL_MS,
+            ),
+        ),
+    )
+    if isinstance(data_to_predict_queue, Exception):
+        raise data_to_predict_queue
+    assert isinstance(data_to_predict_queue, Queue)
+    await data_to_predict_queue.start()
+
+    task = asyncio.create_task(
+        consume_data_to_predict(
+            max_messages=Settings().MAX_MESSAGES,
+            data_to_predict_queue=data_to_predict_queue,
+            api=api,
+            session_factory=session_factory,  # type: ignore
+            model_name=Settings().MODEL_NAME,
+        )
+    )
+    return task, data_to_predict_queue
+
+
+async def main():
     ## database
     session_factory, engine = get_session_factory(SETTINGS=DBSettings())
 
     ## api client
     http_session = aiohttp.ClientSession()
-    api = MLApiClient(base_url=Settings().BASE_URL, session=http_session)
+    api = MLApiClient(base_url=MLSettings().BASE_URL, session=http_session)
 
     tasks = []
-    if CONSUME_PLAYER_SCRAPED:
-        player_sc_queue = QueueFactory.create_queue(
-            model=ScrapedStruct,
-            queue_type="queue",
-            backend_type="kafka",
-            config=KafkaConfig(
-                topic="players.scraped",
-                bootstrap_servers=KafkaSettings().bootstrap_servers,
-                producer=True,
-                consumer=True,
-                producer_config=KafkaProducerConfig(partition_key_fn=None),
-                consumer_config=KafkaConsumerConfig(
-                    group_id="ml_worker",
-                    consume_timeout_ms=Settings().MAX_INTERVAL_MS,
-                ),
-            ),
+    if Settings().CONSUME_PLAYER_SCRAPED:
+        task_ps, player_sc_queue = await main_player_scraped(
+            api=api,
+            session_factory=session_factory,
         )
-        if isinstance(player_sc_queue, Exception):
-            raise player_sc_queue
+        tasks.append(task_ps)
 
-        assert isinstance(player_sc_queue, Queue)
-
-        await player_sc_queue.start()
-        tasks.append(
-            asyncio.create_task(
-                consume_player_scraped(
-                    max_messages=Settings().MAX_MESSAGES,
-                    player_sc_queue=player_sc_queue,
-                    api=api,
-                    session_factory=session_factory,  # type: ignore
-                    model_name=Settings().MODEL_NAME,
-                )
-            )
+    if Settings().CONSUME_DATA_TO_PREDICT:
+        task_dtp, data_to_predict_queue = await main_data_to_predict(
+            api=api,
+            session_factory=session_factory,
         )
-
-    if CONSUME_DATA_TO_PREDICT:
-        data_to_predict_queue = QueueFactory.create_queue(
-            model=DataToPredictStruct,
-            queue_type="queue",
-            backend_type="kafka",
-            config=KafkaConfig(
-                topic="data.to_predict",
-                bootstrap_servers=KafkaSettings().bootstrap_servers,
-                producer=True,
-                consumer=True,
-                producer_config=KafkaProducerConfig(partition_key_fn=None),
-                consumer_config=KafkaConsumerConfig(
-                    group_id="ml_worker",
-                    consume_timeout_ms=Settings().MAX_INTERVAL_MS,
-                ),
-            ),
-        )
-        if isinstance(data_to_predict_queue, Exception):
-            raise data_to_predict_queue
-        assert isinstance(data_to_predict_queue, Queue)
-        await data_to_predict_queue.start()
-        tasks.append(
-            asyncio.create_task(
-                consume_data_to_predict(
-                    max_messages=Settings().MAX_MESSAGES,
-                    data_to_predict_queue=data_to_predict_queue,
-                    api=api,
-                    session_factory=session_factory,  # type: ignore
-                    model_name=Settings().MODEL_NAME,
-                )
-            )
-        )
+        tasks.append(task_dtp)
     await asyncio.gather(*tasks)
 
-    if CONSUME_PLAYER_SCRAPED:
+    if Settings().CONSUME_PLAYER_SCRAPED:
         await player_sc_queue.stop()
 
-    if CONSUME_DATA_TO_PREDICT:
+    if Settings().CONSUME_DATA_TO_PREDICT:
         await data_to_predict_queue.stop()
 
     await http_session.close()
