@@ -55,7 +55,7 @@ services:
       - JVM_OPTS=-Xms32M -Xmx64M
       - SERVER_SERVLET_CONTEXTPATH=/
     ports:
-      - 9042:9000
+      - 9000:9000
     restart: on-failure
     networks:
       - botdetector-network
@@ -216,7 +216,7 @@ services:
       target: prod
     environment:
       - DATABASE_URL=mysql+asyncmy://ml-worker:ml_worker_pw@mysql:3306/playerdata
-      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - bootstrap_servers=kafka:9092
       - BASE_URL=http://api_ml:5000
       - MAX_MESSAGES=10
       - MAX_INTERVAL_MS=5000

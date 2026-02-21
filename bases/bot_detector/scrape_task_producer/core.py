@@ -33,6 +33,7 @@ def _force_log() -> None:
 
 class Settings(BaseSettings):
     LIMIT: int = 10_000
+    MAX_LAG: int = 100_000
 
 
 @dataclass
@@ -200,8 +201,9 @@ async def process_players(
                 last_day = date.today()
                 fp.reset_for_new_day(max_days)
 
-            if lag >= 100_000:
+            if lag >= Settings().MAX_LAG:
                 wide_event.add({"lag_throttle": {"lag": lag}})
+                _force_log()
                 await asyncio.sleep(10)
                 continue
 
@@ -269,7 +271,7 @@ async def main():
     def partition_key_fn(msg: ToScrapeStruct) -> str:
         return str(msg.player_data.id % 10)
 
-    queue = QueueFactory.create_queue(
+    player_queue = QueueFactory.create_queue(
         model=ToScrapeStruct,
         queue_type="queue",
         backend_type="kafka",
@@ -282,10 +284,10 @@ async def main():
             consumer_config=KafkaConsumerConfig(group_id=lag_group_id),
         ),
     )
-    if isinstance(queue, Exception):
-        raise queue
-    assert isinstance(queue, Queue)
-    player_queue = queue
+    if isinstance(player_queue, Exception):
+        raise player_queue
+
+    assert isinstance(player_queue, Queue)
 
     lag_probe = KafkaLagProbe(bootstrap_servers)
 
