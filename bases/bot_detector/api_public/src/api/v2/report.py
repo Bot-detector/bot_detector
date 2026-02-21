@@ -1,5 +1,5 @@
 from bot_detector.api_public.src.app.repositories.player import Player
-from bot_detector.api_public.src.app.repositories.report import CustomError, Report
+from bot_detector.api_public.src.app.repositories.report import Report
 from bot_detector.api_public.src.app.views.response.ok import Ok
 from bot_detector.api_public.src.core._cache import SimpleALRUCache
 from bot_detector.api_public.src.core.fastapi.dependencies.kafka import (
@@ -90,9 +90,20 @@ async def post_reports(
         _data.append(ParsedDetection(**_d))
 
     # print(_data)
-    try:
-        await report_repo.send_to_kafka(data=_data, producer=report_producer)
-    except CustomError:
+    produce_errors = await report_repo.send_to_kafka(
+        data=_data,
+        producer=report_producer,
+    )
+    if produce_errors:
+        wide_event.add_context(
+            {
+                "report": {
+                    "status": "error",
+                    "detail": str(produce_errors[0]),
+                    "produce_errors": len(produce_errors),
+                }
+            }
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal error",
