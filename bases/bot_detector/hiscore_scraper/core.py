@@ -220,14 +220,14 @@ async def get_player_to_scrape(
     worker_id: int,
     player_ts_queue: Queue[ToScrapeStruct],
 ) -> ToScrapeStruct | None:
-    player_to_scrape, error = await player_ts_queue.consume_one()
-    if error:
-        logger.error(f"[{worker_id}]: Error consuming player to scrape: {error}")
+    result = await player_ts_queue.get_one()
+    if isinstance(result, Exception):
+        logger.error(f"[{worker_id}]: Error consuming player to scrape: {result}")
         return None
-    if player_to_scrape is None:
+    if result is None:
         logger.warning(f"[{worker_id}]: No player available.")
         return None
-    return player_to_scrape
+    return result
 
 
 async def work(

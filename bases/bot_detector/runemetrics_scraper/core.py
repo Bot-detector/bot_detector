@@ -168,21 +168,18 @@ async def work(
                 continue
 
             # get player from kafka
-            try:
-                player, error = await player_nf_queue.consume_one()
-            except ValidationError as e:
-                error = e.json()
-                logger.error(error)
-                continue
-            if error:
-                logger.error(f"[{worker_id}]: {error}")
+            result = await player_nf_queue.get_one()
+            if isinstance(result, Exception):
+                logger.error(f"[{worker_id}]: {result}")
                 await asyncio.sleep(10)
                 continue
 
-            if player is None:
+            if result is None:
                 logger.error(f"[{worker_id}]: No player available.")
                 await asyncio.sleep(10)
                 continue
+
+            player = result
 
             player_data = player.player_data
 
