@@ -275,6 +275,7 @@ async def main():
     )
     if isinstance(queue, Exception):
         raise queue
+    assert isinstance(queue, Queue)
     player_queue = queue
 
     await player_queue.start()
