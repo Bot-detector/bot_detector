@@ -20,6 +20,7 @@ from bot_detector.structs import (
     MetaData,
     PlayerStruct,
 )
+from pydantic import BaseModel
 from pydantic_settings import BaseSettings
 from sqlalchemy import TextClause
 from sqlalchemy.exc import OperationalError
@@ -186,6 +187,11 @@ async def producer_send(
 async def main():
     async_session, async_engine = get_session_factory(SETTINGS=DBSettings())
     b_server = KafkaSettings().bootstrap_servers
+
+    def partition_key_fn(message: BaseModel) -> str:
+        assert isinstance(message, ScrapedStruct)
+        return str(message.player_data.id % 10)
+
     queue = QueueFactory.create_queue(
         model=ScrapedStruct,
         queue_type="producer",
@@ -194,13 +200,12 @@ async def main():
             topic="players.scraped",
             bootstrap_servers=b_server,
             producer=True,
-            producer_config=KafkaProducerConfig(
-                partition_key_fn=lambda message: str(message.player_data.id % 10)
-            ),
+            producer_config=KafkaProducerConfig(partition_key_fn=partition_key_fn),
         ),
     )
     if isinstance(queue, Exception):
         raise queue
+    assert isinstance(queue, QueueProducer)
     player_sc_producer = queue
     produce_queue = asyncio.Queue(maxsize=1)
     stop_event = asyncio.Event()
