@@ -23,8 +23,8 @@ class KafkaConfig(BaseModel):
     bootstrap_servers: str
     consumer: bool = False
     producer: bool = False
-    producer_config: Optional[KafkaProducerConfig]
-    consumer_config: Optional[KafkaConsumerConfig]
+    producer_config: Optional[KafkaProducerConfig] = None
+    consumer_config: Optional[KafkaConsumerConfig] = None
 
     @model_validator(mode="after")
     def check_config(self):

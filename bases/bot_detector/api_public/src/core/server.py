@@ -18,7 +18,6 @@ from fastapi.middleware import Middleware
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import start_http_server
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -55,7 +54,7 @@ async def lifespan(app: FastAPI):
         backend_type="kafka",
         config=KafkaConfig(
             topic="reports.to_insert",
-            bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
+            bootstrap_servers=KafkaSettings().bootstrap_servers,
             producer=True,
             producer_config=KafkaProducerConfig(partition_key_fn=None),
         ),
