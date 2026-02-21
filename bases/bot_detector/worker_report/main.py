@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 logger = logging.getLogger(__name__)
 
 
-async def add_to_error_queue(report: ReportsToInsertStruct, queue: Queue):
+async def add_to_error_queue(report: ReportsToInsertStruct, queue: Queue) -> bool:
     if not isinstance(report, ReportsToInsertStruct):
         logger.warning(
             {
@@ -31,8 +31,16 @@ async def add_to_error_queue(report: ReportsToInsertStruct, queue: Queue):
                 "received": report.__class__,
             }
         )
-        return
-    await queue.put(item=report)
+        return False
+
+    try:
+        await queue.put(item=report)
+    except Exception as error:
+        logger.error(f"Failed to enqueue report in error queue: {error}")
+        logger.debug(f"Traceback: \n{traceback.format_exc()}")
+        return False
+
+    return True
 
 
 async def insert_batch(
@@ -75,6 +83,7 @@ async def consume_many_task(
     error_queue: Queue,
 ):
     while True:
+        should_commit = False
         try:
             reports = await report_queue.get_many(count=max_messages)
 
@@ -87,6 +96,7 @@ async def consume_many_task(
 
             if not parsed_detections:
                 logger.info("No valid reports to process.")
+                should_commit = True
                 await asyncio.sleep(15)
                 continue
 
@@ -100,15 +110,24 @@ async def consume_many_task(
             if error:
                 # the error queue will add the messages at the end of the queue
                 logger.error(error)
-                await asyncio.gather(
+                enqueue_results = await asyncio.gather(
                     *[add_to_error_queue(report=r, queue=error_queue) for r in reports]
                 )
+                should_commit = all(enqueue_results)
+                if not should_commit:
+                    logger.error(
+                        "Failed to enqueue all reports to error queue. "
+                        "Skipping commit to retry later."
+                    )
                 await asyncio.sleep(15)
+                continue
+
+            should_commit = True
         except Exception as e:
             logger.error(f"Error consuming reports: {e}")
             logger.debug(f"Traceback: \n{traceback.format_exc()}")
             await asyncio.sleep(5)
-        finally:
+        if should_commit:
             await report_queue.commit()
 
 
