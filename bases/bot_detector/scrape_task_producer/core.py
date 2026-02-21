@@ -257,7 +257,7 @@ async def process_players(
 async def main():
     async_session, async_engine = get_session_factory(SETTINGS=DBSettings())
 
-    bootstrap_servers = KafkaSettings().KAFKA_BOOTSTRAP_SERVERS
+    bootstrap_servers = KafkaSettings().bootstrap_servers
     queue = QueueFactory.create_queue(
         model=ToScrapeStruct,
         queue_type="queue",
