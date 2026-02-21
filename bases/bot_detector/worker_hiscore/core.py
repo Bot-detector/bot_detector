@@ -236,7 +236,9 @@ async def main():
             producer_config=KafkaProducerConfig(partition_key_fn=None),
         ),
     )
-    assert isinstance(data_to_predict_producer, Queue)
+    if isinstance(data_to_predict_producer, Exception):
+        raise data_to_predict_producer
+    assert isinstance(data_to_predict_producer, QueueProducer)
 
     await player_sc_queue.start()
     await data_to_predict_producer.start()
