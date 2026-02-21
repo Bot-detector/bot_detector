@@ -214,7 +214,7 @@ async def main():
         backend_type="kafka",
         config=KafkaConfig(
             topic="players.scraped",
-            bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
+            bootstrap_servers=KafkaSettings().bootstrap_servers,
             producer=True,
             consumer=True,
             producer_config=KafkaProducerConfig(
@@ -229,7 +229,7 @@ async def main():
         backend_type="kafka",
         config=KafkaConfig(
             topic="data.to_predict",
-            bootstrap_servers=KafkaSettings().KAFKA_BOOTSTRAP_SERVERS,
+            bootstrap_servers=KafkaSettings().bootstrap_servers,
             producer=True,
             producer_config=KafkaProducerConfig(partition_key_fn=None),
         ),

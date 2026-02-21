@@ -255,7 +255,7 @@ async def main():
     proxies = await proxy_manager.fetch_proxies()
 
     # initialize kafka producers and consumers
-    b_server = KafkaSettings().KAFKA_BOOTSTRAP_SERVERS
+    b_server = KafkaSettings().bootstrap_servers
 
     player_nf_queue = QueueFactory.create_queue(
         model=NotFoundStruct,

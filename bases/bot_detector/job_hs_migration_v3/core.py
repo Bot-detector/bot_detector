@@ -185,7 +185,7 @@ async def producer_send(
 
 async def main():
     async_session, async_engine = get_session_factory(SETTINGS=DBSettings())
-    b_server = KafkaSettings().KAFKA_BOOTSTRAP_SERVERS
+    b_server = KafkaSettings().bootstrap_servers
     queue = QueueFactory.create_queue(
         model=ScrapedStruct,
         queue_type="producer",
