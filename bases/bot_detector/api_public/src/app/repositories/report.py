@@ -106,8 +106,13 @@ class Report:
         # Transform data to ReportsToInsertStruct
         reports, error = self._transform_detection(data)
 
-        tasks = [producer.produce_one(report) for report in reports]
-        await asyncio.gather(*tasks)
+        tasks = [producer.put([report]) for report in reports]
+        produce_results = await asyncio.gather(*tasks)
+        produce_errors = [
+            result for result in produce_results if isinstance(result, Exception)
+        ]
+        if produce_errors:
+            raise CustomError(f"Failed to send reports to kafka: {produce_errors[0]}")
 
         if len(error) > 0:
             error_msg = f"Received {len(error)} validation errors like this: {error[0]}"

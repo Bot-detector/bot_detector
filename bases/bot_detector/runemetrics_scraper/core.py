@@ -207,7 +207,11 @@ async def work(
             if error:
                 error_counter.labels(proxy=_proxy).inc()
                 logger.warning(f"[{worker_id}][{player_data.name}]: {error=}")
-                await player_nf_queue.produce_one(player)
+                produce_error = await player_nf_queue.put([player])
+                if produce_error:
+                    logger.error(
+                        f"[{worker_id}]: Failed to requeue player: {produce_error}"
+                    )
                 await asyncio.sleep(10)
                 continue
 
@@ -226,15 +230,21 @@ async def work(
             except ValidationError as e:
                 error = e.json()
                 logger.error(error)
-                await player_nf_queue.produce_one(player)
+                produce_error = await player_nf_queue.put([player])
+                if produce_error:
+                    logger.error(
+                        f"[{worker_id}]: Failed to requeue player: {produce_error}"
+                    )
                 continue
 
             # push data to kafka
             success_counter.labels(proxy=_proxy).inc()
-            await player_sc_producer.produce_one(
-                scraped_data,
-                partition_key=str(scraped_data.player_data.id % 10).encode("utf-8"),
-            )
+            produce_error = await player_sc_producer.put([scraped_data])
+            if produce_error:
+                logger.error(
+                    f"[{worker_id}]: Failed to produce scraped player: {produce_error}"
+                )
+                continue
             logger.debug(
                 f"[{worker_id}][{player_data.name}]: {player_data.label_jagex=}"
             )
