@@ -51,6 +51,10 @@ Why this is useful:
 Pragmatic deviation:
 - We keep a facade layer (instead of only direct factory calls) to preserve stable topic-oriented APIs and reduce churn in bases.
 
+Migration note:
+- `components/bot_detector/event_queue` is the single queue abstraction for runtime code.
+- The legacy `components/bot_detector/kafka` package has been removed; queue integrations should use `event_queue` facades/factory APIs.
+
 - **Components** encapsulate each feature’s business logic plus adapters, and may depend on other components/libraries only.
 - **Bases** expose public APIs and handle plumbing only (routing, request parsing, dependency wiring) before delegating to components.
 - **Projects** only compose bricks + libraries into deployable artifacts; they hold wiring/config, never feature code.
