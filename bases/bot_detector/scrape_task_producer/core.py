@@ -9,11 +9,12 @@ from bot_detector.database.player import PlayerRepo
 from bot_detector.event_queue.adapters.kafka import (
     KafkaConfig,
     KafkaConsumerConfig,
+    KafkaLagProbe,
     KafkaProducerConfig,
+    KafkaSettings,
 )
 from bot_detector.event_queue.core import Queue
-from bot_detector.event_queue.factory import QueueFactory, create_lag_probe
-from bot_detector.event_queue.adapters.kafka import KafkaSettings
+from bot_detector.event_queue.factory import QueueFactory
 from bot_detector.event_queue.lag_probe import LagProbeProtocol
 from bot_detector.event_queue.structs import ToScrapeStruct
 from bot_detector.structs import MetaData, PlayerStruct
@@ -265,6 +266,9 @@ async def main():
     lag_topic = "players.to_scrape"
     lag_group_id = "scraper"
 
+    def partition_key_fn(msg: ToScrapeStruct) -> str:
+        return str(msg.player_data.id % 10)
+
     queue = QueueFactory.create_queue(
         model=ToScrapeStruct,
         queue_type="queue",
@@ -274,9 +278,7 @@ async def main():
             bootstrap_servers=bootstrap_servers,
             producer=True,
             consumer=True,
-            producer_config=KafkaProducerConfig(
-                partition_key_fn=lambda message: str(message.player_data.id % 10)
-            ),
+            producer_config=KafkaProducerConfig(partition_key_fn=partition_key_fn),
             consumer_config=KafkaConsumerConfig(group_id=lag_group_id),
         ),
     )
@@ -285,10 +287,8 @@ async def main():
     assert isinstance(queue, Queue)
     player_queue = queue
 
-    lag_probe = create_lag_probe(
-        backend_type="kafka",
-        bootstrap_servers=bootstrap_servers,
-    )
+    lag_probe = KafkaLagProbe(bootstrap_servers)
+
     if isinstance(lag_probe, Exception):
         raise lag_probe
 

@@ -1,4 +1,4 @@
-from typing import Callable, Optional, TypeVar
+from typing import Any, Callable, Optional, TypeVar
 
 from pydantic import BaseModel, model_validator
 
@@ -13,7 +13,7 @@ class KafkaConsumerConfig(BaseModel):
 
 
 class KafkaProducerConfig(BaseModel):
-    partition_key_fn: Callable[[T], bytes | str] | None
+    partition_key_fn: Optional[Callable[[Any], bytes | str]] = None
     MAX_PRODUCE_RETRIES: int = 3
     MAX_PRODUCE_RETRY_BACKOFF: int = 60
 
