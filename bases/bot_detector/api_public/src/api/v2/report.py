@@ -2,7 +2,7 @@ from bot_detector.api_public.src.app.repositories.player import Player
 from bot_detector.api_public.src.app.repositories.report import Report
 from bot_detector.api_public.src.app.views.response.ok import Ok
 from bot_detector.api_public.src.core._cache import SimpleALRUCache
-from bot_detector.api_public.src.core.fastapi.dependencies.kafka import (
+from bot_detector.api_public.src.core.fastapi.dependencies.queue import (
     get_reports_to_insert_producer,
 )
 from bot_detector.api_public.src.core.fastapi.dependencies import wide_event
@@ -90,7 +90,7 @@ async def post_reports(
         _data.append(ParsedDetection(**_d))
 
     # print(_data)
-    produce_errors = await report_repo.send_to_kafka(
+    produce_errors = await report_repo.send_to_queue(
         data=_data,
         producer=report_producer,
     )

@@ -96,7 +96,7 @@ class Report:
                 errors.append(error)
         return reports, errors
 
-    async def send_to_kafka(
+    async def send_to_queue(
         self,
         data: list[ParsedDetection],
         producer: QueueProducer[ReportsToInsertStruct],
@@ -116,7 +116,7 @@ class Report:
             wide_event.add_context(
                 {
                     "report": {
-                        "reports_sent_to_kafka": len(reports),
+                        "reports_sent_to_queue": len(reports),
                         "report_errors": len(error),
                     }
                 }
