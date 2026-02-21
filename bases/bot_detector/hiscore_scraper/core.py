@@ -356,6 +356,10 @@ async def main():
         if isinstance(queue, Exception):
             raise queue
 
+    assert isinstance(player_ts_queue, Queue)
+    assert isinstance(player_nf_producer, QueueProducer)
+    assert isinstance(player_sc_producer, QueueProducer)
+
     await player_ts_queue.start()
     await player_nf_producer.start()
     await player_sc_producer.start()
