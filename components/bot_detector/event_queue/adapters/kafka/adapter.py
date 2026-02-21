@@ -3,12 +3,7 @@ import logging
 from typing import Generic, Optional, TypeVar
 
 import orjson
-from aiokafka import (
-    AIOKafkaConsumer,
-    AIOKafkaProducer,
-    ConsumerRecord,
-    TopicPartition,
-)
+from aiokafka import AIOKafkaConsumer, AIOKafkaProducer, ConsumerRecord
 from aiokafka.errors import KafkaTimeoutError
 from bot_detector.event_queue.core.batcher import Batcher
 from bot_detector.event_queue.core.errors import (
@@ -204,21 +199,6 @@ class AIOKafkaConsumerAdapter(
             )
         await self.consumer.commit()
 
-    async def lag(self) -> int:
-        if self.consumer is None:
-            return 0
-        total_lag = 0
-        partitions = self.consumer.partitions_for_topic(self.config.topic)
-        if partitions is None:
-            return 0
-
-        for partition in partitions:
-            tp = TopicPartition(self.config.topic, partition)
-            committed = await self.consumer.committed(tp) or 0
-            end_offset = await self.consumer.end_offsets([tp])
-            total_lag += end_offset[tp] - committed
-        return total_lag
-
 
 class AIOKafkaAdapter(QueueBackendProtocol[T]):
     """
@@ -254,6 +234,3 @@ class AIOKafkaAdapter(QueueBackendProtocol[T]):
 
     async def commit(self) -> Optional[Exception]:
         await self.consumer.commit()
-
-    async def lag(self) -> int:
-        return await self.consumer.lag()

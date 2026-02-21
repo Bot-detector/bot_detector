@@ -1,5 +1,6 @@
 from .adapters.kafka import KafkaSettings as Settings
-from .factory import QueueFactory
+from .factory import QueueFactory, create_lag_probe
+from .lag_probe import LagProbeProtocol
 from .structs import (
     DataToPredictStruct,
     HighScoreStruct,
@@ -11,6 +12,8 @@ from .structs import (
 
 __all__ = [
     "QueueFactory",
+    "create_lag_probe",
+    "LagProbeProtocol",
     "Settings",
     "ToScrapeStruct",
     "ScrapedStruct",

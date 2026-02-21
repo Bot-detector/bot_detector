@@ -12,8 +12,9 @@ from bot_detector.event_queue.adapters.kafka import (
     KafkaProducerConfig,
 )
 from bot_detector.event_queue.core import Queue
-from bot_detector.event_queue.factory import QueueFactory
+from bot_detector.event_queue.factory import QueueFactory, create_lag_probe
 from bot_detector.event_queue.adapters.kafka import KafkaSettings
+from bot_detector.event_queue.lag_probe import LagProbeProtocol
 from bot_detector.event_queue.structs import ToScrapeStruct
 from bot_detector.structs import MetaData, PlayerStruct
 from bot_detector.wide_event import WideEventLogger
@@ -173,6 +174,9 @@ async def process_players(
     async_session: async_sessionmaker[AsyncSession],
     player_repo: PlayerRepo,
     player_queue: Queue[ToScrapeStruct],
+    lag_probe: LagProbeProtocol,
+    lag_topic: str,
+    lag_group_id: str,
     limit: int = 10,
 ):
     max_days = 20
@@ -188,7 +192,7 @@ async def process_players(
     while True:
         token = wide_event.set({})
         try:
-            lag = await player_queue.lag()
+            lag = await lag_probe.lag(topic=lag_topic, group_id=lag_group_id)
             if last_day != date.today():
                 wide_event.add({"new_day_reset": True})
                 _force_log()
@@ -258,19 +262,22 @@ async def main():
     async_session, async_engine = get_session_factory(SETTINGS=DBSettings())
 
     bootstrap_servers = KafkaSettings().bootstrap_servers
+    lag_topic = "players.to_scrape"
+    lag_group_id = "scraper"
+
     queue = QueueFactory.create_queue(
         model=ToScrapeStruct,
         queue_type="queue",
         backend_type="kafka",
         config=KafkaConfig(
-            topic="players.to_scrape",
+            topic=lag_topic,
             bootstrap_servers=bootstrap_servers,
             producer=True,
             consumer=True,
             producer_config=KafkaProducerConfig(
                 partition_key_fn=lambda message: str(message.player_data.id % 10)
             ),
-            consumer_config=KafkaConsumerConfig(group_id="scraper"),
+            consumer_config=KafkaConsumerConfig(group_id=lag_group_id),
         ),
     )
     if isinstance(queue, Exception):
@@ -278,17 +285,29 @@ async def main():
     assert isinstance(queue, Queue)
     player_queue = queue
 
+    lag_probe = create_lag_probe(
+        backend_type="kafka",
+        bootstrap_servers=bootstrap_servers,
+    )
+    if isinstance(lag_probe, Exception):
+        raise lag_probe
+
     await player_queue.start()
+    await lag_probe.start()
 
     try:
         await process_players(
             async_session=async_session,
             player_repo=PlayerRepo(),
             player_queue=player_queue,
+            lag_probe=lag_probe,
+            lag_topic=lag_topic,
+            lag_group_id=lag_group_id,
             limit=Settings().LIMIT,
         )
     finally:
         await async_engine.dispose()
+        await lag_probe.stop()
         await player_queue.stop()
 
 

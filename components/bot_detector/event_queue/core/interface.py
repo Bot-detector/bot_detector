@@ -36,8 +36,6 @@ class QueueBackendConsumerProtocol(Generic[T], Protocol):
 
     async def commit(self) -> Optional[Exception]: ...
 
-    async def lag(self) -> int: ...
-
 
 @runtime_checkable
 class QueueBackendProtocol(
