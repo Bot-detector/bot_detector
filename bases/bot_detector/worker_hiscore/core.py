@@ -170,15 +170,11 @@ async def consume_many_task(
 
             if error:
                 logger.error(f"{error}")
-                requeue_results = await asyncio.gather(
-                    *[player_sc_queue.put([b]) for b in batch]
-                )
-                for requeue_result in requeue_results:
-                    if isinstance(requeue_result, Exception):
-                        logger.error(
-                            f"Failed to requeue scraped message: {requeue_result}"
-                        )
-                await asyncio.sleep(15)
+                requeue_result = await player_sc_queue.put(batch)
+                if isinstance(requeue_result, Exception):
+                    logger.error(f"Failed to requeue scraped batch: {requeue_result}")
+                    await asyncio.sleep(15)
+                    continue
 
             await player_sc_queue.commit()
 
@@ -189,14 +185,11 @@ async def consume_many_task(
             logger.error(f"[{worker_id}] Error consuming scrapes: {e}")
             logger.debug(f"[{worker_id}] Traceback: \n{traceback.format_exc()}")
             if batch:  # only retry if we have data
-                requeue_results = await asyncio.gather(
-                    *[player_sc_queue.put([b]) for b in batch]
-                )
-                for requeue_result in requeue_results:
-                    if isinstance(requeue_result, Exception):
-                        logger.error(
-                            f"Failed to requeue scraped message: {requeue_result}"
-                        )
+                requeue_result = await player_sc_queue.put(batch)
+                if isinstance(requeue_result, Exception):
+                    logger.error(f"Failed to requeue scraped batch: {requeue_result}")
+                else:
+                    await player_sc_queue.commit()
             await asyncio.sleep(15)
 
 
