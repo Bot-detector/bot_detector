@@ -132,7 +132,16 @@ async def consume_data_to_predict(
                     "error": str(e),
                 }
             )
-            await data_to_predict_queue.put(_batch)
+            put_result = await data_to_predict_queue.put(_batch)
+            if isinstance(put_result, Exception):
+                logger.error(
+                    {
+                        "error": "failed to requeue consumed records",
+                        "reason": str(put_result),
+                    }
+                )
+                await asyncio.sleep(15)
+                continue
             await data_to_predict_queue.commit()
             await asyncio.sleep(15)
             continue
@@ -159,7 +168,16 @@ async def consume_data_to_predict(
                     "error": str(e),
                 }
             )
-            await data_to_predict_queue.put(_batch)
+            put_result = await data_to_predict_queue.put(_batch)
+            if isinstance(put_result, Exception):
+                logger.error(
+                    {
+                        "error": "failed to requeue consumed records",
+                        "reason": str(put_result),
+                    }
+                )
+                await asyncio.sleep(15)
+                continue
             await data_to_predict_queue.commit()
             await asyncio.sleep(15)
             continue
@@ -220,7 +238,16 @@ async def consume_player_scraped(
                         "error": str(e),
                     }
                 )
-                await player_sc_queue.put(batch)
+                put_result = await player_sc_queue.put(batch)
+                if isinstance(put_result, Exception):
+                    logger.error(
+                        {
+                            "error": "failed to requeue consumed records",
+                            "reason": str(put_result),
+                        }
+                    )
+                    await asyncio.sleep(15)
+                    continue
                 await player_sc_queue.commit()
                 await asyncio.sleep(15)
                 continue
@@ -235,7 +262,16 @@ async def consume_player_scraped(
             logger.error(f"Error consuming scrapes: {e}")
             logger.debug(f"Traceback: \n{traceback.format_exc()}")
             if not isinstance(batch, Exception):
-                await player_sc_queue.put(batch)
+                put_result = await player_sc_queue.put(batch)
+                if isinstance(put_result, Exception):
+                    logger.error(
+                        {
+                            "error": "failed to requeue consumed records",
+                            "reason": str(put_result),
+                        }
+                    )
+                    await asyncio.sleep(15)
+                    continue
                 await player_sc_queue.commit()
             await asyncio.sleep(15)
 
