@@ -11,6 +11,7 @@ from bot_detector.event_queue.adapters.kafka import (
     KafkaProducerConfig,
     KafkaSettings,
 )
+from bot_detector.event_queue.core import QueueProducer
 from bot_detector.event_queue.factory import QueueFactory
 from bot_detector.event_queue.structs import ReportsToInsertStruct
 from fastapi import FastAPI
@@ -61,6 +62,7 @@ async def lifespan(app: FastAPI):
     )
     if isinstance(queue, Exception):
         raise queue
+    assert isinstance(queue, QueueProducer)
     app.state.reports_to_insert_producer = queue
     producer = app.state.reports_to_insert_producer
     await producer.start()
