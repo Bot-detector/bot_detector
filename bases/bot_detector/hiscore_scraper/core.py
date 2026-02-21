@@ -76,22 +76,34 @@ async def scrape_player(
         not_found_counter.labels(proxy=proxy).inc()
         logger.debug(f"[{worker_id}][{player.name}]: not found.")
         player.possible_ban = True
-        await player_nf_producer.produce_one(
-            NotFoundStruct(
-                metadata=MetaData(version=1, source="hiscore_scraper"),
-                player_data=player,
-            )
+        produce_error = await player_nf_producer.put(
+            [
+                NotFoundStruct(
+                    metadata=MetaData(version=1, source="hiscore_scraper"),
+                    player_data=player,
+                )
+            ]
         )
+        if produce_error:
+            logger.error(
+                f"[{worker_id}][{player.name}]: Failed to publish not_found: {produce_error}"
+            )
         return None, False
     except UnexpectedRedirection as e:
         error_counter.labels(proxy=proxy).inc()
         logger.warning(f"[{worker_id}][{player.name}]: {e=}")
-        await player_ts_producer.produce_one(
-            ToScrapeStruct(
-                metadata=MetaData(version=1, source="hiscore_scraper"),
-                player_data=player,
-            )
+        produce_error = await player_ts_producer.put(
+            [
+                ToScrapeStruct(
+                    metadata=MetaData(version=1, source="hiscore_scraper"),
+                    player_data=player,
+                )
+            ]
         )
+        if produce_error:
+            logger.error(
+                f"[{worker_id}][{player.name}]: Failed to requeue scrape: {produce_error}"
+            )
         return None, True
     except (
         aiohttp.ClientResponseError,
@@ -102,12 +114,18 @@ async def scrape_player(
     ) as e:
         error_counter.labels(proxy=proxy).inc()
         logger.warning(f"[{worker_id}][{player.name}]: {e=}")
-        await player_ts_producer.produce_one(
-            ToScrapeStruct(
-                metadata=MetaData(version=1, source="hiscore_scraper"),
-                player_data=player,
-            )
+        produce_error = await player_ts_producer.put(
+            [
+                ToScrapeStruct(
+                    metadata=MetaData(version=1, source="hiscore_scraper"),
+                    player_data=player,
+                )
+            ]
         )
+        if produce_error:
+            logger.error(
+                f"[{worker_id}][{player.name}]: Failed to requeue scrape: {produce_error}"
+            )
         return None, True
 
 
@@ -140,12 +158,18 @@ async def transform_player_stats(
     except ValidationError as e:
         error = e.json()
         logger.error(error)
-        await player_ts_producer.produce_one(
-            ToScrapeStruct(
-                metadata=MetaData(version=1, source="hiscore_scraper"),
-                player_data=player,
-            )
+        produce_error = await player_ts_producer.put(
+            [
+                ToScrapeStruct(
+                    metadata=MetaData(version=1, source="hiscore_scraper"),
+                    player_data=player,
+                )
+            ]
         )
+        if produce_error:
+            logger.error(
+                f"Failed to requeue player after transform failure: {produce_error}"
+            )
         return None
 
 
@@ -276,11 +300,12 @@ async def work(
             # Successful scrape - reset retry counter
             retry_tracker.record_attempt(worker_id, success=True)
 
-            partition_key = str(scraped_data.player_data.id % 10).encode("utf-8")
-            await player_sc_producer.produce_one(
-                message=scraped_data,
-                partition_key=partition_key,
-            )
+            produce_error = await player_sc_producer.put([scraped_data])
+            if produce_error:
+                logger.error(
+                    f"[{worker_id}][{player_data.name}]: Failed to publish scraped data: {produce_error}"
+                )
+                continue
             logger.debug(f"[{worker_id}][{player_data.name}]: scraped successfully.")
 
 

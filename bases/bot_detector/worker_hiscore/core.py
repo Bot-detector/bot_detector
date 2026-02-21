@@ -118,8 +118,13 @@ async def produce_data_to_predict(
         _data_to_predict = transform_scraped_struct(_record)
         if _data_to_predict is None:
             continue
-        _tasks.append(data_to_predict_producer.produce_one(message=_data_to_predict))
-    await asyncio.gather(*_tasks)
+        _tasks.append(data_to_predict_producer.put([_data_to_predict]))
+
+    produce_results = await asyncio.gather(*_tasks)
+    for produce_result in produce_results:
+        if isinstance(produce_result, Exception):
+            logger.error(f"Failed to produce data_to_predict message: {produce_result}")
+
     logger.info(f"Produced {len(_tasks)} messages to data to predict topic.")
 
 
@@ -134,16 +139,18 @@ async def consume_many_task(
     session_factory: async_sessionmaker[AsyncSession],
 ):
     while True:
-        batch = []
+        batch: list[ScrapedStruct] = []
         try:
-            batch, errors = await player_sc_queue.consume_many(
-                max_records=max_messages,
-                timeout_ms=max_interval_ms,
-            )
-            logger.info(f"[{worker_id}] consumed {len(batch)} scrapes")
+            consume_result = await player_sc_queue.get_many(count=max_messages)
+            if isinstance(consume_result, Exception):
+                logger.error(
+                    f"[{worker_id}] Error during consumption: {consume_result}"
+                )
+                await asyncio.sleep(15)
+                continue
 
-            if errors:
-                logger.error(f"[{worker_id}] Errors during consumption: {errors}")
+            batch = consume_result
+            logger.info(f"[{worker_id}] consumed {len(batch)} scrapes")
 
             if not batch:
                 logger.info("No highscore data to process.")
@@ -164,14 +171,14 @@ async def consume_many_task(
 
             if error:
                 logger.error(f"{error}")
-                await asyncio.gather(
-                    *[
-                        player_sc_queue.produce_one(
-                            b, partition_key=str(b.player_data.id % 10).encode("utf-8")
-                        )
-                        for b in batch
-                    ]
+                requeue_results = await asyncio.gather(
+                    *[player_sc_queue.put([b]) for b in batch]
                 )
+                for requeue_result in requeue_results:
+                    if isinstance(requeue_result, Exception):
+                        logger.error(
+                            f"Failed to requeue scraped message: {requeue_result}"
+                        )
                 await asyncio.sleep(15)
 
             await player_sc_queue.commit()
@@ -183,14 +190,14 @@ async def consume_many_task(
             logger.error(f"[{worker_id}] Error consuming scrapes: {e}")
             logger.debug(f"[{worker_id}] Traceback: \n{traceback.format_exc()}")
             if batch:  # only retry if we have data
-                await asyncio.gather(
-                    *[
-                        player_sc_queue.produce_one(
-                            b, partition_key=str(b.player_data.id % 10).encode("utf-8")
-                        )
-                        for b in batch
-                    ]
+                requeue_results = await asyncio.gather(
+                    *[player_sc_queue.put([b]) for b in batch]
                 )
+                for requeue_result in requeue_results:
+                    if isinstance(requeue_result, Exception):
+                        logger.error(
+                            f"Failed to requeue scraped message: {requeue_result}"
+                        )
             await asyncio.sleep(15)
 
 

@@ -100,17 +100,19 @@ class Report:
         self,
         data: list[ParsedDetection],
         producer: QueueProducer[ReportsToInsertStruct],
-    ) -> None:
+    ) -> list[Exception]:
         tasks = []
 
         # Transform data to ReportsToInsertStruct
         reports, error = self._transform_detection(data)
 
-        tasks = [producer.produce_one(report) for report in reports]
-        await asyncio.gather(*tasks)
+        tasks = [producer.put([report]) for report in reports]
+        produce_results = await asyncio.gather(*tasks, return_exceptions=True)
+        produce_errors = [
+            result for result in produce_results if isinstance(result, Exception)
+        ]
 
         if len(error) > 0:
-            error_msg = f"Received {len(error)} validation errors like this: {error[0]}"
             wide_event.add_context(
                 {
                     "report": {
@@ -119,4 +121,10 @@ class Report:
                     }
                 }
             )
-            raise CustomError(error_msg)
+            produce_errors.append(
+                CustomError(
+                    f"Received {len(error)} validation errors like this: {error[0]}"
+                )
+            )
+
+        return produce_errors
