@@ -306,6 +306,14 @@ async def work(
                     f"[{worker_id}][{player_data.name}]: Failed to publish scraped data: {produce_error}"
                 )
                 continue
+
+            commit_error = await player_ts_queue.commit()
+            if commit_error:
+                logger.error(
+                    f"[{worker_id}][{player_data.name}]: Failed to commit consumed message: {commit_error}"
+                )
+                continue
+
             logger.debug(f"[{worker_id}][{player_data.name}]: scraped successfully.")
 
 
