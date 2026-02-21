@@ -131,7 +131,6 @@ async def produce_data_to_predict(
 async def consume_many_task(
     worker_id: int,
     max_messages: int,
-    max_interval_ms: int,
     player_sc_queue: Queue[ScrapedStruct],
     data_to_predict_producer: QueueProducer[DataToPredictStruct],
     highscore_repo: HighscoreDataRepo,
@@ -207,6 +206,9 @@ async def main():
     player_repo = PlayerRepo()
     highscore_repo = HighscoreDataRepo()
 
+    def partition_key_fn(msg: ScrapedStruct) -> str:
+        return str(msg.player_data.id % 10)
+
     ## queue
     player_sc_queue = QueueFactory.create_queue(
         model=ScrapedStruct,
@@ -217,12 +219,12 @@ async def main():
             bootstrap_servers=KafkaSettings().bootstrap_servers,
             producer=True,
             consumer=True,
-            producer_config=KafkaProducerConfig(
-                partition_key_fn=lambda message: str(message.player_data.id % 10)
-            ),
+            producer_config=KafkaProducerConfig(partition_key_fn=partition_key_fn),
             consumer_config=KafkaConsumerConfig(group_id="highscore_worker"),
         ),
     )
+    assert isinstance(player_sc_queue, Queue)
+
     data_to_predict_producer = QueueFactory.create_queue(
         model=DataToPredictStruct,
         queue_type="producer",
@@ -234,9 +236,7 @@ async def main():
             producer_config=KafkaProducerConfig(partition_key_fn=None),
         ),
     )
-    for queue in (player_sc_queue, data_to_predict_producer):
-        if isinstance(queue, Exception):
-            raise queue
+    assert isinstance(data_to_predict_producer, Queue)
 
     await player_sc_queue.start()
     await data_to_predict_producer.start()
@@ -247,7 +247,6 @@ async def main():
             consume_many_task(
                 worker_id=worker_id,
                 max_messages=Settings().MAX_BATCH_SIZE,
-                max_interval_ms=Settings().MAX_INTERVAL_MS,
                 player_sc_queue=player_sc_queue,
                 data_to_predict_producer=data_to_predict_producer,
                 highscore_repo=highscore_repo,
