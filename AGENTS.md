@@ -105,6 +105,18 @@ This keeps related logic co-located and easier to evolve.
 - Use **pydantic-settings**
 - No direct os.environ access inside business logic
 - Validate environment configuration at startup
+## Event Queue Pattern Note
+The `components/bot_detector/event_queue` area intentionally combines multiple patterns:
+- **Structural**
+  - **Adapter**: backend-specific adapters (Kafka, memory) implement queue protocols.
+- **Creational**
+  - **Abstract Factory** (`QueueFactory.create_queue`) chooses backend + queue shape at runtime.
+
+Why this mix:
+- Keep base code simple
+- Keep transport swappable for testing (`backend_type="memory"`) without changing call sites.
+- Keep backend-specific details isolated behind protocols/factory.
+
 ## Documentation Standards
 Documentation should be **short, relevant, and intentional**.
 - Google-style docstrings

@@ -5,13 +5,15 @@ from datetime import datetime
 
 import aiohttp
 from aiohttp import ClientSession
-from bot_detector.kafka import (
-    PlayersNotFoundConsumer,
-    PlayersNotFoundProducer,
-    PlayersScrapedProducer,
-    ScrapedStruct,
+from bot_detector.event_queue.adapters.kafka import (
+    KafkaConfig,
+    KafkaConsumerConfig,
+    KafkaProducerConfig,
+    KafkaSettings,
 )
-from bot_detector.kafka import Settings as KafkaSettings
+from bot_detector.event_queue.core import Queue, QueueProducer
+from bot_detector.event_queue.factory import QueueFactory
+from bot_detector.event_queue.structs import NotFoundStruct, ScrapedStruct
 from bot_detector.proxy_manager import ProxyManager
 from bot_detector.proxy_manager import Settings as ProxySettings
 from bot_detector.runemetrics_api import RuneMetrics, RuneMetricsResponse
@@ -150,9 +152,8 @@ async def work(
     worker_id: int,
     proxy_manager: ProxyManager,
     rate_limiter: RateLimiter,
-    player_nf_consumer: PlayersNotFoundConsumer,
-    player_nf_producer: PlayersNotFoundProducer,
-    player_sc_producer: PlayersScrapedProducer,
+    player_nf_queue: Queue[NotFoundStruct],
+    player_sc_producer: QueueProducer[ScrapedStruct],
 ):
     async with ClientSession() as session:
         while True:
@@ -167,21 +168,18 @@ async def work(
                 continue
 
             # get player from kafka
-            try:
-                player, error = await player_nf_consumer.consume_one()
-            except ValidationError as e:
-                error = e.json()
-                logger.error(error)
-                continue
-            if error:
-                logger.error(f"[{worker_id}]: {error}")
+            result = await player_nf_queue.get_one()
+            if isinstance(result, Exception):
+                logger.error(f"[{worker_id}]: {result}")
                 await asyncio.sleep(10)
                 continue
 
-            if player is None:
+            if result is None:
                 logger.error(f"[{worker_id}]: No player available.")
                 await asyncio.sleep(10)
                 continue
+
+            player = result
 
             player_data = player.player_data
 
@@ -206,7 +204,13 @@ async def work(
             if error:
                 error_counter.labels(proxy=_proxy).inc()
                 logger.warning(f"[{worker_id}][{player_data.name}]: {error=}")
-                await player_nf_producer.produce_one(player)
+                produce_error = await player_nf_queue.put([player])
+                if produce_error:
+                    logger.error(
+                        f"[{worker_id}]: Failed to requeue player: {produce_error}"
+                    )
+                else:
+                    await player_nf_queue.commit()
                 await asyncio.sleep(10)
                 continue
 
@@ -225,15 +229,24 @@ async def work(
             except ValidationError as e:
                 error = e.json()
                 logger.error(error)
-                await player_nf_producer.produce_one(player)
+                produce_error = await player_nf_queue.put([player])
+                if produce_error:
+                    logger.error(
+                        f"[{worker_id}]: Failed to requeue player: {produce_error}"
+                    )
+                else:
+                    await player_nf_queue.commit()
                 continue
 
             # push data to kafka
             success_counter.labels(proxy=_proxy).inc()
-            await player_sc_producer.produce_one(
-                scraped_data,
-                partition_key=str(scraped_data.player_data.id % 10).encode("utf-8"),
-            )
+            produce_error = await player_sc_producer.put([scraped_data])
+            if produce_error:
+                logger.error(
+                    f"[{worker_id}]: Failed to produce scraped player: {produce_error}"
+                )
+                continue
+            await player_nf_queue.commit()
             logger.debug(
                 f"[{worker_id}][{player_data.name}]: {player_data.label_jagex=}"
             )
@@ -244,20 +257,42 @@ async def main():
     proxies = await proxy_manager.fetch_proxies()
 
     # initialize kafka producers and consumers
-    b_server = KafkaSettings().KAFKA_BOOTSTRAP_SERVERS
+    b_server = KafkaSettings().bootstrap_servers
 
-    ## consumer
-    player_nf_consumer = PlayersNotFoundConsumer(
-        bootstrap_servers=b_server, group_id="runemetrics_scraper"
+    player_nf_queue = QueueFactory.create_queue(
+        model=NotFoundStruct,
+        queue_type="queue",
+        backend_type="kafka",
+        config=KafkaConfig(
+            topic="players.not_found",
+            bootstrap_servers=b_server,
+            producer=True,
+            consumer=True,
+            producer_config=KafkaProducerConfig(partition_key_fn=None),
+            consumer_config=KafkaConsumerConfig(group_id="runemetrics_scraper"),
+        ),
     )
+    player_sc_producer = QueueFactory.create_queue(
+        model=ScrapedStruct,
+        queue_type="producer",
+        backend_type="kafka",
+        config=KafkaConfig(
+            topic="players.scraped",
+            bootstrap_servers=b_server,
+            producer=True,
+            producer_config=KafkaProducerConfig(
+                partition_key_fn=lambda message: str(message.player_data.id % 10)
+            ),
+        ),
+    )
+    for queue in (player_nf_queue, player_sc_producer):
+        if isinstance(queue, Exception):
+            raise queue
 
-    ## producer
-    player_nf_producer = PlayersNotFoundProducer(bootstrap_servers=b_server)
-    player_sc_producer = PlayersScrapedProducer(bootstrap_servers=b_server)
+    assert isinstance(player_nf_queue, Queue)
+    assert isinstance(player_sc_producer, QueueProducer)
 
-    # start kafka producers and consumers
-    await player_nf_consumer.start()
-    await player_nf_producer.start()
+    await player_nf_queue.start()
     await player_sc_producer.start()
 
     # start workers
@@ -270,8 +305,7 @@ async def main():
                     calls_per_interval=ProxySettings().MAX_CALLS,
                     interval=ProxySettings().INTERVAL,
                 ),
-                player_nf_consumer=player_nf_consumer,
-                player_nf_producer=player_nf_producer,
+                player_nf_queue=player_nf_queue,
                 player_sc_producer=player_sc_producer,
             )
         )

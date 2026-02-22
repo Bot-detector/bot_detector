@@ -55,7 +55,7 @@ services:
       - JVM_OPTS=-Xms32M -Xmx64M
       - SERVER_SERVLET_CONTEXTPATH=/
     ports:
-      - 9042:9000
+      - 9000:9000
     restart: on-failure
     networks:
       - botdetector-network

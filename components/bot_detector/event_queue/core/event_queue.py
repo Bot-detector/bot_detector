@@ -64,8 +64,8 @@ class QueueConsumer(Generic[T]):
     async def get_many(self, count: int) -> list[T] | Exception:
         return await self._backend.get_many(count)
 
-    async def lag(self) -> int:
-        return await self._backend.lag()
+    async def commit(self):
+        return await self._backend.commit()
 
 
 class Queue(QueueConsumer[T], QueueProducer[T]):

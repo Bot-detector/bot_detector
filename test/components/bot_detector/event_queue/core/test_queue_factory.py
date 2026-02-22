@@ -5,7 +5,12 @@ from bot_detector.event_queue.core.event_queue import (
     QueueConsumer,
     QueueProducer,
 )
-from bot_detector.event_queue.factory import InvalidConfig, QueueFactory
+from bot_detector.event_queue.factory import (
+    InvalidConfig,
+    QueueFactory,
+    create_lag_probe,
+)
+from bot_detector.event_queue.adapters.memory import MemoryLagProbe
 from pydantic import BaseModel
 
 
@@ -91,3 +96,16 @@ def test_queue_factory_raises_invalid_config():
             backend_type="memory",
             config=object(),
         )
+
+
+def test_create_lag_probe_memory():
+    lag_probe = create_lag_probe(backend_type="memory")
+
+    assert isinstance(lag_probe, MemoryLagProbe)
+
+
+def test_create_lag_probe_missing_bootstrap_servers():
+    lag_probe = create_lag_probe(backend_type="kafka")
+
+    assert isinstance(lag_probe, ValueError)
+    assert str(lag_probe) == "bootstrap_servers is required for kafka lag probe"

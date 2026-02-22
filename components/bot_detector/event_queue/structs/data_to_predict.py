@@ -2,7 +2,6 @@ from pydantic import BaseModel
 
 
 class HighScoreStruct(BaseModel):
-    # Skills
     attack: int = 0
     defence: int = 0
     strength: int = 0
@@ -26,8 +25,6 @@ class HighScoreStruct(BaseModel):
     runecraft: int = 0
     hunter: int = 0
     construction: int = 0
-
-    # Minigames
     lms_rank: int = 0
     soul_wars_zeal: int = 0
     cs_all: int = 0
@@ -37,8 +34,6 @@ class HighScoreStruct(BaseModel):
     cs_hard: int = 0
     cs_elite: int = 0
     cs_master: int = 0
-
-    # Bosses
     abyssal_sire: int = 0
     alchemical_hydra: int = 0
     barrows_chests: int = 0

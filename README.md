@@ -37,6 +37,24 @@
 - **Structs** = Pydantic data shapes (requests/responses/contracts) shared across components/bases; they live under `components/bot_detector/structs` and replace the old “DTO” term.
 
 ## Working Standards
+## Event Queue design pattern (short note)
+`components/bot_detector/event_queue` uses complementary patterns:
+- **Adapter (structural)**: concrete backends (Kafka, memory) conform to shared queue protocols.
+- **Facade (structural)**: topic APIs (`*Producer`, `*Consumer`, `*Queue`) keep base code readable.
+- **Abstract Factory (creational)**: `QueueFactory.create_queue(...)` selects backend + queue shape.
+
+Why this is useful:
+- Swap backend for tests without changing business call sites.
+- Keep infrastructure details out of base business flow.
+- Preserve migration compatibility while converging on queue-first usage.
+
+Pragmatic deviation:
+- We keep a facade layer (instead of only direct factory calls) to preserve stable topic-oriented APIs and reduce churn in bases.
+
+Migration note:
+- `components/bot_detector/event_queue` is the single queue abstraction for runtime code.
+- The legacy `components/bot_detector/kafka` package has been removed; queue integrations should use `event_queue` facades/factory APIs.
+
 - **Components** encapsulate each feature’s business logic plus adapters, and may depend on other components/libraries only.
 - **Bases** expose public APIs and handle plumbing only (routing, request parsing, dependency wiring) before delegating to components.
 - **Projects** only compose bricks + libraries into deployable artifacts; they hold wiring/config, never feature code.

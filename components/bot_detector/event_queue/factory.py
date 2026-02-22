@@ -1,5 +1,9 @@
 from typing import Any, Literal, Type, TypeVar
 
+from bot_detector.event_queue.adapters.kafka import KafkaLagProbe
+from bot_detector.event_queue.adapters.memory import MemoryLagProbe
+from bot_detector.event_queue.lag_probe import LagProbeProtocol
+
 from bot_detector.event_queue.core import (
     Queue,
     QueueBackendConsumerProtocol,
@@ -68,6 +72,21 @@ def create_adapter_kafka(
         return AIOKafkaProducerAdapter[model](cls=model, config=config)
     else:  # consumer
         return AIOKafkaConsumerAdapter[model](cls=model, config=config)
+
+
+def create_lag_probe(
+    backend_type: Literal["memory", "kafka"],
+    bootstrap_servers: str | None = None,
+) -> LagProbeProtocol | Exception:
+    match backend_type:
+        case "memory":
+            return MemoryLagProbe()
+        case "kafka":
+            if bootstrap_servers is None:
+                return ValueError("bootstrap_servers is required for kafka lag probe")
+            return KafkaLagProbe(bootstrap_servers=bootstrap_servers)
+        case _:
+            return ValueError(f"Unknown backend_type: {backend_type}")
 
 
 class QueueFactory:

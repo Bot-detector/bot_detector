@@ -4,16 +4,19 @@ from datetime import date, datetime, timedelta
 
 import aiohttp
 from aiohttp import ClientSession
-from bot_detector.kafka import (
+from bot_detector.event_queue.adapters.kafka import (
+    KafkaConfig,
+    KafkaConsumerConfig,
+    KafkaProducerConfig,
+    KafkaSettings,
+)
+from bot_detector.event_queue.core import Queue, QueueProducer
+from bot_detector.event_queue.factory import QueueFactory
+from bot_detector.event_queue.structs import (
     NotFoundStruct,
-    PlayersNotFoundProducer,
-    PlayersScrapedProducer,
-    PlayersToScrapeConsumer,
-    PlayersToScrapeProducer,
     ScrapedStruct,
     ToScrapeStruct,
 )
-from bot_detector.kafka import Settings as KafkaSettings
 from bot_detector.proxy_manager import ProxyManager
 from bot_detector.proxy_manager import Settings as ProxySettings
 from bot_detector.structs import (
@@ -48,8 +51,8 @@ async def scrape_player(
     session: ClientSession,
     hiscore_instance: Hiscore,
     proxy: str,
-    player_nf_producer: PlayersNotFoundProducer,
-    player_ts_producer: PlayersToScrapeProducer,
+    player_nf_producer: QueueProducer[NotFoundStruct],
+    player_ts_producer: Queue[ToScrapeStruct],
 ) -> tuple[PlayerStats | None, bool]:
     """
     Scrape player stats from hiscores.
@@ -73,22 +76,34 @@ async def scrape_player(
         not_found_counter.labels(proxy=proxy).inc()
         logger.debug(f"[{worker_id}][{player.name}]: not found.")
         player.possible_ban = True
-        await player_nf_producer.produce_one(
-            NotFoundStruct(
-                metadata=MetaData(version=1, source="hiscore_scraper"),
-                player_data=player,
-            )
+        produce_error = await player_nf_producer.put(
+            [
+                NotFoundStruct(
+                    metadata=MetaData(version=1, source="hiscore_scraper"),
+                    player_data=player,
+                )
+            ]
         )
+        if produce_error:
+            logger.error(
+                f"[{worker_id}][{player.name}]: Failed to publish not_found: {produce_error}"
+            )
         return None, False
     except UnexpectedRedirection as e:
         error_counter.labels(proxy=proxy).inc()
         logger.warning(f"[{worker_id}][{player.name}]: {e=}")
-        await player_ts_producer.produce_one(
-            ToScrapeStruct(
-                metadata=MetaData(version=1, source="hiscore_scraper"),
-                player_data=player,
-            )
+        produce_error = await player_ts_producer.put(
+            [
+                ToScrapeStruct(
+                    metadata=MetaData(version=1, source="hiscore_scraper"),
+                    player_data=player,
+                )
+            ]
         )
+        if produce_error:
+            logger.error(
+                f"[{worker_id}][{player.name}]: Failed to requeue scrape: {produce_error}"
+            )
         return None, True
     except (
         aiohttp.ClientResponseError,
@@ -99,19 +114,25 @@ async def scrape_player(
     ) as e:
         error_counter.labels(proxy=proxy).inc()
         logger.warning(f"[{worker_id}][{player.name}]: {e=}")
-        await player_ts_producer.produce_one(
-            ToScrapeStruct(
-                metadata=MetaData(version=1, source="hiscore_scraper"),
-                player_data=player,
-            )
+        produce_error = await player_ts_producer.put(
+            [
+                ToScrapeStruct(
+                    metadata=MetaData(version=1, source="hiscore_scraper"),
+                    player_data=player,
+                )
+            ]
         )
+        if produce_error:
+            logger.error(
+                f"[{worker_id}][{player.name}]: Failed to requeue scrape: {produce_error}"
+            )
         return None, True
 
 
 async def transform_player_stats(
     player_stats: PlayerStats,
     player: PlayerStruct,
-    player_ts_producer: PlayersToScrapeProducer,
+    player_ts_producer: Queue[ToScrapeStruct],
 ) -> ScrapedStruct | None:
     player.updated_at = datetime.now()
     player.possible_ban = False
@@ -137,12 +158,18 @@ async def transform_player_stats(
     except ValidationError as e:
         error = e.json()
         logger.error(error)
-        await player_ts_producer.produce_one(
-            ToScrapeStruct(
-                metadata=MetaData(version=1, source="hiscore_scraper"),
-                player_data=player,
-            )
+        produce_error = await player_ts_producer.put(
+            [
+                ToScrapeStruct(
+                    metadata=MetaData(version=1, source="hiscore_scraper"),
+                    player_data=player,
+                )
+            ]
         )
+        if produce_error:
+            logger.error(
+                f"Failed to requeue player after transform failure: {produce_error}"
+            )
         return None
 
 
@@ -191,25 +218,24 @@ async def get_proxy(
 
 async def get_player_to_scrape(
     worker_id: int,
-    player_ts_consumer: PlayersToScrapeConsumer,
+    player_ts_queue: Queue[ToScrapeStruct],
 ) -> ToScrapeStruct | None:
-    player_to_scrape, error = await player_ts_consumer.consume_one()
-    if error:
-        logger.error(f"[{worker_id}]: Error consuming player to scrape: {error}")
+    result = await player_ts_queue.get_one()
+    if isinstance(result, Exception):
+        logger.error(f"[{worker_id}]: Error consuming player to scrape: {result}")
         return None
-    if player_to_scrape is None:
+    if result is None:
         logger.warning(f"[{worker_id}]: No player available.")
         return None
-    return player_to_scrape
+    return result
 
 
 async def work(
     worker_id: int,
     proxy_manager: ProxyManager,
-    player_ts_consumer: PlayersToScrapeConsumer,
-    player_ts_producer: PlayersToScrapeProducer,
-    player_nf_producer: PlayersNotFoundProducer,
-    player_sc_producer: PlayersScrapedProducer,
+    player_ts_queue: Queue[ToScrapeStruct],
+    player_nf_producer: QueueProducer[NotFoundStruct],
+    player_sc_producer: QueueProducer[ScrapedStruct],
 ):
     retry_tracker = RetryTracker(base_delay=1.0, max_delay=300.0, decay_window=300.0)
     rate_limiter = RateLimiter(
@@ -229,7 +255,7 @@ async def work(
             _proxy = proxy.split("@")[1]
 
             # get player from kafka
-            player_to_scrape = await get_player_to_scrape(worker_id, player_ts_consumer)
+            player_to_scrape = await get_player_to_scrape(worker_id, player_ts_queue)
             if player_to_scrape is None:
                 await asyncio.sleep(10)
                 continue
@@ -251,7 +277,7 @@ async def work(
                 proxy=_proxy,
                 worker_id=worker_id,
                 player_nf_producer=player_nf_producer,
-                player_ts_producer=player_ts_producer,
+                player_ts_producer=player_ts_queue,
             )
             if player_stats is None:
                 if retry:
@@ -264,7 +290,7 @@ async def work(
             scraped_data = await transform_player_stats(
                 player_stats=player_stats,
                 player=player_data,
-                player_ts_producer=player_ts_producer,
+                player_ts_producer=player_ts_queue,
             )
 
             if scraped_data is None:
@@ -274,11 +300,20 @@ async def work(
             # Successful scrape - reset retry counter
             retry_tracker.record_attempt(worker_id, success=True)
 
-            partition_key = str(scraped_data.player_data.id % 10).encode("utf-8")
-            await player_sc_producer.produce_one(
-                message=scraped_data,
-                partition_key=partition_key,
-            )
+            produce_error = await player_sc_producer.put([scraped_data])
+            if produce_error:
+                logger.error(
+                    f"[{worker_id}][{player_data.name}]: Failed to publish scraped data: {produce_error}"
+                )
+                continue
+
+            commit_error = await player_ts_queue.commit()
+            if commit_error:
+                logger.error(
+                    f"[{worker_id}][{player_data.name}]: Failed to commit consumed message: {commit_error}"
+                )
+                continue
+
             logger.debug(f"[{worker_id}][{player_data.name}]: scraped successfully.")
 
 
@@ -287,19 +322,53 @@ async def main():
     proxies = await proxy_manager.fetch_proxies()
 
     # initialize kafka producers and consumers
-    b_server = KafkaSettings().KAFKA_BOOTSTRAP_SERVERS
-    ## consumer
-    player_ts_consumer = PlayersToScrapeConsumer(
-        bootstrap_servers=b_server, group_id="scraper"
+    b_server = KafkaSettings().bootstrap_servers
+    player_ts_queue = QueueFactory.create_queue(
+        model=ToScrapeStruct,
+        queue_type="queue",
+        backend_type="kafka",
+        config=KafkaConfig(
+            topic="players.to_scrape",
+            bootstrap_servers=b_server,
+            producer=True,
+            consumer=True,
+            producer_config=KafkaProducerConfig(partition_key_fn=None),
+            consumer_config=KafkaConsumerConfig(group_id="scraper"),
+        ),
     )
-    ## producer
-    player_ts_producer = PlayersToScrapeProducer(bootstrap_servers=b_server)
-    player_nf_producer = PlayersNotFoundProducer(bootstrap_servers=b_server)
-    player_sc_producer = PlayersScrapedProducer(bootstrap_servers=b_server)
+    player_nf_producer = QueueFactory.create_queue(
+        model=NotFoundStruct,
+        queue_type="producer",
+        backend_type="kafka",
+        config=KafkaConfig(
+            topic="players.not_found",
+            bootstrap_servers=b_server,
+            producer=True,
+            producer_config=KafkaProducerConfig(partition_key_fn=None),
+        ),
+    )
+    player_sc_producer = QueueFactory.create_queue(
+        model=ScrapedStruct,
+        queue_type="producer",
+        backend_type="kafka",
+        config=KafkaConfig(
+            topic="players.scraped",
+            bootstrap_servers=b_server,
+            producer=True,
+            producer_config=KafkaProducerConfig(
+                partition_key_fn=lambda message: str(message.player_data.id % 10)
+            ),
+        ),
+    )
+    for queue in (player_ts_queue, player_nf_producer, player_sc_producer):
+        if isinstance(queue, Exception):
+            raise queue
 
-    # start kafka producers and consumers
-    await player_ts_consumer.start()
-    await player_ts_producer.start()
+    assert isinstance(player_ts_queue, Queue)
+    assert isinstance(player_nf_producer, QueueProducer)
+    assert isinstance(player_sc_producer, QueueProducer)
+
+    await player_ts_queue.start()
     await player_nf_producer.start()
     await player_sc_producer.start()
     # start workers
@@ -307,8 +376,7 @@ async def main():
         work(
             worker_id=worker_id,
             proxy_manager=proxy_manager,
-            player_ts_consumer=player_ts_consumer,
-            player_ts_producer=player_ts_producer,
+            player_ts_queue=player_ts_queue,
             player_nf_producer=player_nf_producer,
             player_sc_producer=player_sc_producer,
         )

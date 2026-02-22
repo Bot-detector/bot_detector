@@ -60,9 +60,6 @@ class InMemoryConsumerAdapter(
     async def commit(self) -> Optional[Exception]:
         self._queue.task_done()
 
-    async def lag(self) -> int:
-        return self._queue.qsize()
-
 
 class InMemoryProducerAdapter(
     _InMemoryBase[T],
@@ -106,6 +103,3 @@ class InMemoryAdapter(QueueBackendProtocol[T]):
 
     async def commit(self) -> Optional[Exception]:
         return await self.consumer.commit()
-
-    async def lag(self) -> int:
-        return await self.consumer.lag()
