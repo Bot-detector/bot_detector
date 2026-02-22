@@ -17,16 +17,11 @@ from bot_detector.event_queue.factory import QueueFactory
 from bot_detector.event_queue.structs import DataToPredictStruct, ScrapedStruct
 from bot_detector.ml_api import InputData, MLApiClient, Prediction
 from bot_detector.structs import PredictionCreate
+from bot_detector.worker_ml.settings import Settings
 from bot_detector.worker_ml.settings import Settings as MLSettings
-from pydantic_settings import BaseSettings
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 logger = logging.getLogger(__name__)
-
-
-class Settings(BaseSettings):
-    CONSUME_PLAYER_SCRAPED: bool = False
-    CONSUME_DATA_TO_PREDICT: bool = True
 
 
 async def insert_prediction_results(

@@ -7,6 +7,5 @@ class Settings(BaseSettings):
     MAX_MESSAGES: int = Field(default=100)
     MAX_INTERVAL_MS: int = Field(default=5000)
     MODEL_NAME: str = Field(default=...)
-
-
-SETTINGS = Settings()
+    CONSUME_PLAYER_SCRAPED: bool = False
+    CONSUME_DATA_TO_PREDICT: bool = True
