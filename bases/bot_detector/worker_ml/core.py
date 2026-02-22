@@ -277,7 +277,7 @@ async def consume_player_scraped(
 
 
 async def main_player_scraped(
-    api: MLApiClient, session_factory
+    api: MLApiClient, session_factory: async_sessionmaker[AsyncSession]
 ) -> tuple[asyncio.Task, Queue]:
     player_sc_queue = QueueFactory.create_queue(
         model=ScrapedStruct,
