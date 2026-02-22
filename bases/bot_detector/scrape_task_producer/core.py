@@ -273,15 +273,14 @@ async def main():
 
     player_queue = QueueFactory.create_queue(
         model=ToScrapeStruct,
-        queue_type="queue",
+        queue_type="producer",
         backend_type="kafka",
         config=KafkaConfig(
             topic=lag_topic,
             bootstrap_servers=bootstrap_servers,
             producer=True,
-            consumer=True,
+            consumer=False,
             producer_config=KafkaProducerConfig(partition_key_fn=partition_key_fn),
-            consumer_config=KafkaConsumerConfig(group_id=lag_group_id),
         ),
     )
     if isinstance(player_queue, Exception):
