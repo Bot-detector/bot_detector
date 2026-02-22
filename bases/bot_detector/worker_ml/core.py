@@ -315,7 +315,7 @@ async def main_player_scraped(
 
 
 async def main_data_to_predict(
-    api: MLApiClient, session_factory
+    api: MLApiClient, session_factory: async_sessionmaker[AsyncSession]
 ) -> tuple[asyncio.Task, Queue]:
     data_to_predict_queue = QueueFactory.create_queue(
         model=DataToPredictStruct,
