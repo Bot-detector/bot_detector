@@ -8,7 +8,6 @@ from bot_detector.database import get_session_factory
 from bot_detector.database.player import PlayerRepo
 from bot_detector.event_queue.adapters.kafka import (
     KafkaConfig,
-    KafkaConsumerConfig,
     KafkaLagProbe,
     KafkaProducerConfig,
     KafkaSettings,
