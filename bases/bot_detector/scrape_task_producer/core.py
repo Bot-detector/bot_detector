@@ -12,7 +12,7 @@ from bot_detector.event_queue.adapters.kafka import (
     KafkaProducerConfig,
     KafkaSettings,
 )
-from bot_detector.event_queue.core import Queue
+from bot_detector.event_queue.core import QueueProducer
 from bot_detector.event_queue.factory import QueueFactory
 from bot_detector.event_queue.lag_probe import LagProbeProtocol
 from bot_detector.event_queue.structs import ToScrapeStruct
@@ -86,7 +86,7 @@ class FetchParams:
 
 async def produce_players(
     players: list[PlayerStruct],
-    player_queue: Queue[ToScrapeStruct],
+    player_queue: QueueProducer[ToScrapeStruct],
 ):
     if not players:
         return
@@ -174,7 +174,7 @@ def determine_fetch_params(
 async def process_players(
     async_session: async_sessionmaker[AsyncSession],
     player_repo: PlayerRepo,
-    player_queue: Queue[ToScrapeStruct],
+    player_queue: QueueProducer[ToScrapeStruct],
     lag_probe: LagProbeProtocol,
     lag_topic: str,
     lag_group_id: str,
@@ -285,7 +285,7 @@ async def main():
     if isinstance(player_queue, Exception):
         raise player_queue
 
-    assert isinstance(player_queue, Queue)
+    assert isinstance(player_queue, QueueProducer)
 
     lag_probe = KafkaLagProbe(bootstrap_servers)
 
