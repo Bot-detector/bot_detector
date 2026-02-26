@@ -68,20 +68,39 @@ def _patch_common(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_work_commits_after_successful_publish(monkeypatch: pytest.MonkeyPatch):
+async def test_get_player_to_scrape_commits_message(monkeypatch: pytest.MonkeyPatch):
+    player_ts_queue = AsyncMock()
+    player_to_scrape = _to_scrape_player()
+    player_ts_queue.get_one = AsyncMock(return_value=player_to_scrape)
+    player_ts_queue.commit = AsyncMock(return_value=None)
+
+    result = await core.get_player_to_scrape(
+        worker_id=1, player_ts_queue=player_ts_queue
+    )
+
+    assert result == player_to_scrape
+    player_ts_queue.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_work_requeues_player_when_publish_fails(monkeypatch: pytest.MonkeyPatch):
     _patch_common(monkeypatch)
 
     player_ts_queue = AsyncMock()
-    player_ts_queue.commit = AsyncMock(return_value=None)
-
     player_sc_producer = AsyncMock()
-    player_sc_producer.put = AsyncMock(return_value=None)
 
     monkeypatch.setattr(
         core, "scrape_player", AsyncMock(return_value=(object(), False))
     )
     monkeypatch.setattr(
         core, "transform_player_stats", AsyncMock(return_value=_scraped_player())
+    )
+    produce_player_to_scrape = AsyncMock(return_value=None)
+    monkeypatch.setattr(core, "produce_player_to_scrape", produce_player_to_scrape)
+    monkeypatch.setattr(
+        core,
+        "produce_player_scraped",
+        AsyncMock(return_value=Exception("publish failed")),
     )
 
     with pytest.raises(asyncio.CancelledError):
@@ -93,26 +112,6 @@ async def test_work_commits_after_successful_publish(monkeypatch: pytest.MonkeyP
             player_sc_producer=player_sc_producer,
         )
 
-    player_ts_queue.commit.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-async def test_work_does_not_commit_on_retry(monkeypatch: pytest.MonkeyPatch):
-    _patch_common(monkeypatch)
-
-    player_ts_queue = AsyncMock()
-    player_ts_queue.commit = AsyncMock(return_value=None)
-
-    monkeypatch.setattr(core, "scrape_player", AsyncMock(return_value=(None, True)))
-    monkeypatch.setattr(core, "handle_retry", AsyncMock())
-
-    with pytest.raises(asyncio.CancelledError):
-        await core.work(
-            worker_id=1,
-            proxy_manager=AsyncMock(),
-            player_ts_queue=player_ts_queue,
-            player_nf_producer=AsyncMock(),
-            player_sc_producer=AsyncMock(),
-        )
-
-    player_ts_queue.commit.assert_not_awaited()
+    produce_player_to_scrape.assert_awaited_once()
+    requeued_player = produce_player_to_scrape.await_args.args[1]
+    assert requeued_player.name == "player-1"
