@@ -146,62 +146,6 @@ wheels = [
 ]
 
 [[package]]
-name = "api-ml"
-version = "0.1.0"
-source = { directory = "projects/api_ml" }
-dependencies = [
-    { name = "boto3" },
-    { name = "fastapi" },
-    { name = "mlflow-skinny" },
-    { name = "numpy" },
-    { name = "pandas" },
-    { name = "prometheus-client" },
-    { name = "pydantic-settings" },
-    { name = "scikit-learn" },
-    { name = "uvicorn" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "boto3", specifier = "==1.40.34" },
-    { name = "fastapi", specifier = "==0.115.12" },
-    { name = "mlflow-skinny", specifier = "==3.4.0" },
-    { name = "numpy", specifier = "==2.3.3" },
-    { name = "pandas", specifier = "==2.3.2" },
-    { name = "prometheus-client", specifier = "==0.22.0" },
-    { name = "pydantic-settings", specifier = "==2.7.0" },
-    { name = "scikit-learn", specifier = "==1.7.2" },
-    { name = "uvicorn", specifier = "==0.34.2" },
-]
-
-[[package]]
-name = "api-public"
-version = "0.1.0"
-source = { directory = "projects/api_public" }
-dependencies = [
-    { name = "aiokafka" },
-    { name = "asyncmy" },
-    { name = "fastapi" },
-    { name = "orjson" },
-    { name = "prometheus-client" },
-    { name = "pydantic-settings" },
-    { name = "sqlalchemy" },
-    { name = "uvicorn" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "aiokafka", specifier = "==0.12.0" },
-    { name = "asyncmy", specifier = "==0.2.11" },
-    { name = "fastapi", specifier = "==0.115.12" },
-    { name = "orjson", specifier = "==3.11.5" },
-    { name = "prometheus-client", specifier = "==0.22.0" },
-    { name = "pydantic-settings", specifier = "==2.7.0" },
-    { name = "sqlalchemy", specifier = "==2.0.44" },
-    { name = "uvicorn", specifier = "==0.34.2" },
-]
-
-[[package]]
 name = "async-timeout"
 version = "5.0.1"
 source = { registry = "https://pypi.org/simple" }
@@ -256,17 +200,25 @@ name = "bot-detector"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "api-ml" },
-    { name = "api-public" },
-    { name = "hiscore-scraper" },
-    { name = "job-hs-migration-v3" },
-    { name = "job-prune-hs-data" },
-    { name = "runemetrics-scraper" },
-    { name = "scrape-task-producer" },
-    { name = "website" },
-    { name = "worker-hiscore" },
-    { name = "worker-ml" },
-    { name = "worker-report" },
+    { name = "aiohttp" },
+    { name = "aiokafka" },
+    { name = "asyncmy" },
+    { name = "boto3" },
+    { name = "cryptography" },
+    { name = "fastapi" },
+    { name = "jinja2" },
+    { name = "mlflow-skinny" },
+    { name = "numpy" },
+    { name = "orjson" },
+    { name = "osrs" },
+    { name = "pandas" },
+    { name = "prometheus-client" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "python-multipart" },
+    { name = "scikit-learn" },
+    { name = "sqlalchemy" },
+    { name = "uvicorn" },
 ]
 
 [package.dev-dependencies]
@@ -279,21 +231,30 @@ dev = [
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
     { name = "ruff" },
+    { name = "tomli-w" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "api-ml", directory = "projects/api_ml" },
-    { name = "api-public", directory = "projects/api_public" },
-    { name = "hiscore-scraper", directory = "projects/hiscore_scraper" },
-    { name = "job-hs-migration-v3", directory = "projects/job_hs_migration_v3" },
-    { name = "job-prune-hs-data", directory = "projects/job_prune_hs_data" },
-    { name = "runemetrics-scraper", directory = "projects/runemetrics_scraper" },
-    { name = "scrape-task-producer", directory = "projects/scrape_task_producer" },
-    { name = "website", directory = "projects/website" },
-    { name = "worker-hiscore", directory = "projects/worker_hiscore" },
-    { name = "worker-ml", directory = "projects/worker_ml" },
-    { name = "worker-report", directory = "projects/worker_report" },
+    { name = "aiohttp", specifier = "==3.11.11" },
+    { name = "aiokafka", specifier = "==0.12.0" },
+    { name = "asyncmy", specifier = "==0.2.11" },
+    { name = "boto3", specifier = "==1.40.34" },
+    { name = "cryptography", specifier = "==46.0.3" },
+    { name = "fastapi", specifier = "==0.115.12" },
+    { name = "jinja2", specifier = "==3.1.6" },
+    { name = "mlflow-skinny", specifier = "==3.4.0" },
+    { name = "numpy", specifier = "==2.3.3" },
+    { name = "orjson", specifier = "==3.11.5" },
+    { name = "osrs", specifier = "==0.0.15" },
+    { name = "pandas", specifier = "==2.3.2" },
+    { name = "prometheus-client", specifier = "==0.22.0" },
+    { name = "pydantic", specifier = "==2.10.4" },
+    { name = "pydantic-settings", specifier = "==2.7.0" },
+    { name = "python-multipart", specifier = "==0.0.20" },
+    { name = "scikit-learn", specifier = "==1.7.2" },
+    { name = "sqlalchemy", specifier = "==2.0.44" },
+    { name = "uvicorn", specifier = "==0.34.2" },
 ]
 
 [package.metadata.requires-dev]
@@ -306,6 +267,7 @@ dev = [
     { name = "pytest-asyncio", specifier = ">=0.25.0" },
     { name = "pytest-cov", specifier = ">=6.1.1" },
     { name = "ruff", specifier = ">=0.8.4" },
+    { name = "tomli-w", specifier = ">=1.2.0" },
 ]
 
 [[package]]
@@ -790,31 +752,6 @@ wheels = [
 ]
 
 [[package]]
-name = "hiscore-scraper"
-version = "0.1.0"
-source = { directory = "projects/hiscore_scraper" }
-dependencies = [
-    { name = "aiohttp" },
-    { name = "aiokafka" },
-    { name = "orjson" },
-    { name = "osrs" },
-    { name = "prometheus-client" },
-    { name = "pydantic" },
-    { name = "pydantic-settings" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "aiohttp", specifier = "==3.11.11" },
-    { name = "aiokafka", specifier = "==0.12.0" },
-    { name = "orjson", specifier = "==3.11.5" },
-    { name = "osrs", specifier = "==0.0.15" },
-    { name = "prometheus-client", specifier = "==0.22.0" },
-    { name = "pydantic", specifier = "==2.10.4" },
-    { name = "pydantic-settings", specifier = "==2.7.0" },
-]
-
-[[package]]
 name = "idna"
 version = "3.10"
 source = { registry = "https://pypi.org/simple" }
@@ -863,50 +800,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/00/2a/e867e8531cf3e36b41201936b7fa7ba7b5702dbef42922193f05c8976cd6/jmespath-1.0.1.tar.gz", hash = "sha256:90261b206d6defd58fdd5e85f478bf633a2901798906be2ad389150c5c60edbe", size = 25843 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/31/b4/b9b800c45527aadd64d5b442f9b932b00648617eb5d63d2c7a6587b7cafc/jmespath-1.0.1-py3-none-any.whl", hash = "sha256:02e2e4cc71b5bcab88332eebf907519190dd9e6e82107fa7f83b1003a6252980", size = 20256 },
-]
-
-[[package]]
-name = "job-hs-migration-v3"
-version = "0.1.0"
-source = { directory = "projects/job_hs_migration_v3" }
-dependencies = [
-    { name = "aiokafka" },
-    { name = "asyncmy" },
-    { name = "cryptography" },
-    { name = "orjson" },
-    { name = "pydantic" },
-    { name = "pydantic-settings" },
-    { name = "sqlalchemy" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "aiokafka", specifier = "==0.12.0" },
-    { name = "asyncmy", specifier = "==0.2.11" },
-    { name = "cryptography", specifier = "==46.0.3" },
-    { name = "orjson", specifier = "==3.11.5" },
-    { name = "pydantic", specifier = "==2.10.4" },
-    { name = "pydantic-settings", specifier = "==2.7.0" },
-    { name = "sqlalchemy", specifier = "==2.0.44" },
-]
-
-[[package]]
-name = "job-prune-hs-data"
-version = "0.1.0"
-source = { directory = "projects/job_prune_hs_data" }
-dependencies = [
-    { name = "asyncmy" },
-    { name = "cryptography" },
-    { name = "pydantic-settings" },
-    { name = "sqlalchemy" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "asyncmy", specifier = "==0.2.11" },
-    { name = "cryptography", specifier = "==46.0.3" },
-    { name = "pydantic-settings", specifier = "==2.7.0" },
-    { name = "sqlalchemy", specifier = "==2.0.44" },
 ]
 
 [[package]]
@@ -1889,31 +1782,6 @@ wheels = [
 ]
 
 [[package]]
-name = "runemetrics-scraper"
-version = "0.1.0"
-source = { directory = "projects/runemetrics_scraper" }
-dependencies = [
-    { name = "aiohttp" },
-    { name = "aiokafka" },
-    { name = "orjson" },
-    { name = "osrs" },
-    { name = "prometheus-client" },
-    { name = "pydantic" },
-    { name = "pydantic-settings" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "aiohttp", specifier = "==3.11.11" },
-    { name = "aiokafka", specifier = "==0.12.0" },
-    { name = "orjson", specifier = "==3.11.5" },
-    { name = "osrs", specifier = "==0.0.15" },
-    { name = "prometheus-client", specifier = "==0.22.0" },
-    { name = "pydantic", specifier = "==2.10.4" },
-    { name = "pydantic-settings", specifier = "==2.7.0" },
-]
-
-[[package]]
 name = "s3transfer"
 version = "0.14.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2033,31 +1901,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/fd/c2/e276a237acb09824822b0ada11b028ed4067fdc367a946730979feacb870/scipy-1.16.2-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:b0348d8ddb55be2a844c518cd8cc8deeeb8aeba707cf834db5758fc89b476a2c", size = 38790088 },
     { url = "https://files.pythonhosted.org/packages/c6/b4/5c18a766e8353015439f3780f5fc473f36f9762edc1a2e45da3ff5a31b21/scipy-1.16.2-cp314-cp314t-win_amd64.whl", hash = "sha256:26284797e38b8a75e14ea6631d29bda11e76ceaa6ddb6fdebbfe4c4d90faf2f9", size = 39457455 },
     { url = "https://files.pythonhosted.org/packages/97/30/2f9a5243008f76dfc5dee9a53dfb939d9b31e16ce4bd4f2e628bfc5d89d2/scipy-1.16.2-cp314-cp314t-win_arm64.whl", hash = "sha256:d2a4472c231328d4de38d5f1f68fdd6d28a615138f842580a8a321b5845cf779", size = 26448374 },
-]
-
-[[package]]
-name = "scrape-task-producer"
-version = "0.1.0"
-source = { directory = "projects/scrape_task_producer" }
-dependencies = [
-    { name = "aiokafka" },
-    { name = "asyncmy" },
-    { name = "cryptography" },
-    { name = "orjson" },
-    { name = "pydantic" },
-    { name = "pydantic-settings" },
-    { name = "sqlalchemy" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "aiokafka", specifier = "==0.12.0" },
-    { name = "asyncmy", specifier = "==0.2.11" },
-    { name = "cryptography", specifier = "==46.0.3" },
-    { name = "orjson", specifier = "==3.11.5" },
-    { name = "pydantic", specifier = "==2.10.4" },
-    { name = "pydantic-settings", specifier = "==2.7.0" },
-    { name = "sqlalchemy", specifier = "==2.0.44" },
 ]
 
 [[package]]
@@ -2203,6 +2046,15 @@ wheels = [
 ]
 
 [[package]]
+name = "tomli-w"
+version = "1.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/19/75/241269d1da26b624c0d5e110e8149093c759b7a286138f4efd61a60e75fe/tomli_w-1.2.0.tar.gz", hash = "sha256:2dd14fac5a47c27be9cd4c976af5a12d87fb1f0b4512f81d69cce3b35ae25021", size = 7184 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c7/18/c86eb8e0202e32dd3df50d43d7ff9854f8e0603945ff398974c1d91ac1ef/tomli_w-1.2.0-py3-none-any.whl", hash = "sha256:188306098d013b691fcadc011abd66727d3c414c571bb01b1a174ba8c983cf90", size = 6675 },
+]
+
+[[package]]
 name = "tomlkit"
 version = "0.13.2"
 source = { registry = "https://pypi.org/simple" }
@@ -2264,110 +2116,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/a6/ae/9bbb19b9e1c450cf9ecaef06463e40234d98d95bf572fab11b4f19ae5ded/uvicorn-0.34.2.tar.gz", hash = "sha256:0e929828f6186353a80b58ea719861d2629d766293b6d19baf086ba31d4f3328", size = 76815 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b1/4b/4cef6ce21a2aaca9d852a6e84ef4f135d99fcd74fa75105e2fc0c8308acd/uvicorn-0.34.2-py3-none-any.whl", hash = "sha256:deb49af569084536d269fe0a6d67e3754f104cf03aba7c11c40f01aadf33c403", size = 62483 },
-]
-
-[[package]]
-name = "website"
-version = "0.1.0"
-source = { directory = "projects/website" }
-dependencies = [
-    { name = "aiohttp" },
-    { name = "fastapi" },
-    { name = "jinja2" },
-    { name = "prometheus-client" },
-    { name = "pydantic-settings" },
-    { name = "python-multipart" },
-    { name = "sqlalchemy" },
-    { name = "uvicorn" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "aiohttp", specifier = "==3.11.11" },
-    { name = "fastapi", specifier = "==0.115.12" },
-    { name = "jinja2", specifier = "==3.1.6" },
-    { name = "prometheus-client", specifier = "==0.22.0" },
-    { name = "pydantic-settings", specifier = "==2.7.0" },
-    { name = "python-multipart", specifier = "==0.0.20" },
-    { name = "sqlalchemy", specifier = "==2.0.44" },
-    { name = "uvicorn", specifier = "==0.34.2" },
-]
-
-[[package]]
-name = "worker-hiscore"
-version = "0.1.0"
-source = { directory = "projects/worker_hiscore" }
-dependencies = [
-    { name = "aiokafka" },
-    { name = "asyncmy" },
-    { name = "cryptography" },
-    { name = "orjson" },
-    { name = "pydantic" },
-    { name = "pydantic-settings" },
-    { name = "sqlalchemy" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "aiokafka", specifier = "==0.12.0" },
-    { name = "asyncmy", specifier = "==0.2.11" },
-    { name = "cryptography", specifier = "==46.0.3" },
-    { name = "orjson", specifier = "==3.11.5" },
-    { name = "pydantic", specifier = "==2.10.4" },
-    { name = "pydantic-settings", specifier = "==2.7.0" },
-    { name = "sqlalchemy", specifier = "==2.0.44" },
-]
-
-[[package]]
-name = "worker-ml"
-version = "0.1.0"
-source = { directory = "projects/worker_ml" }
-dependencies = [
-    { name = "aiohttp" },
-    { name = "aiokafka" },
-    { name = "asyncmy" },
-    { name = "cryptography" },
-    { name = "orjson" },
-    { name = "pydantic" },
-    { name = "pydantic-settings" },
-    { name = "sqlalchemy" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "aiohttp", specifier = "==3.11.11" },
-    { name = "aiokafka", specifier = "==0.12.0" },
-    { name = "asyncmy", specifier = "==0.2.11" },
-    { name = "cryptography", specifier = "==46.0.3" },
-    { name = "orjson", specifier = "==3.11.5" },
-    { name = "pydantic", specifier = "==2.10.4" },
-    { name = "pydantic-settings", specifier = "==2.7.0" },
-    { name = "sqlalchemy", specifier = "==2.0.44" },
-]
-
-[[package]]
-name = "worker-report"
-version = "0.1.0"
-source = { directory = "projects/worker_report" }
-dependencies = [
-    { name = "aiokafka" },
-    { name = "asyncmy" },
-    { name = "cryptography" },
-    { name = "orjson" },
-    { name = "pydantic" },
-    { name = "pydantic-settings" },
-    { name = "sqlalchemy" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "aiokafka", specifier = "==0.12.0" },
-    { name = "asyncmy", specifier = "==0.2.11" },
-    { name = "cryptography", specifier = "==46.0.3" },
-    { name = "orjson", specifier = "==3.11.5" },
-    { name = "pydantic", specifier = "==2.10.4" },
-    { name = "pydantic-settings", specifier = "==2.7.0" },
-    { name = "sqlalchemy", specifier = "==2.0.44" },
 ]
 
 [[package]]

@@ -1,5 +1,7 @@
 [build-system]
-requires = ["hatchling"]
+requires = [
+    "hatchling",
+]
 build-backend = "hatchling.build"
 
 [project]
@@ -9,17 +11,25 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "api_public",
-    "api_ml",
-    "worker_hiscore",
-    "worker_ml",
-    "worker_report",
-    "hiscore_scraper",
-    "runemetrics_scraper",
-    "scrape_task_producer",
-    "website",
-    "job_hs_migration_v3",
-    "job_prune_hs_data",
+    "aiohttp==3.11.11",
+    "aiokafka==0.12.0",
+    "asyncmy==0.2.11",
+    "boto3==1.40.34",
+    "cryptography==46.0.3",
+    "fastapi==0.115.12",
+    "jinja2==3.1.6",
+    "mlflow-skinny==3.4.0",
+    "numpy==2.3.3",
+    "orjson==3.11.5",
+    "osrs==0.0.15",
+    "pandas==2.3.2",
+    "prometheus-client==0.22.0",
+    "pydantic-settings==2.7.0",
+    "pydantic==2.10.4",
+    "python-multipart==0.0.20",
+    "scikit-learn==1.7.2",
+    "sqlalchemy==2.0.44",
+    "uvicorn==0.34.2",
 ]
 
 [dependency-groups]
@@ -32,25 +42,16 @@ dev = [
     "pytest-cov>=6.1.1",
     "mypy>=1.19.1",
     "pyright>=1.1.408",
+    "tomli-w>=1.2.0",
 ]
 
-[tool.uv.sources]
-api_public = { path = "./projects/api_public" }
-api_ml = { path = "./projects/api_ml" }
-worker_hiscore = { path = "./projects/worker_hiscore" }
-worker_ml = { path = "./projects/worker_ml" }
-worker_report = { path = "./projects/worker_report" }
-hiscore_scraper = { path = "./projects/hiscore_scraper" }
-runemetrics_scraper = { path = "./projects/runemetrics_scraper" }
-scrape_task_producer = { path = "./projects/scrape_task_producer" }
-website = { path = "./projects/website" }
-job_hs_migration_v3 = { path = "./projects/job_hs_migration_v3" }
-job_prune_hs_data = { path = "./projects/job_prune_hs_data" }
-
-
 [tool.hatch.build]
-dev-mode-dirs = ["components", "bases", "development", "."]
-
+dev-mode-dirs = [
+    "components",
+    "bases",
+    "development",
+    ".",
+]
 
 [tool.hatch.metadata]
 allow-direct-references = true
