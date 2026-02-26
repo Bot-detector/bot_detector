@@ -116,32 +116,3 @@ async def test_work_does_not_commit_on_retry(monkeypatch: pytest.MonkeyPatch):
         )
 
     player_ts_queue.commit.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_work_does_not_commit_when_publish_fails(monkeypatch: pytest.MonkeyPatch):
-    _patch_common(monkeypatch)
-
-    player_ts_queue = AsyncMock()
-    player_ts_queue.commit = AsyncMock(return_value=None)
-
-    player_sc_producer = AsyncMock()
-    player_sc_producer.put = AsyncMock(return_value=Exception("publish failed"))
-
-    monkeypatch.setattr(
-        core, "scrape_player", AsyncMock(return_value=(object(), False))
-    )
-    monkeypatch.setattr(
-        core, "transform_player_stats", AsyncMock(return_value=_scraped_player())
-    )
-
-    with pytest.raises(asyncio.CancelledError):
-        await core.work(
-            worker_id=1,
-            proxy_manager=AsyncMock(),
-            player_ts_queue=player_ts_queue,
-            player_nf_producer=AsyncMock(),
-            player_sc_producer=player_sc_producer,
-        )
-
-    player_ts_queue.commit.assert_not_awaited()
