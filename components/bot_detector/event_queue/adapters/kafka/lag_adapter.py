@@ -37,6 +37,7 @@ class KafkaLagProbe(LagProbeProtocol):
 
         # latest offsets
         end_offsets = await self._consumer.end_offsets(topic_partitions)
+        first_offsets = await self._consumer.beginning_offsets(topic_partitions)
 
         # committed group offsets (no group join!)
         group_offsets = await self._admin.list_consumer_group_offsets(group_id)
@@ -45,8 +46,19 @@ class KafkaLagProbe(LagProbeProtocol):
 
         for tp in topic_partitions:
             end_offset = end_offsets[tp]
+            first_offset = first_offsets[tp]
+            if end_offset < first_offset:
+                # This can happen if the topic was deleted and recreated, or if the partition was truncated.
+                # In this case, we consider all messages as consumed (lag = 0) to avoid negative lag.
+                continue
             committed = group_offsets.get(tp)
             committed_offset = committed.offset if committed else 0
+
+            if committed_offset < first_offset:
+                # This can happen if the consumer group has never consumed from this partition, or if it has fallen behind and the partition has been truncated.
+                # In this case, we consider the lag to be the number of messages from the first offset to the end offset.
+                total_lag += max(end_offset - first_offset, 0)
+                continue
             total_lag += max(end_offset - committed_offset, 0)
 
         return total_lag

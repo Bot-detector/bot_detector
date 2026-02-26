@@ -45,6 +45,74 @@ from .retry_tracker import RetryTracker
 logger = logging.getLogger(__name__)
 
 
+async def produce_player_to_scrape(
+    player_ts_queue: Queue[ToScrapeStruct],
+    player: PlayerStruct,
+):
+    error = None
+    retries = 0
+    MAX_RETRIES = 3
+    while retries < MAX_RETRIES:
+        to_scrape_struct = ToScrapeStruct(
+            metadata=MetaData(version=1, source="hiscore_scraper"),
+            player_data=player,
+        )
+        error = await player_ts_queue.put([to_scrape_struct])
+        if not error:
+            return None
+        retries += 1
+        logger.error(f"Failed to produce player to scrape (attempt {retries}): {error}")
+        await asyncio.sleep(2**retries)  # Exponential backoff
+    else:
+        return Exception(
+            f"Failed to produce player to scrape after {MAX_RETRIES} attempts: {error}"
+        )
+
+
+async def produce_not_found(
+    player_nf_producer: QueueProducer[NotFoundStruct],
+    player: PlayerStruct,
+):
+    error = None
+    retries = 0
+    MAX_RETRIES = 3
+    while retries < MAX_RETRIES:
+        not_found_struct = NotFoundStruct(
+            metadata=MetaData(version=1, source="hiscore_scraper"),
+            player_data=player,
+        )
+        error = await player_nf_producer.put([not_found_struct])
+        if not error:
+            return None
+        retries += 1
+        logger.error(f"Failed to produce not found (attempt {retries}): {error}")
+        await asyncio.sleep(2**retries)  # Exponential backoff
+    else:
+        return Exception(
+            f"Failed to produce not found after {MAX_RETRIES} attempts: {error}"
+        )
+
+
+async def produce_player_scraped(
+    player_sc_producer: QueueProducer[ScrapedStruct],
+    scraped_data: ScrapedStruct,
+):
+    error = None
+    retries = 0
+    MAX_RETRIES = 3
+    while retries < MAX_RETRIES:
+        error = await player_sc_producer.put([scraped_data])
+        if not error:
+            return None
+        retries += 1
+        logger.error(f"Failed to produce scraped data (attempt {retries}): {error}")
+        await asyncio.sleep(2**retries)  # Exponential backoff
+    else:
+        return Exception(
+            f"Failed to produce scraped data after {MAX_RETRIES} attempts: {error}"
+        )
+
+
 async def scrape_player(
     worker_id: int,
     player: PlayerStruct,
@@ -52,13 +120,14 @@ async def scrape_player(
     hiscore_instance: Hiscore,
     proxy: str,
     player_nf_producer: QueueProducer[NotFoundStruct],
-    player_ts_producer: Queue[ToScrapeStruct],
+    player_ts_queue: Queue[ToScrapeStruct],
 ) -> tuple[PlayerStats | None, bool]:
     """
     Scrape player stats from hiscores.
     Returns a tuple of (PlayerStats | None, bool) where the bool indicates
     whether to retry scraping the player.
     """
+    log_prefix = f"[{worker_id}][{player.name}]"
     try:
         hiscore_data = await hiscore_instance.get(
             mode=HSMode.OLDSCHOOL,
@@ -74,36 +143,18 @@ async def scrape_player(
         return player_stats, False
     except PlayerDoesNotExist:
         not_found_counter.labels(proxy=proxy).inc()
-        logger.debug(f"[{worker_id}][{player.name}]: not found.")
+        logger.debug(f"{log_prefix}: not found.")
         player.possible_ban = True
-        produce_error = await player_nf_producer.put(
-            [
-                NotFoundStruct(
-                    metadata=MetaData(version=1, source="hiscore_scraper"),
-                    player_data=player,
-                )
-            ]
-        )
-        if produce_error:
-            logger.error(
-                f"[{worker_id}][{player.name}]: Failed to publish not_found: {produce_error}"
-            )
+        error = await produce_not_found(player_nf_producer, player)
+        if error:
+            logger.error(f"{log_prefix}: Failed to publish not_found: {error}")
         return None, False
     except UnexpectedRedirection as e:
         error_counter.labels(proxy=proxy).inc()
-        logger.warning(f"[{worker_id}][{player.name}]: {e=}")
-        produce_error = await player_ts_producer.put(
-            [
-                ToScrapeStruct(
-                    metadata=MetaData(version=1, source="hiscore_scraper"),
-                    player_data=player,
-                )
-            ]
-        )
-        if produce_error:
-            logger.error(
-                f"[{worker_id}][{player.name}]: Failed to requeue scrape: {produce_error}"
-            )
+        logger.warning(f"{log_prefix}: {e=}")
+        error = await produce_player_to_scrape(player_ts_queue, player)
+        if error:
+            logger.error(f"{log_prefix}: Failed to requeue scrape: {error}")
         return None, True
     except (
         aiohttp.ClientResponseError,
@@ -113,19 +164,10 @@ async def scrape_player(
         asyncio.TimeoutError,
     ) as e:
         error_counter.labels(proxy=proxy).inc()
-        logger.warning(f"[{worker_id}][{player.name}]: {e=}")
-        produce_error = await player_ts_producer.put(
-            [
-                ToScrapeStruct(
-                    metadata=MetaData(version=1, source="hiscore_scraper"),
-                    player_data=player,
-                )
-            ]
-        )
-        if produce_error:
-            logger.error(
-                f"[{worker_id}][{player.name}]: Failed to requeue scrape: {produce_error}"
-            )
+        logger.warning(f"{log_prefix}: {e=}")
+        error = await produce_player_to_scrape(player_ts_queue, player)
+        if error:
+            logger.error(f"{log_prefix}: Failed to requeue scrape: {error}")
         return None, True
 
 
@@ -158,18 +200,9 @@ async def transform_player_stats(
     except ValidationError as e:
         error = e.json()
         logger.error(error)
-        produce_error = await player_ts_producer.put(
-            [
-                ToScrapeStruct(
-                    metadata=MetaData(version=1, source="hiscore_scraper"),
-                    player_data=player,
-                )
-            ]
-        )
-        if produce_error:
-            logger.error(
-                f"Failed to requeue player after transform failure: {produce_error}"
-            )
+        error = await produce_player_to_scrape(player_ts_producer, player)
+        if error:
+            logger.error(f"Failed to requeue player after transform failure: {error}")
         return None
 
 
@@ -190,9 +223,12 @@ async def handle_retry(
     retry_tracker.record_attempt(worker_id, success=False)
     delay = retry_tracker.get_backoff_delay(worker_id)
     retry_count = retry_tracker.get_retry_count(worker_id)
+
+    # metrics
     retry_counter.labels(proxy=_proxy).inc()
     retry_histogram.labels(proxy=_proxy).observe(retry_count)
     retry_delay_histogram.labels(proxy=_proxy).observe(delay)
+
     logger.warning(f"[{worker_id}]: backing off {delay:.2f}s")
     await asyncio.sleep(delay)
 
@@ -227,6 +263,7 @@ async def get_player_to_scrape(
     if result is None:
         logger.warning(f"[{worker_id}]: No player available.")
         return None
+    await player_ts_queue.commit()
     return result
 
 
@@ -277,7 +314,7 @@ async def work(
                 proxy=_proxy,
                 worker_id=worker_id,
                 player_nf_producer=player_nf_producer,
-                player_ts_producer=player_ts_queue,
+                player_ts_queue=player_ts_queue,
             )
             if player_stats is None:
                 if retry:
@@ -300,21 +337,14 @@ async def work(
             # Successful scrape - reset retry counter
             retry_tracker.record_attempt(worker_id, success=True)
 
-            produce_error = await player_sc_producer.put([scraped_data])
-            if produce_error:
-                logger.error(
-                    f"[{worker_id}][{player_data.name}]: Failed to publish scraped data: {produce_error}"
-                )
+            error = await produce_player_scraped(player_sc_producer, scraped_data)
+            logger_prefix = f"[{worker_id}][{player_data.name}]"
+            if error:
+                logger.error(f"{logger_prefix}: {error}")
+                await produce_player_to_scrape(player_ts_queue, player_data)
                 continue
 
-            commit_error = await player_ts_queue.commit()
-            if commit_error:
-                logger.error(
-                    f"[{worker_id}][{player_data.name}]: Failed to commit consumed message: {commit_error}"
-                )
-                continue
-
-            logger.debug(f"[{worker_id}][{player_data.name}]: scraped successfully.")
+            logger.debug(f"{logger_prefix}: scraped successfully.")
 
 
 async def main():
