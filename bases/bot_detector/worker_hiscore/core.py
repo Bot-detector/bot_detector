@@ -176,7 +176,11 @@ async def consume_many_task(
                     await asyncio.sleep(15)
                     continue
 
-            await player_sc_queue.commit()
+            commit_result = await player_sc_queue.commit()
+            if isinstance(commit_result, Exception):
+                logger.error(f"Failed to commit scraped batch: {commit_result}")
+                await asyncio.sleep(15)
+                continue
 
             # ideally we want batches to be as full as possible, this is more efficient on the database
             if len(batch) < 1000:
@@ -189,7 +193,11 @@ async def consume_many_task(
                 if isinstance(requeue_result, Exception):
                     logger.error(f"Failed to requeue scraped batch: {requeue_result}")
                 else:
-                    await player_sc_queue.commit()
+                    commit_result = await player_sc_queue.commit()
+                    if isinstance(commit_result, Exception):
+                        logger.error(
+                            f"Failed to commit requeued scraped batch: {commit_result}"
+                        )
             await asyncio.sleep(15)
 
 

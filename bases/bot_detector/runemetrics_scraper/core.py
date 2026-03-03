@@ -210,7 +210,11 @@ async def work(
                         f"[{worker_id}]: Failed to requeue player: {produce_error}"
                     )
                 else:
-                    await player_nf_queue.commit()
+                    commit_error = await player_nf_queue.commit()
+                    if commit_error:
+                        logger.error(
+                            f"[{worker_id}]: Failed to commit requeued player offset: {commit_error}"
+                        )
                 await asyncio.sleep(10)
                 continue
 
@@ -235,7 +239,11 @@ async def work(
                         f"[{worker_id}]: Failed to requeue player: {produce_error}"
                     )
                 else:
-                    await player_nf_queue.commit()
+                    commit_error = await player_nf_queue.commit()
+                    if commit_error:
+                        logger.error(
+                            f"[{worker_id}]: Failed to commit requeued player offset: {commit_error}"
+                        )
                 continue
 
             # push data to kafka
@@ -246,7 +254,13 @@ async def work(
                     f"[{worker_id}]: Failed to produce scraped player: {produce_error}"
                 )
                 continue
-            await player_nf_queue.commit()
+            commit_error = await player_nf_queue.commit()
+            if commit_error:
+                logger.error(
+                    f"[{worker_id}]: Failed to commit consumed player offset: {commit_error}"
+                )
+                await asyncio.sleep(10)
+                continue
             logger.debug(
                 f"[{worker_id}][{player_data.name}]: {player_data.label_jagex=}"
             )

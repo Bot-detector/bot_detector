@@ -426,8 +426,29 @@ async def test_consumer_commit_success():
     )
     adapter = AIOKafkaConsumerAdapter(PlayerScraped, config)
     adapter.consumer = AsyncMock()
-    adapter.consumer.commit = AsyncMock()
+    adapter.consumer.commit = AsyncMock(return_value=None)
 
-    await adapter.commit()
+    result = await adapter.commit()
 
     adapter.consumer.commit.assert_awaited_once()
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_consumer_commit_propagates_error_value():
+    config = KafkaConfig(
+        topic="players",
+        bootstrap_servers="localhost:9092",
+        consumer=True,
+        producer=False,
+        consumer_config=KafkaConsumerConfig(group_id="group"),
+        producer_config=None,
+    )
+    adapter = AIOKafkaConsumerAdapter(PlayerScraped, config)
+    adapter.consumer = AsyncMock()
+    commit_error = Exception("commit failed")
+    adapter.consumer.commit = AsyncMock(return_value=commit_error)
+
+    result = await adapter.commit()
+
+    assert result is commit_error

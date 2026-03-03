@@ -263,7 +263,12 @@ async def get_player_to_scrape(
     if result is None:
         logger.warning(f"[{worker_id}]: No player available.")
         return None
-    await player_ts_queue.commit()
+    commit_error = await player_ts_queue.commit()
+    if commit_error:
+        logger.error(
+            f"[{worker_id}]: Error committing player to scrape offset: {commit_error}"
+        )
+        return None
     return result
 
 

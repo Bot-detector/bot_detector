@@ -32,8 +32,8 @@ class QueueProducer(Generic[T]):
     async def stop(self):
         await self._backend.stop()
 
-    async def put(self, message: list[T]):
-        await self._backend.put(message)
+    async def put(self, message: list[T]) -> Optional[Exception]:
+        return await self._backend.put(message)
 
 
 class QueueConsumer(Generic[T]):
@@ -64,7 +64,7 @@ class QueueConsumer(Generic[T]):
     async def get_many(self, count: int) -> list[T] | Exception:
         return await self._backend.get_many(count)
 
-    async def commit(self):
+    async def commit(self) -> Optional[Exception]:
         return await self._backend.commit()
 
 
