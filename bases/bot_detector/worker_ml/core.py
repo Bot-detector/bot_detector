@@ -137,7 +137,16 @@ async def consume_data_to_predict(
                 )
                 await asyncio.sleep(15)
                 continue
-            await data_to_predict_queue.commit()
+            commit_result = await data_to_predict_queue.commit()
+            if isinstance(commit_result, Exception):
+                logger.error(
+                    {
+                        "error": "failed to commit offset after requeue",
+                        "reason": str(commit_result),
+                    }
+                )
+                await asyncio.sleep(15)
+                continue
             await asyncio.sleep(15)
             continue
 
@@ -173,10 +182,27 @@ async def consume_data_to_predict(
                 )
                 await asyncio.sleep(15)
                 continue
-            await data_to_predict_queue.commit()
+            commit_result = await data_to_predict_queue.commit()
+            if isinstance(commit_result, Exception):
+                logger.error(
+                    {
+                        "error": "failed to commit offset after requeue",
+                        "reason": str(commit_result),
+                    }
+                )
+                await asyncio.sleep(15)
+                continue
             await asyncio.sleep(15)
             continue
-        await data_to_predict_queue.commit()
+        commit_result = await data_to_predict_queue.commit()
+        if isinstance(commit_result, Exception):
+            logger.error(
+                {
+                    "error": "failed to commit processed batch",
+                    "reason": str(commit_result),
+                }
+            )
+            await asyncio.sleep(15)
 
 
 async def consume_player_scraped(
@@ -208,7 +234,16 @@ async def consume_player_scraped(
 
             if not input_data:
                 logger.info("No valid highscore data to process. (input_data is empty)")
-                await player_sc_queue.commit()
+                commit_result = await player_sc_queue.commit()
+                if isinstance(commit_result, Exception):
+                    logger.error(
+                        {
+                            "error": "failed to commit offset after requeue",
+                            "reason": str(commit_result),
+                        }
+                    )
+                    await asyncio.sleep(15)
+                    continue
                 continue
 
             try:
@@ -243,7 +278,16 @@ async def consume_player_scraped(
                     )
                     await asyncio.sleep(15)
                     continue
-                await player_sc_queue.commit()
+                commit_result = await player_sc_queue.commit()
+                if isinstance(commit_result, Exception):
+                    logger.error(
+                        {
+                            "error": "failed to commit offset after requeue",
+                            "reason": str(commit_result),
+                        }
+                    )
+                    await asyncio.sleep(15)
+                    continue
                 await asyncio.sleep(15)
                 continue
 
@@ -252,7 +296,16 @@ async def consume_player_scraped(
                 session_factory=session_factory,
                 predictions=combined_predictions,
             )
-            await player_sc_queue.commit()
+            commit_result = await player_sc_queue.commit()
+            if isinstance(commit_result, Exception):
+                logger.error(
+                    {
+                        "error": "failed to commit processed batch",
+                        "reason": str(commit_result),
+                    }
+                )
+                await asyncio.sleep(15)
+                continue
         except Exception as e:
             logger.error(f"Error consuming scrapes: {e}")
             logger.debug(f"Traceback: \n{traceback.format_exc()}")
@@ -267,7 +320,16 @@ async def consume_player_scraped(
                     )
                     await asyncio.sleep(15)
                     continue
-                await player_sc_queue.commit()
+                commit_result = await player_sc_queue.commit()
+                if isinstance(commit_result, Exception):
+                    logger.error(
+                        {
+                            "error": "failed to commit offset after requeue",
+                            "reason": str(commit_result),
+                        }
+                    )
+                    await asyncio.sleep(15)
+                    continue
             await asyncio.sleep(15)
 
 

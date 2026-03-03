@@ -128,7 +128,10 @@ async def consume_many_task(
             logger.debug(f"Traceback: \n{traceback.format_exc()}")
             await asyncio.sleep(5)
         if should_commit:
-            await report_queue.commit()
+            commit_result = await report_queue.commit()
+            if isinstance(commit_result, Exception):
+                logger.error(f"Failed to commit processed reports: {commit_result}")
+                await asyncio.sleep(5)
 
 
 async def error_task(
@@ -140,7 +143,10 @@ async def error_task(
         if not isinstance(report, ReportsToInsertStruct):
             logger.warning(f"invalid {report=}")
             continue
-        await report_queue.put(message=[report])
+        put_result = await report_queue.put(message=[report])
+        if isinstance(put_result, Exception):
+            logger.error(f"Failed to requeue report from error queue: {put_result}")
+            await asyncio.sleep(5)
 
 
 async def main():

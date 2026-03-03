@@ -197,7 +197,7 @@ class AIOKafkaConsumerAdapter(
             return ConsumerNotStartedError(
                 "Consumer is None, did you start the consumer?"
             )
-        await self.consumer.commit()
+        return await self.consumer.commit()
 
 
 class AIOKafkaAdapter(QueueBackendProtocol[T]):
@@ -223,8 +223,8 @@ class AIOKafkaAdapter(QueueBackendProtocol[T]):
         if self.producer:
             await self.producer.stop()
 
-    async def put(self, messages: list[T]) -> None:
-        await self.producer.put(messages)
+    async def put(self, messages: list[T]) -> Optional[Exception]:
+        return await self.producer.put(messages)
 
     async def get_one(self) -> Optional[T] | Exception:
         return await self.consumer.get_one()
@@ -233,4 +233,4 @@ class AIOKafkaAdapter(QueueBackendProtocol[T]):
         return await self.consumer.get_many(count)
 
     async def commit(self) -> Optional[Exception]:
-        await self.consumer.commit()
+        return await self.consumer.commit()
