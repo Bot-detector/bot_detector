@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 
 from aiohttp import ClientSession
 from pydantic import BaseModel, Field
@@ -32,23 +33,29 @@ class Proxy(BaseModel):
 
 
 class ProxyManager:
-    def __init__(self, api_key: str) -> None:
+    def __init__(self, api_key: str, rotate_cooldown_seconds: float = 30.0) -> None:
         """
         Initialize the Webshare API client.
 
         Args:
             api_key (str): API key for authenticating with Webshare.
+            rotate_cooldown_seconds (float): Minimum seconds between proxy rotations.
         """
         referral = "https://www.webshare.io/?referral_code=qvpjdwxqsblt"
         print(f"To get an API key, please use our referral code: {referral}")
 
         self.URL = "https://proxy.webshare.io/api/proxy/list/"
         self.api_key = api_key
-        self.proxy_list = []  # Holds the list of proxies
-        self.lock = asyncio.Lock()  # Lock for thread-safe access to proxy list
+        self.proxy_list = []
+        self.lock = asyncio.Lock()
+        self._rotate_lock = asyncio.Lock()
+        self._last_rotate: float = 0.0
+        self._rotate_cooldown = rotate_cooldown_seconds
+        self._rotating = False
+        self._rotate_done = asyncio.Event()
 
         if not api_key:
-            raise Exception("No API key provided")  # Ensure an API key is supplied
+            raise Exception("No API key provided")
 
     async def _fetch(
         self, session: ClientSession, url: str, headers: dict
@@ -117,6 +124,30 @@ class ProxyManager:
     async def rotate_proxies(self):
         """
         Rotate proxies by fetching a fresh list from the API.
+        Coalesces concurrent calls: if rotation is in progress, waits for it.
+        Skips if a rotation completed recently within the cooldown window.
         """
-        logger.info("Rotating proxies...")
-        await self.fetch_proxies()
+        need_wait = False
+        async with self._rotate_lock:
+            if self._rotating:
+                need_wait = True
+            else:
+                now = time.time()
+                if now - self._last_rotate < self._rotate_cooldown:
+                    logger.info("Skipping rotation - cooldown not elapsed")
+                    return
+                self._rotating = True
+                self._rotate_done.clear()
+
+        if need_wait:
+            await self._rotate_done.wait()
+            return
+
+        try:
+            logger.info("Rotating proxies...")
+            await self.fetch_proxies()
+            self._last_rotate = time.time()
+        finally:
+            async with self._rotate_lock:
+                self._rotating = False
+            self._rotate_done.set()
