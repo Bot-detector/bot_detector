@@ -51,8 +51,6 @@ class ProxyManager:
         self._rotate_lock = asyncio.Lock()
         self._last_rotate: float = 0.0
         self._rotate_cooldown = rotate_cooldown_seconds
-        self._rotating = False
-        self._rotate_done = asyncio.Event()
 
         if not api_key:
             raise Exception("No API key provided")
@@ -124,30 +122,13 @@ class ProxyManager:
     async def rotate_proxies(self):
         """
         Rotate proxies by fetching a fresh list from the API.
-        Coalesces concurrent calls: if rotation is in progress, waits for it.
         Skips if a rotation completed recently within the cooldown window.
         """
-        need_wait = False
         async with self._rotate_lock:
-            if self._rotating:
-                need_wait = True
-            else:
-                now = time.time()
-                if now - self._last_rotate < self._rotate_cooldown:
-                    logger.info("Skipping rotation - cooldown not elapsed")
-                    return
-                self._rotating = True
-                self._rotate_done.clear()
-
-        if need_wait:
-            await self._rotate_done.wait()
-            return
-
-        try:
+            now = time.time()
+            if now - self._last_rotate < self._rotate_cooldown:
+                logger.info("Skipping rotation - cooldown not elapsed")
+                return
             logger.info("Rotating proxies...")
             await self.fetch_proxies()
             self._last_rotate = time.time()
-        finally:
-            async with self._rotate_lock:
-                self._rotating = False
-            self._rotate_done.set()
