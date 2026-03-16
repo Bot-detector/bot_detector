@@ -103,20 +103,21 @@ async def test_rotate_proxies_cooldown_skips_rapid_calls():
 
 
 @pytest.mark.asyncio
-async def test_rotate_proxies_coalesces_concurrent_calls():
+async def test_rotate_proxies_serializes_concurrent_calls():
     """
-    Test that concurrent rotate_proxies calls are coalesced into a single fetch.
+    Test that concurrent rotate_proxies calls are serialized via lock.
+    With cooldown=0, each call will fetch (no coalescing).
     """
     import asyncio
 
     proxy_manager = ProxyManager(api_key="test-key", rotate_cooldown_seconds=0.0)
 
-    fetch_count = 0
+    fetch_order = []
 
     async def fake_fetch():
-        nonlocal fetch_count
-        fetch_count += 1
+        fetch_order.append("start")
         await asyncio.sleep(0.05)
+        fetch_order.append("end")
         return ["http://proxy:8080"]
 
     with patch.object(
@@ -128,4 +129,5 @@ async def test_rotate_proxies_coalesces_concurrent_calls():
             proxy_manager.rotate_proxies(),
         )
 
-    assert fetch_count == 1
+    assert len(fetch_order) == 6
+    assert fetch_order == ["start", "end", "start", "end", "start", "end"]
