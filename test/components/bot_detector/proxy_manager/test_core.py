@@ -1,4 +1,6 @@
+import asyncio
 import os
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from bot_detector.proxy_manager import ProxyManager
@@ -82,3 +84,47 @@ async def test_get_proxy_index_error():
     proxy, error = await proxy_manager.get_proxy(index=len(proxies) + 1)
     assert isinstance(error, IndexError)
     assert proxy is None
+
+
+@pytest.mark.asyncio
+async def test_rotate_proxies_cooldown_skips_rapid_calls():
+    """
+    Test that rotate_proxies skips when called within cooldown window.
+    """
+    proxy_manager = ProxyManager(api_key="test-key", rotate_cooldown_seconds=10.0)
+
+    with patch.object(
+        proxy_manager, "fetch_proxies", new_callable=AsyncMock
+    ) as mock_fetch:
+        await proxy_manager.rotate_proxies()
+        assert mock_fetch.call_count == 1
+
+        await proxy_manager.rotate_proxies()
+        assert mock_fetch.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_rotate_proxies_serializes_concurrent_calls():
+    """
+    Test that concurrent rotate_proxies calls are serialized via lock.
+    With cooldown=0, each call will fetch (no coalescing).
+    """
+    proxy_manager = ProxyManager(api_key="test-key", rotate_cooldown_seconds=0.0)
+
+    fetch_order = []
+
+    async def fake_fetch():
+        fetch_order.append("start")
+        await asyncio.sleep(0.05)
+        fetch_order.append("end")
+        return ["http://proxy:8080"]
+
+    with patch.object(proxy_manager, "fetch_proxies", side_effect=fake_fetch):
+        await asyncio.gather(
+            proxy_manager.rotate_proxies(),
+            proxy_manager.rotate_proxies(),
+            proxy_manager.rotate_proxies(),
+        )
+
+    assert len(fetch_order) == 6
+    assert fetch_order == ["start", "end", "start", "end", "start", "end"]
