@@ -46,7 +46,7 @@ class ProxyManager:
 
         self.URL = "https://proxy.webshare.io/api/proxy/list/"
         self.api_key = api_key
-        self.proxy_list = []
+        self.proxy_list: list[str] = []
         self.lock = asyncio.Lock()
         self._rotate_lock = asyncio.Lock()
         self._last_rotate: float = 0.0
