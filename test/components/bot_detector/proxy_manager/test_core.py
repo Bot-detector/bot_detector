@@ -120,9 +120,7 @@ async def test_rotate_proxies_serializes_concurrent_calls():
         fetch_order.append("end")
         return ["http://proxy:8080"]
 
-    with patch.object(
-        proxy_manager, "fetch_proxies", side_effect=fake_fetch
-    ):
+    with patch.object(proxy_manager, "fetch_proxies", side_effect=fake_fetch):
         await asyncio.gather(
             proxy_manager.rotate_proxies(),
             proxy_manager.rotate_proxies(),

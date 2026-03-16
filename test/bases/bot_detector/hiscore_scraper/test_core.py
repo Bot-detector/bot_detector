@@ -91,9 +91,7 @@ async def test_work_requeues_player_when_publish_fails(monkeypatch: pytest.Monke
     player_ts_queue = AsyncMock()
     player_sc_producer = AsyncMock()
 
-    monkeypatch.setattr(
-        core, "scrape_player", AsyncMock(return_value=(object(), None))
-    )
+    monkeypatch.setattr(core, "scrape_player", AsyncMock(return_value=(object(), None)))
     monkeypatch.setattr(
         core, "transform_player_stats", AsyncMock(return_value=_scraped_player())
     )
