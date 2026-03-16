@@ -1,3 +1,4 @@
+import asyncio
 import os
 from unittest.mock import AsyncMock, patch
 
@@ -108,8 +109,6 @@ async def test_rotate_proxies_serializes_concurrent_calls():
     Test that concurrent rotate_proxies calls are serialized via lock.
     With cooldown=0, each call will fetch (no coalescing).
     """
-    import asyncio
-
     proxy_manager = ProxyManager(api_key="test-key", rotate_cooldown_seconds=0.0)
 
     fetch_order = []
