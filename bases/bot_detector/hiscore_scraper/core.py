@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from datetime import date, datetime, timedelta
+from unittest import case
 
 import aiohttp
 from aiohttp import ClientSession
@@ -302,7 +303,7 @@ async def work(
                 hiscore_instance=hiscore_instance,
                 proxy=_proxy,
             )
-
+        
             if error:
                 log_prefix = f"[{worker_id}][{player_data.name}]"
                 error_counter.labels(proxy=_proxy).inc()
@@ -311,7 +312,7 @@ async def work(
                 if isinstance(error, aiohttp.ClientHttpProxyError):
                     await proxy_manager.rotate_proxies()
                     await asyncio.sleep(10)
-
+                
                 if isinstance(error, PlayerDoesNotExist):
                     not_found_counter.labels(proxy=_proxy).inc()
                     logger.debug(f"{log_prefix}: not found.")
@@ -329,6 +330,7 @@ async def work(
             success_counter.labels(proxy=_proxy).inc()
 
             # transform player stats to hiscore data
+            assert player_stats is not None  # for mypy
             scraped_data = await transform_player_stats(
                 player_stats=player_stats,
                 player=player_data,
