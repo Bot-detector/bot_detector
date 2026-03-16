@@ -1,7 +1,6 @@
 import asyncio
 import logging
 from datetime import date, datetime, timedelta
-from unittest import case
 
 import aiohttp
 from aiohttp import ClientSession
@@ -121,7 +120,11 @@ async def scrape_player(
     proxy: str,
 ) -> tuple[
     PlayerStats | None,
-    PlayerDoesNotExist | UnexpectedRedirection | aiohttp.ClientError | asyncio.TimeoutError | None,
+    PlayerDoesNotExist
+    | UnexpectedRedirection
+    | aiohttp.ClientError
+    | asyncio.TimeoutError
+    | None,
 ]:
     """
     Scrape player stats from hiscores.
@@ -303,23 +306,30 @@ async def work(
                 hiscore_instance=hiscore_instance,
                 proxy=_proxy,
             )
-        
+
             if error:
                 log_prefix = f"[{worker_id}][{player_data.name}]"
                 error_counter.labels(proxy=_proxy).inc()
                 logger.warning(f"{log_prefix}: {error=}")
 
                 if isinstance(error, aiohttp.ClientHttpProxyError):
-                    await proxy_manager.rotate_proxies()
-                    await asyncio.sleep(10)
-                
+                    if error.status == 407:
+                        await proxy_manager.rotate_proxies()
+                        await asyncio.sleep(10)
+                    else:
+                        logger.warning(
+                            f"{log_prefix}: Proxy error (status={error.status}): {error.message}"
+                        )
+
                 if isinstance(error, PlayerDoesNotExist):
                     not_found_counter.labels(proxy=_proxy).inc()
                     logger.debug(f"{log_prefix}: not found.")
                     player_data.possible_ban = True
                     err = await produce_not_found(player_nf_producer, player_data)
                     if err:
-                        logger.error(f"{log_prefix}: Failed to publish not_found: {err}")
+                        logger.error(
+                            f"{log_prefix}: Failed to publish not_found: {err}"
+                        )
                 else:
                     err = await produce_player_to_scrape(player_ts_queue, player_data)
                     if err:
