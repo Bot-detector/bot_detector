@@ -118,7 +118,10 @@ async def scrape_player(
     session: ClientSession,
     hiscore_instance: Hiscore,
     proxy: str,
-) -> tuple[PlayerStats | None, Exception | None]:
+) -> tuple[
+    PlayerStats | None,
+    PlayerDoesNotExist | UnexpectedRedirection | aiohttp.ClientError | asyncio.TimeoutError | None,
+]:
     """
     Scrape player stats from hiscores.
     Returns a tuple of (PlayerStats | None, Exception | None).
