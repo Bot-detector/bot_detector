@@ -3,7 +3,9 @@ from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
+import aiohttp
 import pytest
+from aiohttp import RequestInfo
 from bot_detector.event_queue.structs import ScrapedStruct, ToScrapeStruct
 from bot_detector.hiscore_scraper import core
 from bot_detector.structs import HighscoreBaseStruct, MetaData, PlayerStruct
@@ -90,7 +92,7 @@ async def test_work_requeues_player_when_publish_fails(monkeypatch: pytest.Monke
     player_sc_producer = AsyncMock()
 
     monkeypatch.setattr(
-        core, "scrape_player", AsyncMock(return_value=(object(), False))
+        core, "scrape_player", AsyncMock(return_value=(object(), None))
     )
     monkeypatch.setattr(
         core, "transform_player_stats", AsyncMock(return_value=_scraped_player())
@@ -113,5 +115,47 @@ async def test_work_requeues_player_when_publish_fails(monkeypatch: pytest.Monke
         )
 
     produce_player_to_scrape.assert_awaited_once()
-    requeued_player = produce_player_to_scrape.await_args.args[1]
+    call_args = produce_player_to_scrape.await_args
+    assert call_args is not None
+    requeued_player = call_args.args[1]
     assert requeued_player.name == "player-1"
+
+
+@pytest.mark.asyncio
+async def test_work_refreshes_proxies_on_proxy_error(monkeypatch: pytest.MonkeyPatch):
+    _patch_common(monkeypatch)
+
+    player_ts_queue = AsyncMock()
+    player_sc_producer = AsyncMock()
+    proxy_manager = AsyncMock()
+
+    proxy_error = aiohttp.ClientHttpProxyError(
+        request_info=RequestInfo(
+            url="http://example.com",
+            method="GET",
+            headers={},
+        ),
+        history=(),
+        status=407,
+        message="Proxy Authentication Required",
+    )
+    monkeypatch.setattr(
+        core, "scrape_player", AsyncMock(return_value=(None, proxy_error))
+    )
+    monkeypatch.setattr(core, "produce_player_to_scrape", AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        core,
+        "produce_player_scraped",
+        AsyncMock(return_value=Exception("should not be called")),
+    )
+
+    with pytest.raises(asyncio.CancelledError):
+        await core.work(
+            worker_id=1,
+            proxy_manager=proxy_manager,
+            player_ts_queue=player_ts_queue,
+            player_nf_producer=AsyncMock(),
+            player_sc_producer=player_sc_producer,
+        )
+
+    proxy_manager.rotate_proxies.assert_awaited_once()

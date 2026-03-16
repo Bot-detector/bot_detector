@@ -114,20 +114,16 @@ async def produce_player_scraped(
 
 
 async def scrape_player(
-    worker_id: int,
     player: PlayerStruct,
     session: ClientSession,
     hiscore_instance: Hiscore,
     proxy: str,
-    player_nf_producer: QueueProducer[NotFoundStruct],
-    player_ts_queue: Queue[ToScrapeStruct],
-) -> tuple[PlayerStats | None, bool]:
+) -> tuple[PlayerStats | None, Exception | None]:
     """
     Scrape player stats from hiscores.
-    Returns a tuple of (PlayerStats | None, bool) where the bool indicates
-    whether to retry scraping the player.
+    Returns a tuple of (PlayerStats | None, Exception | None).
+    Caller handles error-based logic (retry, not_found, proxy refresh).
     """
-    log_prefix = f"[{worker_id}][{player.name}]"
     try:
         hiscore_data = await hiscore_instance.get(
             mode=HSMode.OLDSCHOOL,
@@ -140,35 +136,20 @@ async def scrape_player(
             latency_histogram.labels(proxy=proxy).observe(latency)
         else:
             player_stats = hiscore_data
-        return player_stats, False
-    except PlayerDoesNotExist:
-        not_found_counter.labels(proxy=proxy).inc()
-        logger.debug(f"{log_prefix}: not found.")
-        player.possible_ban = True
-        error = await produce_not_found(player_nf_producer, player)
-        if error:
-            logger.error(f"{log_prefix}: Failed to publish not_found: {error}")
-        return None, False
+        return player_stats, None
+    except PlayerDoesNotExist as e:
+        return None, e
     except UnexpectedRedirection as e:
-        error_counter.labels(proxy=proxy).inc()
-        logger.warning(f"{log_prefix}: {e=}")
-        error = await produce_player_to_scrape(player_ts_queue, player)
-        if error:
-            logger.error(f"{log_prefix}: Failed to requeue scrape: {error}")
-        return None, True
+        return None, e
     except (
         aiohttp.ClientResponseError,
+        aiohttp.ClientHttpProxyError,
         aiohttp.ConnectionTimeoutError,
         aiohttp.ClientConnectorError,
         aiohttp.ServerDisconnectedError,
         asyncio.TimeoutError,
     ) as e:
-        error_counter.labels(proxy=proxy).inc()
-        logger.warning(f"{log_prefix}: {e=}")
-        error = await produce_player_to_scrape(player_ts_queue, player)
-        if error:
-            logger.error(f"{log_prefix}: Failed to requeue scrape: {error}")
-        return None, True
+        return None, e
 
 
 async def transform_player_stats(
@@ -312,17 +293,33 @@ async def work(
             # metric: every time we scrape a player, we increment the counter
             total_counter.labels(proxy=_proxy).inc()
 
-            player_stats, retry = await scrape_player(
+            player_stats, error = await scrape_player(
                 player=player_data,
                 session=session,
                 hiscore_instance=hiscore_instance,
                 proxy=_proxy,
-                worker_id=worker_id,
-                player_nf_producer=player_nf_producer,
-                player_ts_queue=player_ts_queue,
             )
-            if player_stats is None:
-                if retry:
+
+            if error:
+                log_prefix = f"[{worker_id}][{player_data.name}]"
+                error_counter.labels(proxy=_proxy).inc()
+                logger.warning(f"{log_prefix}: {error=}")
+
+                if isinstance(error, aiohttp.ClientHttpProxyError):
+                    await proxy_manager.rotate_proxies()
+                    await asyncio.sleep(10)
+
+                if isinstance(error, PlayerDoesNotExist):
+                    not_found_counter.labels(proxy=_proxy).inc()
+                    logger.debug(f"{log_prefix}: not found.")
+                    player_data.possible_ban = True
+                    err = await produce_not_found(player_nf_producer, player_data)
+                    if err:
+                        logger.error(f"{log_prefix}: Failed to publish not_found: {err}")
+                else:
+                    err = await produce_player_to_scrape(player_ts_queue, player_data)
+                    if err:
+                        logger.error(f"{log_prefix}: Failed to requeue scrape: {err}")
                     await handle_retry(retry_tracker, worker_id, proxy)
                 continue
 
