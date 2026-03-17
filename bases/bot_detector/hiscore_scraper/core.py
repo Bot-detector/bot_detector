@@ -322,7 +322,6 @@ async def work(
                         logger.warning(f"{log_prefix}: Rotating proxies.")
                         await proxy_manager.rotate_proxies()
                         await asyncio.sleep(10)
-                        continue
 
                 logger.warning(f"{log_prefix}: {scrape_error=}")
                 error_counter.labels(proxy=_proxy).inc()
