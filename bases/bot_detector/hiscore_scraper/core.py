@@ -300,40 +300,34 @@ async def work(
             # metric: every time we scrape a player, we increment the counter
             total_counter.labels(proxy=_proxy).inc()
 
-            player_stats, error = await scrape_player(
+            player_stats, scrape_error = await scrape_player(
                 player=player_data,
                 session=session,
                 hiscore_instance=hiscore_instance,
                 proxy=_proxy,
             )
 
-            if error:
+            if scrape_error:
                 log_prefix = f"[{worker_id}][{player_data.name}]"
-                error_counter.labels(proxy=_proxy).inc()
-                logger.warning(f"{log_prefix}: {error=}")
 
-                if isinstance(error, aiohttp.ClientHttpProxyError):
-                    if error.status == 407:
-                        await proxy_manager.rotate_proxies()
-                        await asyncio.sleep(10)
-                    else:
-                        logger.warning(
-                            f"{log_prefix}: Proxy error (status={error.status}): {error.message}"
-                        )
-
-                if isinstance(error, PlayerDoesNotExist):
+                if isinstance(scrape_error, PlayerDoesNotExist):
                     not_found_counter.labels(proxy=_proxy).inc()
-                    logger.debug(f"{log_prefix}: not found.")
                     player_data.possible_ban = True
                     err = await produce_not_found(player_nf_producer, player_data)
                     if err:
-                        logger.error(
-                            f"{log_prefix}: Failed to publish not_found: {err}"
-                        )
+                        logger.error(f"{log_prefix}:{err}")
+                elif isinstance(scrape_error, aiohttp.ClientHttpProxyError):
+                    logger.warning(f"{log_prefix}: {scrape_error=}")
+                    error_counter.labels(proxy=_proxy).inc()
+                    if scrape_error.status == 407:
+                        await proxy_manager.rotate_proxies()
+                        await asyncio.sleep(10)
                 else:
+                    logger.warning(f"{log_prefix}: {scrape_error=}")
+                    error_counter.labels(proxy=_proxy).inc()
                     err = await produce_player_to_scrape(player_ts_queue, player_data)
                     if err:
-                        logger.error(f"{log_prefix}: Failed to requeue scrape: {err}")
+                        logger.error(f"{log_prefix}: {err}")
                     await handle_retry(retry_tracker, worker_id, proxy)
                 continue
 
