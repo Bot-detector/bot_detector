@@ -316,19 +316,20 @@ async def work(
                     err = await produce_not_found(player_nf_producer, player_data)
                     if err:
                         logger.error(f"{log_prefix}:{err}")
-                elif isinstance(scrape_error, aiohttp.ClientHttpProxyError):
-                    logger.warning(f"{log_prefix}: {scrape_error=}")
-                    error_counter.labels(proxy=_proxy).inc()
+                    continue
+                if isinstance(scrape_error, aiohttp.ClientHttpProxyError):
                     if scrape_error.status == 407:
+                        logger.warning(f"{log_prefix}: Rotating proxies.")
                         await proxy_manager.rotate_proxies()
                         await asyncio.sleep(10)
-                else:
-                    logger.warning(f"{log_prefix}: {scrape_error=}")
-                    error_counter.labels(proxy=_proxy).inc()
-                    err = await produce_player_to_scrape(player_ts_queue, player_data)
-                    if err:
-                        logger.error(f"{log_prefix}: {err}")
-                    await handle_retry(retry_tracker, worker_id, proxy)
+                        continue
+
+                logger.warning(f"{log_prefix}: {scrape_error=}")
+                error_counter.labels(proxy=_proxy).inc()
+                err = await produce_player_to_scrape(player_ts_queue, player_data)
+                if err:
+                    logger.error(f"{log_prefix}: {err}")
+                await handle_retry(retry_tracker, worker_id, proxy)
                 continue
 
             success_counter.labels(proxy=_proxy).inc()
