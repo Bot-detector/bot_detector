@@ -37,7 +37,7 @@ services:
     container_name: kafka_setup
     image: bd/kafka_setup # tags the image if build
     build:
-      context: ./_kafka
+      context: ./_infra/_kafka
     # command: ["sleep", "infinity"]
     environment:
       - KAFKA_BROKER=kafka:9092
@@ -67,7 +67,7 @@ services:
     container_name: mysql
     image: bd/mysql # tags the image if build
     build:
-      context: ./_mysql
+      context: ./_infra/_mysql
     environment:
       - MYSQL_ROOT_PASSWORD=root_bot_buster
       # - MYSQL_DATABASE=playerdata
@@ -85,7 +85,7 @@ services:
     container_name: mysql_setup
     image: bd/mysql_setup # tags the image if build
     build:
-      context: ./_mysql_data
+      context: ./_infra/_mysql_data
     # command: ["sleep", "infinity"]
     environment:
       - DATABASE_URL=mysql+asyncmy://root:root_bot_buster@mysql:3306/playerdata
@@ -106,7 +106,7 @@ services:
       MINIO_ROOT_USER: "minio_user"
       MINIO_ROOT_PASSWORD: "minio_password"
     volumes:
-      - ./_minio_data:/data
+      - ./_infra/_minio_data:/data
     healthcheck:
       test: timeout 5s bash -c ':> /dev/tcp/127.0.0.1/9000' || exit 1
       interval: 1s
