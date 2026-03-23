@@ -43,6 +43,7 @@ dev = [
     "mypy>=1.19.1",
     "pyright>=1.1.408",
     "tomli-w>=1.2.0",
+    "aioresponses>=0.7.8",
 ]
 
 [tool.hatch.build]
