@@ -33,7 +33,7 @@ class HiscoreOldSchoolAPI:
                 elif resp.status != 200:
                     resp.raise_for_status()
 
-            result = await resp.json()
+                result = await resp.json()
             total_time = time.perf_counter() - start_time
             return Ok(value=result, latency=total_time)
         except Exception as e:
