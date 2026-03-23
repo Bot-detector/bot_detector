@@ -1,20 +1,21 @@
-from dataclasses import dataclass
-from typing import Any
+from pydantic import BaseModel
 
 
-class Result:
-    def is_ok(self):
-        return isinstance(self, Ok)
-
-    def is_err(self):
-        return isinstance(self, Err)
-
-
-@dataclass
-class Ok(Result):
-    value: Any
+class Skill(BaseModel):
+    id: int
+    name: str
+    rank: int
+    level: int
+    xp: int
 
 
-@dataclass
-class Err(Result):
-    error: Exception
+class Activity(BaseModel):
+    id: int
+    name: str
+    rank: int
+    score: int
+
+
+class PlayerStats(BaseModel):
+    skills: list[Skill]
+    activities: list[Activity]
