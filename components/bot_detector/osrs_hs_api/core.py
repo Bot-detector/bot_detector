@@ -17,9 +17,8 @@ class HiscoreOldSchoolAPI:
     async def _fetch(
         self,
         params: dict,
-        session: ClientSession | None = None,
+        session: ClientSession,
     ) -> Result:
-        session = ClientSession() if session is None else session
         await self.rate_limiter.check()
         try:
             start_time = time.perf_counter()
