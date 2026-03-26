@@ -45,9 +45,12 @@ bot-detector/
 ├── components/             # Reusable business logic and integrations  
 │   └── bot_detector/  
 ├── projects/               # Deployable projects (compose bricks for deployment)  
-├── test/                   # Workspace-level tests (Polylith standard)  
-├── _kafka/                 # Kafka infrastructure (topic setup scripts)  
-├── _mysql/                 # MySQL infrastructure (database init scripts)  
+├── test/                   # Workspace-level tests (Polylith standard)
+├── _infra/                 # Infrastructure containers and setup
+│   ├── _kafka/             # Kafka infrastructure (topic setup scripts)
+│   ├── _mysql/             # MySQL infrastructure (database init scripts)
+│   ├── _mysql_data/        # MySQL data setup (schema, grants)
+│   └── _minio_data/        # MinIO data storage
 ```
 ## Code Guidelines
 ### JSON Serialization
