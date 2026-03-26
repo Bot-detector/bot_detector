@@ -169,26 +169,10 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
-_mysql/docker-entrypoint-initdb.d/2025-02-23_19-38_players_export.sql
-_mysql_data/src/2025-02-23_19-38_players_export.sql
+_infra/_mysql/docker-entrypoint-initdb.d/2025-02-23_19-38_players_export.sql
+_infra/_mysql_data/src/2025-02-23_19-38_players_export.sql
 
 test.py
 _infra/_minio_data/*
 !_infra/_minio_data/.gitkeep
 */*spec*.md
-
-# opencode
-_opencode/opencode.jsonc
-_opencode/.opencode/oh-my-opencode.jsonc
-_opencode/specs/*
-_opencode/.opencode/agents/*
-_opencode/.opencode/commands/*
-_opencode/.opencode/skills/*
-_opencode/.opencode/tools/*
-_opencode/.opencode/memory/*
-_opencode/src/*
-_opencode/package.json
-_opencode/bun.lock
-_opencode/tsconfig.json
-_opencode/node_modules/
-_opencode/.opencode/README.md
