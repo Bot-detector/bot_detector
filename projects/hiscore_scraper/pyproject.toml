@@ -8,7 +8,6 @@ version = "0.1.0"
 requires-python = ">=3.10"
 
 dependencies = [
-    "osrs==0.0.15",
     "pydantic-settings==2.7.0",
     "pydantic==2.10.4",
     "orjson==3.11.5",
@@ -32,3 +31,5 @@ packages = ["bot_detector"]
 "../../components/bot_detector/event_queue" = "bot_detector/event_queue"
 "../../components/bot_detector/structs" = "bot_detector/structs"
 "../../components/bot_detector/logfmt" = "bot_detector/logfmt"
+"../../components/bot_detector/osrs_hs_api" = "bot_detector/osrs_hs_api"
+"../../components/bot_detector/rate_limiter" = "bot_detector/rate_limiter"

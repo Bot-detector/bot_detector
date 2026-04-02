@@ -53,7 +53,7 @@ def _scraped_player() -> ScrapedStruct:
 def _patch_common(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(core, "ClientSession", lambda *args, **kwargs: _DummySession())
     monkeypatch.setattr(core, "RateLimiter", lambda *args, **kwargs: object())
-    monkeypatch.setattr(core, "Hiscore", lambda *args, **kwargs: object())
+    monkeypatch.setattr(core, "HiscoreOldSchoolAPI", lambda *args, **kwargs: object())
     monkeypatch.setattr(
         core,
         "ProxySettings",
@@ -157,3 +157,86 @@ async def test_work_refreshes_proxies_on_proxy_error(monkeypatch: pytest.MonkeyP
         )
 
     proxy_manager.rotate_proxies.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_scrape_player_with_proxy():
+    from bot_detector.osrs_hs_api.exceptions import Ok
+    from bot_detector.osrs_hs_api.structs import Activity, PlayerStats, Skill
+
+    api = AsyncMock()
+    player = PlayerStruct(id=1, name="test_player", created_at=datetime(2024, 1, 1))
+    session = AsyncMock()
+    proxy = "http://user:pass@proxy.example.com:8080"
+
+    player_stats = PlayerStats(
+        skills=[Skill(id=0, name="Attack", rank=1000, level=99, xp=13034431)],
+        activities=[Activity(id=0, name="Bounty Hunter", rank=500, score=100)],
+    )
+    api.get.return_value = Ok(value=player_stats, latency=0.5)
+
+    result_stats, result_error = await core.scrape_player(
+        player=player,
+        session=session,
+        api=api,
+        proxy=proxy,
+    )
+
+    api.get.assert_awaited_once_with(player="test_player", session=session, proxy=proxy)
+    assert result_stats is not None
+    assert result_error is None
+
+
+@pytest.mark.asyncio
+async def test_scrape_player_returns_err_not_found():
+    from bot_detector.osrs_hs_api.exceptions import Err, PlayerDoesNotExist
+
+    api = AsyncMock()
+    player = PlayerStruct(id=1, name="nonexistent", created_at=datetime(2024, 1, 1))
+    session = AsyncMock()
+    proxy = "http://user:pass@proxy.example.com:8080"
+
+    api.get.return_value = Err(error=PlayerDoesNotExist("Player not found"))
+
+    result_stats, result_error = await core.scrape_player(
+        player=player,
+        session=session,
+        api=api,
+        proxy=proxy,
+    )
+
+    assert result_stats is None
+    assert isinstance(result_error, PlayerDoesNotExist)
+
+
+@pytest.mark.asyncio
+async def test_scrape_player_returns_err_proxy_error():
+    from bot_detector.osrs_hs_api.exceptions import Err
+
+    api = AsyncMock()
+    player = PlayerStruct(id=1, name="test_player", created_at=datetime(2024, 1, 1))
+    session = AsyncMock()
+    proxy = "http://user:pass@proxy.example.com:8080"
+
+    proxy_error = aiohttp.ClientHttpProxyError(
+        request_info=RequestInfo(
+            url="http://example.com",
+            method="GET",
+            headers={},
+        ),
+        history=(),
+        status=407,
+        message="Proxy Authentication Required",
+    )
+    api.get.return_value = Err(error=proxy_error)
+
+    result_stats, result_error = await core.scrape_player(
+        player=player,
+        session=session,
+        api=api,
+        proxy=proxy,
+    )
+
+    assert result_stats is None
+    assert isinstance(result_error, aiohttp.ClientHttpProxyError)
+    assert result_error.status == 407

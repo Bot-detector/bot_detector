@@ -4,7 +4,6 @@ from unittest.mock import AsyncMock
 import pytest
 from aiohttp import ClientError, ClientSession
 from aioresponses import aioresponses
-
 from bot_detector.osrs_hs_api.core import HiscoreOldSchoolAPI
 from bot_detector.osrs_hs_api.exceptions import (
     PlayerDoesNotExist,
@@ -145,3 +144,54 @@ async def test_latency_is_recorded():
     assert result.is_ok()
     assert isinstance(result.latency, float)
     assert result.latency >= 0
+
+
+@pytest.mark.asyncio
+async def test_get_with_proxy_passes_to_session():
+    from unittest.mock import patch
+
+    api = HiscoreOldSchoolAPI()
+    proxy_url = "http://user:pass@proxy.example.com:8080"
+
+    with aioresponses() as m:
+        m.get(URL_PATTERN, payload=_valid_hiscore_payload(), status=200)
+
+        async with ClientSession() as session:
+            with patch.object(session, "get", wraps=session.get) as mock_get:
+                result = await api.get("zezima", session, proxy=proxy_url)
+
+                mock_get.assert_called_once()
+                call_kwargs = mock_get.call_args[1]
+                assert call_kwargs.get("proxy") == proxy_url
+
+    assert result.is_ok()
+
+
+@pytest.mark.asyncio
+async def test_get_with_proxy_error():
+    from aiohttp import ClientHttpProxyError, RequestInfo
+
+    api = HiscoreOldSchoolAPI()
+    proxy_url = "http://user:pass@proxy.example.com:8080"
+
+    with aioresponses() as m:
+        m.get(
+            URL_PATTERN,
+            exception=ClientHttpProxyError(
+                request_info=RequestInfo(
+                    url="http://example.com",
+                    method="GET",
+                    headers={},
+                ),
+                history=(),
+                status=407,
+                message="Proxy Authentication Required",
+            ),
+        )
+
+        async with ClientSession() as session:
+            result = await api.get("player", session, proxy=proxy_url)
+
+    assert result.is_err()
+    assert isinstance(result.error, ClientHttpProxyError)
+    assert result.error.status == 407
