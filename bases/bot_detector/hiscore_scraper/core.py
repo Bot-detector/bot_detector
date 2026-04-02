@@ -18,9 +18,7 @@ from bot_detector.event_queue.structs import (
     ToScrapeStruct,
 )
 from bot_detector.osrs_hs_api import HiscoreOldSchoolAPI
-from bot_detector.osrs_hs_api.exceptions import (
-    PlayerDoesNotExist,
-)
+from bot_detector.osrs_hs_api.exceptions import Err, Ok, PlayerDoesNotExist
 from bot_detector.osrs_hs_api.structs import PlayerStats
 from bot_detector.proxy_manager import ProxyManager
 from bot_detector.proxy_manager import Settings as ProxySettings
@@ -128,11 +126,13 @@ async def scrape_player(
     """
     result = await api.get(player=player.name, session=session, proxy=proxy)
 
-    if result.is_ok():
+    if isinstance(result, Ok):
         latency_histogram.labels(proxy=proxy).observe(result.latency)
         return result.value, None
-    else:
+    elif isinstance(result, Err):
         return None, result.error
+    else:
+        return None, Exception("Unexpected result type from scrape_player")
 
 
 async def transform_player_stats(
