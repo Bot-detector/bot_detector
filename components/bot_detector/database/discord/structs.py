@@ -6,7 +6,7 @@ from sqlalchemy import DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 
-class DiscordVerificationTable(Base):
+class DiscordVerificationTableStruct(Base):
     __tablename__ = "DiscordVerification"
 
     Entry: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
