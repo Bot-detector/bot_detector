@@ -35,34 +35,3 @@ def create_players(names: list[str], count: int) -> Generator[Player, None, None
             label_id=0,
             label_jagex=0,
         )
-
-
-async def seed_players(
-    names: list[str],
-    count: int,
-    insert_func,
-) -> list[int]:
-    from database.database import Session
-    import sqlalchemy
-
-    player_ids = []
-    player_gen = create_players(names=names, count=count)
-
-    for player in player_gen:
-        sql = sqlalchemy.text("""
-        INSERT IGNORE INTO Players (id, name, created_at)
-        VALUES (:id, :name, :created_at)
-        """)
-        print(player.name)
-        async with Session.begin() as session:
-            await session.execute(sql, player.model_dump(mode="json"))
-
-        get_id_sql = sqlalchemy.text("SELECT id FROM Players WHERE name = :name")
-        async with Session.begin() as session:
-            result = await session.execute(get_id_sql, {"name": player.name})
-            row = result.fetchone()
-            if row:
-                player_ids.append(row[0])
-
-    print(f"Seeded {len(player_ids)} players")
-    return player_ids
