@@ -17,17 +17,17 @@ from bot_detector.event_queue.structs import (
     ScrapedStruct,
     ToScrapeStruct,
 )
+from bot_detector.osrs_hs_api import HiscoreOldSchoolAPI
+from bot_detector.osrs_hs_api.exceptions import Err, Ok, PlayerDoesNotExist
+from bot_detector.osrs_hs_api.structs import PlayerStats
 from bot_detector.proxy_manager import ProxyManager
 from bot_detector.proxy_manager import Settings as ProxySettings
+from bot_detector.rate_limiter import RateLimiter
 from bot_detector.structs import (
     HighscoreBaseStruct,
     MetaData,
     PlayerStruct,
 )
-from osrs.asyncio import Hiscore, HSMode
-from osrs.asyncio.osrs.hiscores import PlayerStats
-from osrs.exceptions import PlayerDoesNotExist, UnexpectedRedirection
-from osrs.utils import RateLimiter
 from pydantic import ValidationError
 
 from .metrics import (
@@ -116,47 +116,23 @@ async def produce_player_scraped(
 async def scrape_player(
     player: PlayerStruct,
     session: ClientSession,
-    hiscore_instance: Hiscore,
+    api: HiscoreOldSchoolAPI,
     proxy: str,
-) -> tuple[
-    PlayerStats | None,
-    PlayerDoesNotExist
-    | UnexpectedRedirection
-    | aiohttp.ClientError
-    | asyncio.TimeoutError
-    | None,
-]:
+) -> tuple[PlayerStats | None, Exception | None]:
     """
     Scrape player stats from hiscores.
     Returns a tuple of (PlayerStats | None, Exception | None).
     Caller handles error-based logic (retry, not_found, proxy refresh).
     """
-    try:
-        hiscore_data = await hiscore_instance.get(
-            mode=HSMode.OLDSCHOOL,
-            player=player.name,
-            session=session,
-            return_latency=True,
-        )
-        if isinstance(hiscore_data, tuple):
-            player_stats, latency = hiscore_data
-            latency_histogram.labels(proxy=proxy).observe(latency)
-        else:
-            player_stats = hiscore_data
-        return player_stats, None
-    except PlayerDoesNotExist as e:
-        return None, e
-    except UnexpectedRedirection as e:
-        return None, e
-    except (
-        aiohttp.ClientResponseError,
-        aiohttp.ClientHttpProxyError,
-        aiohttp.ConnectionTimeoutError,
-        aiohttp.ClientConnectorError,
-        aiohttp.ServerDisconnectedError,
-        asyncio.TimeoutError,
-    ) as e:
-        return None, e
+    result = await api.get(player=player.name, session=session, proxy=proxy)
+
+    if isinstance(result, Ok):
+        latency_histogram.labels(proxy=proxy).observe(result.latency)
+        return result.value, None
+    elif isinstance(result, Err):
+        return None, result.error
+    else:
+        return None, Exception("Unexpected result type from scrape_player")
 
 
 async def transform_player_stats(
@@ -292,10 +268,7 @@ async def work(
 
             player_data = player_to_scrape.player_data
 
-            hiscore_instance = Hiscore(
-                proxy=proxy,
-                rate_limiter=rate_limiter,
-            )
+            api = HiscoreOldSchoolAPI(rate_limiter=rate_limiter)
 
             # metric: every time we scrape a player, we increment the counter
             total_counter.labels(proxy=_proxy).inc()
@@ -303,8 +276,8 @@ async def work(
             player_stats, scrape_error = await scrape_player(
                 player=player_data,
                 session=session,
-                hiscore_instance=hiscore_instance,
-                proxy=_proxy,
+                api=api,
+                proxy=proxy,
             )
 
             if scrape_error:

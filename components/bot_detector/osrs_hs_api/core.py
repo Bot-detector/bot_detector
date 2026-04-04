@@ -18,11 +18,12 @@ class HiscoreOldSchoolAPI:
         self,
         params: dict,
         session: ClientSession,
+        proxy: Optional[str] = None,
     ) -> Result:
         await self.rate_limiter.check()
         try:
             start_time = time.perf_counter()
-            async with session.get(url=self.url, params=params) as resp:
+            async with session.get(url=self.url, params=params, proxy=proxy) as resp:
                 if resp.history and any(r.status == 302 for r in resp.history):
                     msg = f"{resp.url} - {resp.history[0].url}"
                     return Err(error=UnexpectedRedirection(msg))
@@ -45,8 +46,12 @@ class HiscoreOldSchoolAPI:
         except Exception as e:
             return Err(error=e)
 
-    async def get(self, player: str, session: ClientSession) -> Result:
-        result = await self._fetch(params={"player": player}, session=session)
+    async def get(
+        self, player: str, session: ClientSession, proxy: Optional[str] = None
+    ) -> Result:
+        result = await self._fetch(
+            params={"player": player}, session=session, proxy=proxy
+        )
 
         if isinstance(result, Ok):
             return self._transform(result=result)
