@@ -24,9 +24,7 @@ class modCommands(Cog):
     @commands.hybrid_command()
     @commands.has_any_role(DISCORD_STAFF, OWNER_ROLE)
     async def warn(self, ctx: Context):
-        logger.debug(
-            f"{ctx.author.name=}, {ctx.author.id=}, is using warn"
-        )
+        logger.debug(f"{ctx.author.name=}, {ctx.author.id=}, is using warn")
 
         embed = discord.Embed(title="WARNING", color=0xFF0000)
         name = "= WARNING MESSAGE ="
@@ -42,7 +40,7 @@ class modCommands(Cog):
         logger.debug(
             f"{ctx.author.name=}, {ctx.author.id=}, is using admin_linked for {discord_id}"
         )
-        
+
         await ctx.reply("Admin linked command - needs database implementation")
 
 

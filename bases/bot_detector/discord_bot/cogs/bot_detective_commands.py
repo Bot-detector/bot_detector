@@ -67,11 +67,11 @@ class botDetectiveCommands(commands.Cog):
             f"Received, {len(user_names)}. Thank you for submitting your list"
         )
         logger.debug(f"posting, {len(user_names)} to api")
-        
+
         asyncio.gather(
             *[self.bot.public_api.create_player(name) for name in user_names]  # type: ignore
         )
-        
+
         logger.debug(f"[DONE] posting, {len(user_names)} to api")
 
     @commands.hybrid_command()
@@ -100,9 +100,11 @@ class botDetectiveCommands(commands.Cog):
 
         players = []
         for name in user_names:
-            player = await self.bot.public_api.get_player(player_name=name.replace("_", " "))  # type: ignore
+            player = await self.bot.public_api.get_player(
+                player_name=name.replace("_", " ")
+            )  # type: ignore
             players.append(player)
-        
+
         logger.debug(f"got players: {len(players)}")
         players = [p for p in players if p is not None]
         logger.debug(f"got players after filter: {len(players)}")

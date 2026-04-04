@@ -67,7 +67,7 @@ class errorHandler(commands.Cog):
                     )
                     error_message = "".join(error_message)
 
-                    for secret in getattr(self.settings, 'SECRETS', []):
+                    for secret in getattr(self.settings, "SECRETS", []):
                         error_message = error_message.replace(secret, "***")
                     await webhook.send(error_message, username="bd-error")
 

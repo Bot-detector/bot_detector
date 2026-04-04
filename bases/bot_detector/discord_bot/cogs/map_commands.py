@@ -39,7 +39,9 @@ class mapCommands(Cog):
         }
         logger.debug(debug)
 
-        data_region = await self.bot.public_api.get_heatmap_region(region_name=region_name)  # type: ignore
+        data_region = await self.bot.public_api.get_heatmap_region(
+            region_name=region_name
+        )  # type: ignore
         if not data_region:
             embed = discord.Embed(
                 color=discord.Colour.dark_red(),
@@ -73,7 +75,7 @@ class mapCommands(Cog):
             msg = cleandoc(
                 f"""```diff
                 Input: {region_name}
-                Selection From: {', '.join(str(elem) for elem in df_region['region_name'].values)}
+                Selection From: {", ".join(str(elem) for elem in df_region["region_name"].values)}
                 Selected: {region_true_name}
             ```"""
             )
@@ -91,7 +93,7 @@ class mapCommands(Cog):
             "msg": f"Requested heatmap {region}",
         }
         logger.debug(debug)
-        
+
         if not region:
             return await ctx.send("Please enter a region name or region ID.")
 
@@ -114,7 +116,9 @@ class mapCommands(Cog):
                     )
                     await ctx.reply("https://i.redd.it/lel3o4e2hhp11.jpg")
         else:
-            data_region = await self.bot.public_api.get_heatmap_region(region_name=region)  # type: ignore
+            data_region = await self.bot.public_api.get_heatmap_region(
+                region_name=region
+            )  # type: ignore
             if not data_region:
                 embed = discord.Embed(
                     description=cleandoc(
@@ -144,7 +148,9 @@ class mapCommands(Cog):
 
             if len(df_region) < 30:
                 region_true_name, region_id = self._autofill(df_region, region)
-                map_file_path = await self._run_analysis(region_true_name, str(region_id))
+                map_file_path = await self._run_analysis(
+                    region_true_name, str(region_id)
+                )
 
                 if not map_file_path:
                     await self.map(ctx, region=region)
@@ -170,14 +176,16 @@ class mapCommands(Cog):
             "msg": f"Requested map {region}",
         }
         logger.debug(debug)
-        
+
         if not region:
             return await ctx.send("Please enter a region name or region ID.")
 
         if region.isdigit():
             msg = f"https://raw.githubusercontent.com/Ferrariic/OSRS-Visible-Region-Images/main/Region_Maps/{region}.png"
         else:
-            data_region = await self.bot.public_api.get_heatmap_region(region_name=region)  # type: ignore
+            data_region = await self.bot.public_api.get_heatmap_region(
+                region_name=region
+            )  # type: ignore
             if not data_region:
                 embed = discord.Embed(
                     description=cleandoc(
@@ -234,7 +242,9 @@ class mapCommands(Cog):
 
         if "confirmed_ban" in df.columns:
             try:
-                self._plot_heatmap(df_local_ban=df, regionid=region_id_int, filename=filename)
+                self._plot_heatmap(
+                    df_local_ban=df, regionid=region_id_int, filename=filename
+                )
             except ValueError:
                 self._plot_pixel_heatmap(
                     df_local_ban=df, regionid=region_id_int, filename=filename
@@ -245,7 +255,9 @@ class mapCommands(Cog):
 
         return filename
 
-    def _region_to_world_point(self, region_id: int, region_x: int, region_y: int, plane: int):
+    def _region_to_world_point(
+        self, region_id: int, region_x: int, region_y: int, plane: int
+    ):
         return (
             ((region_id >> 8) << 6) + region_x,
             ((region_id & 0xFF) << 6) + region_y,
@@ -300,7 +312,9 @@ class mapCommands(Cog):
         plt.figure().clear()
         plt.close("all")
 
-    def _plot_pixel_heatmap(self, df_local_ban: pd.DataFrame, regionid: int, filename: str):
+    def _plot_pixel_heatmap(
+        self, df_local_ban: pd.DataFrame, regionid: int, filename: str
+    ):
         origin_wp = self._region_to_world_point(regionid, 0, 0, 0)
         df_local_ban["confirmed_ban"] = df_local_ban["confirmed_ban"].apply(
             lambda x: math.log(x + 1)

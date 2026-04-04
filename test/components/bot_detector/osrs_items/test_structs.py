@@ -11,7 +11,7 @@ def test_item_struct_creation():
         highalch=2,
         limit=40,
         value=10,
-        icon="bronze_dagger.png"
+        icon="bronze_dagger.png",
     )
     assert item.id == 1
     assert item.name == "Bronze dagger"

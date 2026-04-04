@@ -23,7 +23,9 @@ class rsnLinkingCommands(commands.Cog):
             await ctx.author.send(*args, **kwargs)
             await ctx.reply("Please check your PMs.")
         except discord.Forbidden:
-            await ctx.reply("This command requires that your PMs be enabled. Please enable your PMs, then try again.")
+            await ctx.reply(
+                "This command requires that your PMs be enabled. Please enable your PMs, then try again."
+            )
 
     async def verified_msg(self, name: str) -> discord.Embed:
         embed = discord.Embed(title=f"{name}'s Status:", color=0x00FF00)
@@ -122,13 +124,13 @@ class rsnLinkingCommands(commands.Cog):
     @commands.hybrid_command(name="link")
     async def link(self, ctx: Context, *, name: str):
         logger.debug(f"{ctx.author.name=}, {ctx.author.id=}, Requesting link, {name=}")
-        
+
         if not name:
             await ctx.reply(
                 "Please specify the RSN of the account you'd wish to link. /link <RSN>"
             )
             return
-        
+
         if not string_processing.is_valid_rsn(name):
             await ctx.reply(f"{name} isn't a valid Runescape user name.")
             return
@@ -161,7 +163,7 @@ class rsnLinkingCommands(commands.Cog):
                 return
 
         code = string_processing.get_random_id()
-        
+
         await self.bot.public_api.post_discord_code(  # type: ignore
             discord_id=str(ctx.author.id),
             player_name=player.get("name"),
@@ -176,7 +178,7 @@ class rsnLinkingCommands(commands.Cog):
         logger.debug(
             f"{ctx.author.name=}, {ctx.author.id=}, Requesting verify, {name=}"
         )
-        
+
         player = await self.bot.public_api.get_player(player_name=name)  # type: ignore
         if not player:
             embed = await self.install_plugin_msg()
@@ -190,9 +192,9 @@ class rsnLinkingCommands(commands.Cog):
         if ctx.guild is None:
             await ctx.reply("This command must be used in a guild.")
             return
-            
+
         is_privileged = any(ctx.author.get_role(r) for r in checks.PREVILEGED_ROLES)  # type: ignore[union-attr]
-        
+
         if is_privileged:
             linked_user = linked_users[0] if linked_users else None
         else:
@@ -206,7 +208,8 @@ class rsnLinkingCommands(commands.Cog):
             if linked_status:
                 embed = await self.verified_msg(name)
                 verified_role = discord.utils.find(
-                    lambda r: r.id == checks.VERIFIED_PLAYER_ROLE, ctx.guild.roles  # type: ignore[union-attr]
+                    lambda r: r.id == checks.VERIFIED_PLAYER_ROLE,
+                    ctx.guild.roles,  # type: ignore[union-attr]
                 )
                 if verified_role:
                     await ctx.author.add_roles(verified_role)  # type: ignore[union-attr]
@@ -224,9 +227,11 @@ class rsnLinkingCommands(commands.Cog):
     @commands.hybrid_command(name="linked")
     async def linked(self, ctx: Context):
         logger.debug(f"{ctx.author.name=}, {ctx.author.id=}, Requesting linked")
-        
-        links = await self.bot.public_api.get_discord_links(discord_id=str(ctx.author.id))  # type: ignore
-        
+
+        links = await self.bot.public_api.get_discord_links(
+            discord_id=str(ctx.author.id)
+        )  # type: ignore
+
         if not links or len(links) == 0:
             await ctx.send(
                 "You do not have any OSRS accounts linked to this Discord ID. Use the /link command in order to link an account."
@@ -239,9 +244,7 @@ class rsnLinkingCommands(commands.Cog):
             for link in batch:
                 if not link:
                     continue
-                embed.add_field(
-                    name="Account:", value=link.get("name"), inline=True
-                )
+                embed.add_field(name="Account:", value=link.get("name"), inline=True)
             embeds.append(embed)
 
             if i != 0 and i % 9 == 0:

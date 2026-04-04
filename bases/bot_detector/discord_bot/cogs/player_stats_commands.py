@@ -14,31 +14,131 @@ logger = logging.getLogger(__name__)
 BOT_HUNTER_ROLES = [
     {"role_id": 825165287526498314, "role_name": "Bot Hunter I", "min": 1, "max": 5},
     {"role_id": 825165422721499167, "role_name": "Bot Hunter II", "min": 5, "max": 10},
-    {"role_id": 825165526262874133, "role_name": "Bot Hunter III", "min": 10, "max": 25},
+    {
+        "role_id": 825165526262874133,
+        "role_name": "Bot Hunter III",
+        "min": 10,
+        "max": 25,
+    },
     {"role_id": 825169068667305995, "role_name": "Bot Hunter IV", "min": 25, "max": 50},
     {"role_id": 825165991503069225, "role_name": "Bot Hunter V", "min": 50, "max": 100},
-    {"role_id": 825166170989658112, "role_name": "Bot Hunter VI", "min": 100, "max": 250},
-    {"role_id": 825166288321642507, "role_name": "Bot Hunter VII", "min": 250, "max": 500},
-    {"role_id": 825166386862489623, "role_name": "Bot Hunter VIII", "min": 500, "max": 1000},
-    {"role_id": 825166550947332136, "role_name": "Bot Hunter IX", "min": 1000, "max": 2500},
-    {"role_id": 825166673337384990, "role_name": "Bot Hunter X", "min": 2500, "max": 5000},
-    {"role_id": 825166781056286751, "role_name": "Bot Hunter XI", "min": 5000, "max": 10000},
-    {"role_id": 825167037323673631, "role_name": "Bot Hunter XII", "min": 10000, "max": 25000},
-    {"role_id": 825167642184777738, "role_name": "Bot Hunter XIII", "min": 25000, "max": 50000},
-    {"role_id": 825167838753849384, "role_name": "Bot Hunter XIV", "min": 50000, "max": 100000},
-    {"role_id": 825168089363644427, "role_name": "Bot Hunter XV", "min": 100000, "max": 250000},
-    {"role_id": 825168309158281247, "role_name": "Bot Hunter XVI", "min": 250000, "max": 500000},
-    {"role_id": 825168632615010371, "role_name": "Bot Hunter XVII", "min": 500000, "max": 750000},
-    {"role_id": 825168881059758083, "role_name": "Bot Hunter XVIII", "min": 750000, "max": 1000000},
-    {"role_id": 825169438835081216, "role_name": "Bot Hunter XIX", "min": 1000000, "max": 2000000},
-    {"role_id": 825169641491791902, "role_name": "Bot Hunter XX", "min": 2000000, "max": 100_000_000},
+    {
+        "role_id": 825166170989658112,
+        "role_name": "Bot Hunter VI",
+        "min": 100,
+        "max": 250,
+    },
+    {
+        "role_id": 825166288321642507,
+        "role_name": "Bot Hunter VII",
+        "min": 250,
+        "max": 500,
+    },
+    {
+        "role_id": 825166386862489623,
+        "role_name": "Bot Hunter VIII",
+        "min": 500,
+        "max": 1000,
+    },
+    {
+        "role_id": 825166550947332136,
+        "role_name": "Bot Hunter IX",
+        "min": 1000,
+        "max": 2500,
+    },
+    {
+        "role_id": 825166673337384990,
+        "role_name": "Bot Hunter X",
+        "min": 2500,
+        "max": 5000,
+    },
+    {
+        "role_id": 825166781056286751,
+        "role_name": "Bot Hunter XI",
+        "min": 5000,
+        "max": 10000,
+    },
+    {
+        "role_id": 825167037323673631,
+        "role_name": "Bot Hunter XII",
+        "min": 10000,
+        "max": 25000,
+    },
+    {
+        "role_id": 825167642184777738,
+        "role_name": "Bot Hunter XIII",
+        "min": 25000,
+        "max": 50000,
+    },
+    {
+        "role_id": 825167838753849384,
+        "role_name": "Bot Hunter XIV",
+        "min": 50000,
+        "max": 100000,
+    },
+    {
+        "role_id": 825168089363644427,
+        "role_name": "Bot Hunter XV",
+        "min": 100000,
+        "max": 250000,
+    },
+    {
+        "role_id": 825168309158281247,
+        "role_name": "Bot Hunter XVI",
+        "min": 250000,
+        "max": 500000,
+    },
+    {
+        "role_id": 825168632615010371,
+        "role_name": "Bot Hunter XVII",
+        "min": 500000,
+        "max": 750000,
+    },
+    {
+        "role_id": 825168881059758083,
+        "role_name": "Bot Hunter XVIII",
+        "min": 750000,
+        "max": 1000000,
+    },
+    {
+        "role_id": 825169438835081216,
+        "role_name": "Bot Hunter XIX",
+        "min": 1000000,
+        "max": 2000000,
+    },
+    {
+        "role_id": 825169641491791902,
+        "role_name": "Bot Hunter XX",
+        "min": 2000000,
+        "max": 100_000_000,
+    },
 ]
 
 SKILLS_LIST = [
-    "Attack", "Hitpoints", "Mining", "Strength", "Agility", "Smithing",
-    "Defence", "Herblore", "Fishing", "Ranged", "Thieving", "Cooking",
-    "Prayer", "Crafting", "Firemaking", "Magic", "Fletching", "Woodcutting",
-    "runecraft", "Slayer", "Farming", "Construction", "Hunter", "Total",
+    "Attack",
+    "Hitpoints",
+    "Mining",
+    "Strength",
+    "Agility",
+    "Smithing",
+    "Defence",
+    "Herblore",
+    "Fishing",
+    "Ranged",
+    "Thieving",
+    "Cooking",
+    "Prayer",
+    "Crafting",
+    "Firemaking",
+    "Magic",
+    "Fletching",
+    "Woodcutting",
+    "runecraft",
+    "Slayer",
+    "Farming",
+    "Construction",
+    "Hunter",
+    "Total",
 ]
 
 
@@ -58,7 +158,9 @@ class playerStatsCommands(Cog):
             await ctx.reply("Something went terribly wrong. :(")
             return
 
-        player_hiscore = await self.bot.public_api.get_hiscore_latest(player_id=player.get("id"))  # type: ignore
+        player_hiscore = await self.bot.public_api.get_hiscore_latest(
+            player_id=player.get("id")
+        )  # type: ignore
 
         if not player_hiscore:
             await ctx.reply("Could not find the user in our database")
@@ -75,7 +177,9 @@ class playerStatsCommands(Cog):
         for skill in SKILLS_LIST:
             xp = player_hiscore.get(skill.lower())
             if xp:
-                embed.add_field(name=f"{skill}", value=f"EXP - {int(xp):,d}", inline=True)
+                embed.add_field(
+                    name=f"{skill}", value=f"EXP - {int(xp):,d}", inline=True
+                )
         embeds.append(embed)
 
         exclude = ["id", "timestamp", "ts_date", "Player_id"]
@@ -118,7 +222,9 @@ class playerStatsCommands(Cog):
         logger.debug(f"{ctx.author.name=}, {ctx.author.id=}, Requesting kc")
         await ctx.typing()
 
-        linked_accounts = await self.bot.public_api.get_discord_links(discord_id=str(ctx.author.id))  # type: ignore
+        linked_accounts = await self.bot.public_api.get_discord_links(
+            discord_id=str(ctx.author.id)
+        )  # type: ignore
 
         if not linked_accounts:
             embed = discord.Embed(
@@ -244,7 +350,9 @@ class playerStatsCommands(Cog):
             await ctx.reply("This command must be used in a guild.")
             return
 
-        linked_accounts = await self.bot.public_api.get_discord_links(discord_id=str(ctx.author.id))  # type: ignore
+        linked_accounts = await self.bot.public_api.get_discord_links(
+            discord_id=str(ctx.author.id)
+        )  # type: ignore
 
         if not linked_accounts:
             embed = discord.Embed(
@@ -315,8 +423,10 @@ class playerStatsCommands(Cog):
         )
         await ctx.typing()
 
-        prediction = await self.bot.public_api.get_prediction(player_name=player_name, breakdown=True)  # type: ignore
-        
+        prediction = await self.bot.public_api.get_prediction(
+            player_name=player_name, breakdown=True
+        )  # type: ignore
+
         if not prediction:
             await ctx.reply(f"I couldn't get a prediction for **{player_name}**.")
             return
@@ -325,9 +435,7 @@ class playerStatsCommands(Cog):
         pred_label = prediction.prediction_label or "N/A"
         confidence = prediction.prediction or 0
 
-        color = (
-            Color.green() if pred_label.lower() == "real_player" else Color.red()
-        )
+        color = Color.green() if pred_label.lower() == "real_player" else Color.red()
 
         summary_text = (
             f"**Name:** {name}\n"
@@ -365,7 +473,9 @@ class playerStatsCommands(Cog):
         logger.debug(
             f"{ctx.author.name=}, {ctx.author.id=}, Requesting gear: {player_name}"
         )
-        sighting = await self.bot.public_api.get_latest_sighting(player_name=player_name)  # type: ignore
+        sighting = await self.bot.public_api.get_latest_sighting(
+            player_name=player_name
+        )  # type: ignore
 
         if not sighting:
             await ctx.reply(f"I was unable to grab {player_name}'s latest outfit.")

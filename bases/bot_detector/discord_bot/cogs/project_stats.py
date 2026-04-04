@@ -34,7 +34,7 @@ class projectStatsCommands(Cog):
     @commands.hybrid_command()
     async def stats(self, ctx: Context):
         logger.debug(f"{ctx.author.name=}, {ctx.author.id=}, Requesting stats")
-        
+
         active_installs = await self.get_active_installs()
         active_installs = active_installs if active_installs else "N/A"
         logger.info(f"{active_installs=}")
