@@ -67,12 +67,12 @@ async def insert_players(names: list[str], count: int) -> list[int]:
 async def insert_predictions(player_ids: list[int], count: int) -> None:
     sql = sqlalchemy.text("""
     INSERT INTO prediction_latest (player_id, model_name, prediction, confidence, predictions)
-    VALUES (:player_id, :model_name, :prediction, :confidence, :predictions)
+    VALUES (:player_id, :model_name, :prediction, :confidence, :predictions) AS new_val
     ON DUPLICATE KEY UPDATE
-        model_name = VALUES(model_name),
-        prediction = VALUES(prediction),
-        confidence = VALUES(confidence),
-        predictions = VALUES(predictions)
+        model_name = new_val.model_name,
+        prediction = new_val.prediction,
+        confidence = new_val.confidence,
+        predictions = new_val.predictions
     """)
 
     pred_count = min(count, len(player_ids))
