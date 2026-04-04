@@ -9,13 +9,9 @@ from database.database import Session
 sys.path.insert(0, "/app/_shared")
 
 from config import MySQLSeederConfig, load_names
-from seeders.players import Player, create_players
-from seeders.predictions import PredictionLatest, create_predictions
+from seeders.players import create_players
+from seeders.predictions import create_predictions
 from seeders.reports import (
-    Report,
-    ReportGear,
-    ReportLocation,
-    ReportSighting,
     create_report_gear,
     create_report_locations,
     create_report_sightings,
