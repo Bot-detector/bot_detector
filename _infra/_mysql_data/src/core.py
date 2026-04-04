@@ -4,7 +4,7 @@ import random
 import sys
 
 import sqlalchemy
-from database.database import Session
+from database.database import Session, wait_for_db
 
 sys.path.insert(0, "/app/_shared")
 
@@ -141,6 +141,7 @@ async def insert_reports(player_ids: list[int], count: int) -> None:
 
 
 async def main():
+    await wait_for_db()
     random.seed(config.RANDOM_SEED)
 
     names = load_names(config.NAMES_FILE)
