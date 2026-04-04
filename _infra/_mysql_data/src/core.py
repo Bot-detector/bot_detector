@@ -94,11 +94,11 @@ async def insert_reports(player_ids: list[int], count: int) -> None:
     location_ids: list[int] = []
 
     sighting_sql = sqlalchemy.text("""
-    INSERT INTO Reports (reporting_id, reported_id, manual_detect)
+    INSERT IGNORE INTO report_sighting (reporting_id, reported_id, manual_detect)
     VALUES (:reporting_id, :reported_id, :manual_detect)
     """)
     gear_sql = sqlalchemy.text("""
-    INSERT INTO ReportsGear (
+    INSERT IGNORE INTO report_gear (
         equip_head_id, equip_amulet_id, equip_torso_id, equip_legs_id,
         equip_boots_id, equip_cape_id, equip_hands_id, equip_weapon_id, equip_shield_id
     ) VALUES (
@@ -107,11 +107,11 @@ async def insert_reports(player_ids: list[int], count: int) -> None:
     )
     """)
     location_sql = sqlalchemy.text("""
-    INSERT INTO ReportsLocation (region_id, x_coord, y_coord, z_coord)
+    INSERT IGNORE INTO report_location (region_id, x_coord, y_coord, z_coord)
     VALUES (:region_id, :x_coord, :y_coord, :z_coord)
     """)
     report_sql = sqlalchemy.text("""
-    INSERT INTO Reports (report_sighting_id, report_location_id, report_gear_id,
+    INSERT INTO report (report_sighting_id, report_location_id, report_gear_id,
         reported_at, on_members_world, on_pvp_world, world_number, region_id)
     VALUES (:report_sighting_id, :report_location_id, :report_gear_id,
         :reported_at, :on_members_world, :on_pvp_world, :world_number, :region_id)
