@@ -1,49 +1,24 @@
 import asyncio
-import os
+import json
 import random
-import time
-from asyncio import Semaphore
-from datetime import datetime
-from typing import Generator
+import sys
 
 import sqlalchemy
-from database.database import Session
-from sqlalchemy.exc import OperationalError
-from structs import Player
+from database.database import Session, wait_for_db
 
-# Constants for data generation
-NAMES = [
-    "extreme4all",
-    "ferrariic",
-    "championd",
-    "snelms deep",
-    "420 problems",
-    "xedler",
-    "kyranm8",
-    "thecrinkler",
-    "quesorichard",
-    "itellyahwat",
-    "rs n rambo",
-    "stimulism",
-    "bateau bbq",
-    "tee bowz",
-    "n3w y3ar",
-    "revs til bow",
-    "xapol0x",
-    "lauranda",
-    "little sex",
-    "st4rsd",
-    "dalao888",
-    "only death93",
-    "gravity41",
-    "m00kaa",
-    "88snakegod88",
-    "prainfaya",
-    "themission07",
-    "im a tempest",
-    "laito yagami",
-    "the queen 18",
-]
+sys.path.insert(0, "/app/_shared")
+
+from config import MySQLSeederConfig, load_names
+from seeders.players import create_players
+from seeders.predictions import create_predictions
+from seeders.reports import (
+    create_report_gear,
+    create_report_locations,
+    create_report_sightings,
+    create_reports,
+)
+
+config = MySQLSeederConfig()
 
 
 async def get_player_count() -> int:
@@ -57,92 +32,139 @@ async def get_player_count() -> int:
     return count
 
 
-def create_player(names: list[str]) -> Generator[Player, None, None]:
-    """Generates Player objects with random creation timestamps."""
-    for idx, name in enumerate(names, start=1):
-        yield Player(
-            id=idx,
-            name=name,
-            created_at=datetime.fromtimestamp(
-                random.randint(1609459200, 1735689600)
-            ),  # Random date between 2021-01-01 and 2024-12-31
-            updated_at=None,
-            possible_ban=0,
-            confirmed_ban=0,
-            confirmed_player=0,
-            label_id=0,
-            label_jagex=0,
-        )
+async def get_player_ids() -> list[int]:
+    sql = sqlalchemy.text("""
+    SELECT id FROM Players ORDER BY id;
+    """)
+    async with Session.begin() as session:
+        result = await session.execute(sql)
+        ids = [row[0] for row in result.fetchall()]
+    return ids
 
 
-async def insert_player(player: Player):
+async def insert_players(names: list[str], count: int) -> list[int]:
+    player_ids = []
     sql = sqlalchemy.text("""
     INSERT IGNORE INTO Players (id, name, created_at)
     VALUES (:id, :name, :created_at)
     """)
-    print(player.name)
-    async with Session.begin() as session:
-        await session.execute(sql, player.model_dump(mode="json"))
+    get_id_sql = sqlalchemy.text("SELECT id FROM Players WHERE name = :name")
+
+    for player in create_players(names=names, count=count):
+        print(player.name)
+        async with Session.begin() as session:
+            await session.execute(sql, player.model_dump(mode="json"))
+        async with Session.begin() as session:
+            result = await session.execute(get_id_sql, {"name": player.name})
+            row = result.fetchone()
+            if row:
+                player_ids.append(row[0])
+
+    print(f"Seeded {len(player_ids)} players")
+    return player_ids
 
 
-async def execute_sql(sql: str, name: str, semaphore: Semaphore):
-    print(f"Executing {name}")
-    print(sql)
-    async with semaphore:
-        while True:
-            try:
-                async with Session.begin() as session:
-                    await session.execute(sqlalchemy.text(sql))
-                break
-            except OperationalError as e:
-                sleep = random.random()
-                print(f"{sleep=}, {e=}")
-                await asyncio.sleep(sleep)
-                continue
+async def insert_predictions(player_ids: list[int], count: int) -> None:
+    sql = sqlalchemy.text("""
+    INSERT INTO prediction_latest (player_id, model_name, prediction, confidence, predictions)
+    VALUES (:player_id, :model_name, :prediction, :confidence, :predictions) AS new_val
+    ON DUPLICATE KEY UPDATE
+        model_name = new_val.model_name,
+        prediction = new_val.prediction,
+        confidence = new_val.confidence,
+        predictions = new_val.predictions
+    """)
+
+    pred_count = min(count, len(player_ids))
+    for prediction in create_predictions(player_ids=player_ids, count=pred_count):
+        data = prediction.model_dump(mode="json")
+        data["predictions"] = json.dumps(data.get("predictions"))
+        print(f"  -> Prediction for player {prediction.player_id}: {prediction.prediction}")
+        async with Session.begin() as session:
+            await session.execute(sql, data)
 
 
-async def run_sql_file():
-    semaphore = Semaphore(10)
-    scripts = {}
+async def insert_reports(player_ids: list[int], count: int) -> None:
+    sighting_ids: list[int] = []
+    gear_ids: list[int] = []
+    location_ids: list[int] = []
 
-    for file_name in os.listdir("src/"):
-        if not file_name.endswith(".sql"):
-            continue
-
-        with open(f"src/{file_name}", "r", encoding="utf-8-sig") as f:
-            sql = f.read()
-            _sql = sql.split(";")
-            if len(_sql) > 1:  # Split the file into individual queries
-                for i in range(len(_sql) - 1):
-                    if sql[i].strip() == "":
-                        continue
-                    scripts[f"{file_name}_{i}"] = _sql[i]
-        del _sql
-
-    await asyncio.gather(
-        *[execute_sql(sql=v, name=k, semaphore=semaphore) for k, v in scripts.items()]
+    sighting_sql = sqlalchemy.text("""
+    INSERT IGNORE INTO report_sighting (reporting_id, reported_id, manual_detect)
+    VALUES (:reporting_id, :reported_id, :manual_detect)
+    """)
+    gear_sql = sqlalchemy.text("""
+    INSERT IGNORE INTO report_gear (
+        equip_head_id, equip_amulet_id, equip_torso_id, equip_legs_id,
+        equip_boots_id, equip_cape_id, equip_hands_id, equip_weapon_id, equip_shield_id
+    ) VALUES (
+        :equip_head_id, :equip_amulet_id, :equip_torso_id, :equip_legs_id,
+        :equip_boots_id, :equip_cape_id, :equip_hands_id, :equip_weapon_id, :equip_shield_id
     )
+    """)
+    location_sql = sqlalchemy.text("""
+    INSERT IGNORE INTO report_location (region_id, x_coord, y_coord, z_coord)
+    VALUES (:region_id, :x_coord, :y_coord, :z_coord)
+    """)
+    report_sql = sqlalchemy.text("""
+    INSERT INTO report (report_sighting_id, report_location_id, report_gear_id,
+        reported_at, on_members_world, on_pvp_world, world_number, region_id)
+    VALUES (:report_sighting_id, :report_location_id, :report_gear_id,
+        :reported_at, :on_members_world, :on_pvp_world, :world_number, :region_id)
+    """)
+
+    for sighting in create_report_sightings(player_ids=player_ids, count=count):
+        async with Session.begin() as session:
+            result = await session.execute(sighting_sql, sighting.model_dump(mode="json"))
+            sighting_ids.append(result.lastrowid)
+
+    for gear in create_report_gear(count=count):
+        async with Session.begin() as session:
+            result = await session.execute(gear_sql, gear.model_dump(mode="json"))
+            gear_ids.append(result.lastrowid)
+
+    for location in create_report_locations(count=count):
+        async with Session.begin() as session:
+            result = await session.execute(location_sql, location.model_dump(mode="json"))
+            location_ids.append(result.lastrowid)
+
+    for report in create_reports(
+        sighting_ids=sighting_ids,
+        gear_ids=gear_ids,
+        location_ids=location_ids,
+        count=count,
+    ):
+        async with Session.begin() as session:
+            await session.execute(report_sql, report.model_dump(mode="json"))
+
+    print(f"Seeded {count} reports")
 
 
-def main():
-    time.sleep(15)  # Wait for the database to start
+async def main():
+    await wait_for_db()
+    random.seed(config.RANDOM_SEED)
 
-    player_gen = create_player(names=NAMES)
+    names = load_names(config.NAMES_FILE)
 
-    async def run():
+    if config.SKIP_IF_EXISTING:
         player_count = await get_player_count()
-        if player_count > 100:
-            print("Players already exist, skipping insertion.")
+        if player_count > config.SKIP_THRESHOLD:
+            print(
+                f"Players ({player_count}) > threshold ({config.SKIP_THRESHOLD}), skipping insertion."
+            )
             return
 
-        await asyncio.gather(
-            *[insert_player(p.model_copy(deep=True)) for p in player_gen]
-        )
-        await run_sql_file()
+    if config.SEED_PLAYERS > 0:
+        player_ids = await insert_players(names=names, count=config.SEED_PLAYERS)
+    else:
+        player_ids = await get_player_ids()
 
-    asyncio.run(run())
+    if config.SEED_PREDICTIONS > 0:
+        await insert_predictions(player_ids=player_ids, count=config.SEED_PREDICTIONS)
+
+    if config.SEED_REPORTS > 0:
+        await insert_reports(player_ids=player_ids, count=config.SEED_REPORTS)
 
 
 if __name__ == "__main__":
-    random.seed(43)
-    main()
+    asyncio.run(main())
