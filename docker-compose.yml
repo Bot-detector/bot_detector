@@ -103,12 +103,6 @@ services:
       - SKIP_IF_EXISTING=true
       - SKIP_THRESHOLD=100
       - RANDOM_SEED=42
-      - SEED_PLAYERS=100
-      - SEED_REPORTS=100
-      - SEED_PREDICTIONS=100
-      - SKIP_IF_EXISTING=true
-      - SKIP_THRESHOLD=100
-      - RANDOM_SEED=42
     networks:
       - botdetector-network
     depends_on:
