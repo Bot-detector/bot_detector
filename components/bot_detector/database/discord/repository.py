@@ -1,10 +1,11 @@
 import logging
 from datetime import datetime
-from typing import Any
 
-import sqlalchemy as sqla
 from bot_detector.database.discord.interface import DiscordVerificationInterface
-from bot_detector.database.discord.structs import DiscordVerificationStruct
+from bot_detector.database.discord.structs import (
+    DiscordVerificationStruct,
+    DiscordVerificationTable,
+)
 from sqlalchemy import insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,18 +20,18 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
         player_id: int | None = None,
         is_verified: bool | None = None,
     ) -> DiscordVerificationStruct | None:
-        query = select(DiscordVerification)
+        query = select(DiscordVerificationTable)
         
         if discord_id is not None:
-            query = query.where(DiscordVerification.Discord_id == discord_id)
+            query = query.where(DiscordVerificationTable.Discord_id == discord_id)
         
         if player_id is not None:
-            query = query.where(DiscordVerification.Player_id == player_id)
+            query = query.where(DiscordVerificationTable.Player_id == player_id)
         
         if is_verified is not None:
-            query = query.where(DiscordVerification.verified_status == (1 if is_verified else 0))
+            query = query.where(DiscordVerificationTable.verified_status == (1 if is_verified else 0))
         
-        query = query.where(DiscordVerification.primary_rsn == 1)
+        query = query.where(DiscordVerificationTable.primary_rsn == 1)
         query = query.limit(1)
         
         async with async_session.begin():
@@ -58,10 +59,10 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
         discord_id: str,
     ) -> list[DiscordVerificationStruct]:
         query = (
-            select(DiscordVerification)
-            .where(DiscordVerification.Discord_id == discord_id)
-            .where(DiscordVerification.verified_status == 1)
-            .order_by(DiscordVerification.Entry.desc())
+            select(DiscordVerificationTable)
+            .where(DiscordVerificationTable.Discord_id == discord_id)
+            .where(DiscordVerificationTable.verified_status == 1)
+            .order_by(DiscordVerificationTable.Entry.desc())
         )
         
         async with async_session.begin():
@@ -90,7 +91,7 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
         player_id: int,
         code: str,
     ) -> DiscordVerificationStruct:
-        query = insert(DiscordVerification).values(
+        query = insert(DiscordVerificationTable).values(
             Discord_id=discord_id,
             Player_id=player_id,
             Code=code,
@@ -100,7 +101,7 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
         )
         
         async with async_session.begin():
-            result = await async_session.execute(query)
+            await async_session.execute(query)
             await async_session.commit()
             
             return DiscordVerificationStruct(
@@ -120,9 +121,9 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
         verified_status: int,
     ) -> bool:
         query = (
-            update(DiscordVerification)
-            .where(DiscordVerification.Discord_id == discord_id)
-            .where(DiscordVerification.Player_id == player_id)
+            update(DiscordVerificationTable)
+            .where(DiscordVerificationTable.Discord_id == discord_id)
+            .where(DiscordVerificationTable.Player_id == player_id)
             .values(
                 verified_status=verified_status,
                 updated_at=datetime.now(),
@@ -142,18 +143,16 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
         player_id: int,
         is_primary: bool,
     ) -> bool:
-        # First, set all accounts for this discord_id to primary_rsn=0
         clear_query = (
-            update(DiscordVerification)
-            .where(DiscordVerification.Discord_id == discord_id)
+            update(DiscordVerificationTable)
+            .where(DiscordVerificationTable.Discord_id == discord_id)
             .values(primary_rsn=0)
         )
         
-        # Then set the specified player to primary_rsn=1
         set_query = (
-            update(DiscordVerification)
-            .where(DiscordVerification.Discord_id == discord_id)
-            .where(DiscordVerification.Player_id == player_id)
+            update(DiscordVerificationTable)
+            .where(DiscordVerificationTable.Discord_id == discord_id)
+            .where(DiscordVerificationTable.Player_id == player_id)
             .values(primary_rsn=1 if is_primary else 0, updated_at=datetime.now())
         )
         
