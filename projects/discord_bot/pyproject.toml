@@ -1,0 +1,26 @@
+[build-system]
+requires = ["hatchling", "hatch-polylith-bricks"]
+build-backend = "hatchling.build"
+
+[project]
+name = "discord_bot"
+version = "0.1.0"
+requires-python = ">=3.11"
+
+dependencies = [
+    "discord-py>=2.2.2",
+    "matplotlib>=3.10.0",
+    "seaborn>=0.13.0",
+]
+
+[project.scripts]
+discord-bot = "bot_detector.discord_bot.core:run"
+
+[tool.hatch.build.hooks.polylith-bricks]
+
+[tool.polylith.bricks]
+"../../bases/bot_detector/discord_bot" = "bot_detector/discord_bot"
+"../../components/bot_detector/database" = "bot_detector/database"
+"../../components/bot_detector/public_api" = "bot_detector/public_api"
+"../../components/bot_detector/osrs_items" = "bot_detector/osrs_items"
+"../../components/bot_detector/logfmt" = "bot_detector/logfmt"
