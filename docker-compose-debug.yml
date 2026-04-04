@@ -37,10 +37,15 @@ services:
     container_name: kafka_setup
     image: bd/kafka_setup # tags the image if build
     build:
-      context: ./_infra/_kafka
-    # command: ["sleep", "infinity"]
+      context: ./_infra
+      dockerfile: _kafka/Dockerfile
     environment:
       - KAFKA_BROKER=kafka:9092
+      - SEED_PLAYERS=100
+      - SEED_SCRAPES_PER_PLAYER=10
+      - SEED_REPORTS=0
+      - RESET_TOPICS=true
+      - RANDOM_SEED=42
     networks:
       - botdetector-network
     depends_on:
@@ -85,11 +90,17 @@ services:
     container_name: mysql_setup
     image: bd/mysql_setup # tags the image if build
     build:
-      context: ./_infra/_mysql_data
-    # command: ["sleep", "infinity"]
+      context: ./_infra
+      dockerfile: _mysql_data/Dockerfile
     environment:
       - DATABASE_URL=mysql+asyncmy://root:root_bot_buster@mysql:3306/playerdata
       - DEBUG=False
+      - SEED_PLAYERS=100
+      - SEED_REPORTS=100
+      - SEED_PREDICTIONS=100
+      - SKIP_IF_EXISTING=true
+      - SKIP_THRESHOLD=100
+      - RANDOM_SEED=42
     networks:
       - botdetector-network
     depends_on:

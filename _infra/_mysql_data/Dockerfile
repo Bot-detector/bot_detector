@@ -3,12 +3,11 @@ COPY --from=ghcr.io/astral-sh/uv:0.5.13 /uv /uvx /bin/
 
 WORKDIR /app
 
-COPY ./pyproject.toml /app
-COPY ./uv.lock /app
+COPY _mysql_data/pyproject.toml /app
+COPY _mysql_data/uv.lock /app
 RUN uv sync
 
-COPY ./src /app/src
+COPY _mysql_data/src /app/src
+COPY _shared /app/_shared
 
-# Set the KAFKA_BROKER environment variable during container runtime
-# ENV KAFKA_BROKER=localhost:9094
 CMD ["uv", "run", "src/core.py"]

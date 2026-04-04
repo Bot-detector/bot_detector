@@ -1,59 +1,97 @@
 import json
-import os
 import random
+import sys
 
-import kafka_data
-import kafka_topics
 from kafka import KafkaProducer
+
+sys.path.insert(0, "/app/_shared")
+
+from config import KafkaSeederConfig, load_names
+from seeders.players_scraped import create_players_scraped
+from seeders.players_to_scrape import create_players_to_scrape
+from topics import create_topics
+
+config = KafkaSeederConfig()
 
 
 def create_kafka_producer(kafka_broker: str | list):
-    # Create the Kafka producer
-    producer = KafkaProducer(
+    return KafkaProducer(
         bootstrap_servers=kafka_broker,
         value_serializer=lambda x: json.dumps(x).encode(),
         acks="all",
-        # retries=100,
         batch_size=1,
     )
-    return producer
 
 
-def insert_data(producer: KafkaProducer):
-    player_generator = kafka_data.create_player()
-    for player in player_generator:
-        print(player.name)
-        player_to_scrape = kafka_data.ToScrapeStruct(
-            metadata=kafka_data.MetaData(version=0, source="init"),
-            player_data=player,
-        )
+def seed_players_to_scrape(producer: KafkaProducer, names: list[str], count: int):
+    print(f"Seeding {count} players to players.to_scrape...")
+    for to_scrape in create_players_to_scrape(names=names, count=count):
         producer.send(
             topic="players.to_scrape",
-            value=player_to_scrape.model_dump(mode="json"),
+            value=to_scrape.model_dump(mode="json"),
         )
+        print(f"  -> {to_scrape.player_data.name}")
+    producer.flush()
+    print("Done seeding players.to_scrape")
 
-        scrape_gen = kafka_data.create_scraped_data(player, n_records=30)
-        scraped_data = list()
-        scraped_data = [d.model_copy(deep=True) for d in scrape_gen]
-        random.shuffle(scraped_data)
 
-        for scrape_data in scraped_data:
-            producer.send(
-                topic="players.scraped",
-                value=scrape_data.model_dump(mode="json"),
-            )
-            print("\t", scrape_data.player_data.updated_at)
+def seed_players_scraped(
+    producer: KafkaProducer,
+    names: list[str],
+    player_count: int,
+    scrapes_per_player: int,
+):
+    print(
+        f"Seeding {player_count} players with {scrapes_per_player} scrapes each to players.scraped..."
+    )
+
+    players = []
+    for to_scrape in create_players_to_scrape(names=names, count=player_count):
+        players.append(to_scrape.player_data)
+
+    scraped_data = list(create_players_scraped(players, scrapes_per_player))
+    random.shuffle(scraped_data)
+
+    for scraped in scraped_data:
+        producer.send(
+            topic="players.scraped",
+            value=scraped.model_dump(mode="json"),
+        )
+        scrape_date = (
+            scraped.highscore_data.scrape_date if scraped.highscore_data else "N/A"
+        )
+        print(f"  -> {scraped.player_data.name} @ {scrape_date}")
+    producer.flush()
+    print("Done seeding players.scraped")
 
 
 def main():
-    random.seed(43)
+    random.seed(config.RANDOM_SEED)
 
-    # Get the Kafka broker address from the environment variable
-    kafka_broker = os.environ.get("KAFKA_BROKER", "localhost:9094")
-    kafka_topics.create_topics(kafka_broker=kafka_broker)
+    names = load_names(config.NAMES_FILE)
 
-    producer = create_kafka_producer(kafka_broker=kafka_broker)
-    insert_data(producer=producer)
+    create_topics(
+        kafka_broker=config.KAFKA_BROKER,
+        reset=config.RESET_TOPICS,
+    )
+
+    producer = create_kafka_producer(kafka_broker=config.KAFKA_BROKER)
+
+    if config.SEED_PLAYERS > 0:
+        seed_players_to_scrape(
+            producer=producer,
+            names=names,
+            count=config.SEED_PLAYERS,
+        )
+        seed_players_scraped(
+            producer=producer,
+            names=names,
+            player_count=config.SEED_PLAYERS,
+            scrapes_per_player=config.SEED_SCRAPES_PER_PLAYER,
+        )
+
+    if config.SEED_REPORTS > 0:
+        print("Report seeding not yet implemented")
 
 
 if __name__ == "__main__":
