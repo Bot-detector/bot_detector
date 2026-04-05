@@ -1,5 +1,6 @@
 import logging
 
+import discord
 from discord.ext.commands import Context
 
 logger = logging.getLogger(__name__)
@@ -37,6 +38,6 @@ PREVILEGED_ROLES = (
 
 async def is_allowed_channel(ctx: Context):
     for role in PREVILEGED_ROLES:
-        if ctx.author.get_role(role):
+        if isinstance(ctx.author, discord.Member) and ctx.author.get_role(role):
             return True
     return ctx.channel.id in ALLOWED_CHANNELS
