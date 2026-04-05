@@ -11,10 +11,14 @@ dependencies = [
     "discord-py>=2.2.2",
     "matplotlib>=3.10.0",
     "seaborn>=0.13.0",
+    "sqlalchemy==2.0.44",
+    "prometheus-client==0.22.0",
+    "pydantic-settings==2.7.0",
+    "pydantic==2.10.4",
 ]
 
 [project.scripts]
-discord-bot = "bot_detector.discord_bot.core:run"
+discord_bot = "bot_detector.discord_bot.core:run"
 
 [tool.hatch.build.hooks.polylith-bricks]
 

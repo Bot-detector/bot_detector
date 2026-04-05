@@ -50,7 +50,7 @@ async def run_async():
         session = aiohttp.ClientSession()
         bot.session = session
         bot.public_api = PublicApiClient(session=session)
-        bot.osrs_items = OsrsItemsClient(session=session)
+        bot.osrs_items = OsrsItemsClient(session=session, user_agent=settings.OSRS_ITEMS_USER_AGENT)
 
         if settings.SQL_URI:
             engine = create_async_engine(settings.SQL_URI, echo=False)
@@ -103,7 +103,7 @@ async def run_async():
     async def on_disconnect():
         logger.info("Bot disconnected.")
 
-    await bot.start(settings.TOKEN)
+    await bot.start(settings.DISCORD_TOKEN)
 
 
 if __name__ == "__main__":

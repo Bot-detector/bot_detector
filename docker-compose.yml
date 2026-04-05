@@ -356,6 +356,7 @@ services:
       context: .
       dockerfile: ./projects/discord_bot/Dockerfile
       target: prod
+    # command: ["sleep", "infinity"]
     env_file:
       - .env
     environment:
@@ -368,6 +369,6 @@ services:
       kafka_setup:
         condition: service_completed_successfully
 
-  networks:
+networks:
   botdetector-network:
     name: bd-network

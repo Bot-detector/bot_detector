@@ -1,15 +1,15 @@
 from pydantic_settings import BaseSettings
+from pydantic import Field
+from typing import Optional
 
 
 class Settings(BaseSettings):
-    TOKEN: str
-    COMMAND_PREFIX: str = "!"
-    API_TOKEN: str | None = None
-    SQL_URI: str | None = None
-    API_URL: str | None = None
-    WEBHOOK: str | None = None
-    OSRS_ITEMS_USER_AGENT: str = "discord:<name#id>"
+    DISCORD_TOKEN: str = Field(default=...)
+    COMMAND_PREFIX: str = Field(default="!")
+    API_TOKEN: Optional[str] = Field(default=None)
+    SQL_URI: Optional[str] = Field(default=None)
+    API_URL: Optional[str] = Field(default=None)
+    WEBHOOK: Optional[str] = Field(default=None)
+    OSRS_ITEMS_USER_AGENT: str = Field(default=...)
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+settings = Settings()
