@@ -3,18 +3,22 @@ import sys
 import traceback
 
 import aiohttp
-from bot_detector.discord_bot.config import Settings
-from discord import Webhook
+from bot_detector.discord_bot.dependencies import BotDependencies
 from discord.ext import commands
 from discord.ext.commands import Context
+from bot_detector.discord_bot.dependencies import BotDependencies
 
 logger = logging.getLogger(__name__)
 
 
 class errorHandler(commands.Cog):
-    def __init__(self, bot: commands.Bot) -> None:
+    def __init__(self, bot: commands.Bot, deps: BotDependencies) -> None:
+        super().__init__(*args, **kwargs)
         self.bot = bot
-        self.settings = Settings()
+        self.deps = deps
+
+    @commands.Cog.listener()
+    async def on_command_error(self, ctx: Context, error):
 
     @commands.Cog.listener()
     async def on_command_error(self, ctx: Context, error):

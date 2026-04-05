@@ -16,8 +16,9 @@ logger = logging.getLogger(__name__)
 
 
 class botDetectiveCommands(commands.Cog):
-    def __init__(self, bot: commands.Bot) -> None:
+    def __init__(self, bot: commands.Bot, deps: BotDependencies) -> None:
         self.bot = bot
+        self.deps = deps
 
     async def _get_pastebin(self, url) -> str | None:
         url = url.replace("https://pastebin.com/", "https://pastebin.com/raw/")
