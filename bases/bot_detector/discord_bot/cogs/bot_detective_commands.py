@@ -4,6 +4,7 @@ import re
 from typing import List
 
 import discord
+from bot_detector.discord_bot.dependencies import BotDependencies
 from bot_detector.discord_bot.utils import (
     DETECTIVE_ROLE,
     HEAD_DETECTIVE_ROLE,
@@ -20,9 +21,9 @@ class botDetectiveCommands(commands.Cog):
         self.bot = bot
         self.deps = deps
 
-    async def _get_pastebin(self, url) -> str | None:
+    async def _get_pastebin(self, url: str) -> str | None:
         url = url.replace("https://pastebin.com/", "https://pastebin.com/raw/")
-        async with self.bot.session.get(url) as resp:
+        async with self.deps.session.get(url) as resp:
             if not resp.ok:
                 return None
             return await resp.text()
@@ -101,7 +102,7 @@ class botDetectiveCommands(commands.Cog):
 
         players = []
         for name in user_names:
-            player = await self.bot.public_api.get_player(
+            player: dict = await self.deps.public_api.get_player(
                 player_name=name.replace("_", " ")
             )  # type: ignore
             players.append(player)
@@ -130,7 +131,3 @@ class botDetectiveCommands(commands.Cog):
 
         if embeds:
             await ctx.reply(embeds=embeds)
-
-
-async def setup(bot: commands.Bot):
-    await bot.add_cog(botDetectiveCommands(bot))

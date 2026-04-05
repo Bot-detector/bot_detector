@@ -1,64 +1,113 @@
 import logging
+from typing import Literal, Optional
 
 import discord
-from bot_detector.discord_bot.config import Settings
-from bot_detector.discord_bot.dependencies import BotDependencies
-from discord.ext.commands import Bot, Context
 from bot_detector.discord_bot import cogs
-from discord.ext import commands
+from bot_detector.discord_bot.config import Settings
+from bot_detector.discord_bot.dependencies import DEPS, BotDependencies
 from bot_detector.discord_bot.utils import checks
-from typing import Optional, Literal
+from discord import AllowedMentions, Game, Intents
+from discord.ext import commands
+from discord.ext.commands import Bot, Context, Greedy
 
 logger = logging.getLogger(__name__)
 
+settings = Settings()
 
-class Bot(Bot):
-    def __init__(
-        self,
-        deps: BotDependencies,
-        *,
-    ):
-        super().__init__(*args, **kwargs)
-        self.deps = deps
-    
-    @bot.check
-    async def globally_block_dms(self, ctx: Context):
-        return ctx.guild is not None
-    
-    @bot.check
-    async def globally_check_channel(self, ctx: Context):
-        return await checks.is_allowed_channel(ctx)
-
-
-async def setup_hook(bot: Bot, deps: BotDependencies):
-    await bot.add_cog(cogs.funCommands(bot, deps=deps))
-    await bot.add_cog(cogs.botDetectiveCommands(bot, deps=deps))
-    await bot.add_cog(cogs.errorHandler(bot, deps=deps))
-    await bot.add_cog(cogs.rsnLinkingCommands(bot, deps=deps))
-    await bot.add_cog(cogs.modCommands(bot, deps=deps))
-    await bot.add_cog(cogs.projectStatsCommands(bot, deps=deps))
-    await bot.add_cog(cogs.playerStatsCommands(bot, deps=deps))
-    await bot.add_cog(cogs.mapCommands(bot, deps=deps))
+bot = Bot(
+    command_prefix=settings.COMMAND_PREFIX,
+    description="busting bots",
+    case_insensitive=True,
+    activity=Game("OSRS", type=discord.ActivityType.watching),
+    allowed_mentions=AllowedMentions(
+        everyone=False,
+        roles=False,
+        users=True,
+    ),
+    intents=Intents(
+        messages=True,
+        guilds=True,
+        members=True,
+        reactions=True,
+        message_content=True,
+    ),
+)
 
 
-async def run_async():
-    settings = Settings()
-    deps = BotDependencies(settings)
-    bot = Bot(deps=deps)
-    
-    @bot.event
-    async def on_ready():
-        logger.info(f"We have logged in as {bot.user}")
-        await bot.tree.sync()
-    
-    @bot.event
-    async def on_connect():
-        logger.info("Bot connected successfully.")
-    
-    @bot.event
-    async def on_disconnect():
-        logger.info("Bot disconnected.")
+@bot.check
+async def globally_block_dms(ctx: Context):
+    return ctx.guild is not None
 
 
-if __name__ == "__main__":
-    run()
+@bot.check
+async def globally_check_channel(ctx: Context):
+    return await checks.is_allowed_channel(ctx)
+
+
+@bot.event
+async def setup_hook():
+    await bot.add_cog(cogs.funCommands(bot))
+    await bot.add_cog(cogs.botDetectiveCommands(bot, deps=DEPS))
+    await bot.add_cog(cogs.errorHandler(bot, deps=DEPS))
+    await bot.add_cog(cogs.rsnLinkingCommands(bot))
+    await bot.add_cog(cogs.modCommands(bot))
+    await bot.add_cog(cogs.projectStatsCommands(bot))
+    await bot.add_cog(cogs.playerStatsCommands(bot))
+    await bot.add_cog(cogs.mapCommands(bot))
+
+
+# default events
+@bot.event
+async def on_ready():
+    logger.info(f"We have logged in as {bot.user}")
+    await bot.tree.sync()
+
+
+@bot.event
+async def on_connect():
+    logger.info("Bot connected successfully.")
+    logger.info(f"{Settings.COMMAND_PREFIX=}")
+
+
+@bot.event
+async def on_disconnect():
+    logger.info("Bot disconnected.")
+
+
+@bot.command()
+@commands.guild_only()
+@commands.is_owner()
+async def sync(
+    ctx: Context,
+    guilds: Greedy[discord.Object],
+    spec: Optional[Literal["~", "*", "^"]] = None,
+) -> None:
+    logger.debug(f"{ctx.author.name=}, {ctx.author.id=}, Requesting sync, {spec=}")
+    if not guilds:
+        if spec == "~":
+            synced = await ctx.bot.tree.sync(guild=ctx.guild)
+        elif spec == "*":
+            ctx.bot.tree.copy_global_to(guild=ctx.guild)
+            synced = await ctx.bot.tree.sync(guild=ctx.guild)
+        elif spec == "^":
+            ctx.bot.tree.clear_commands(guild=ctx.guild)
+            await ctx.bot.tree.sync(guild=ctx.guild)
+            synced = []
+        else:
+            synced = await ctx.bot.tree.sync()
+
+        await ctx.send(
+            f"Synced {len(synced)} commands {'globally' if spec is None else 'to the current guild.'}"
+        )
+        return
+
+    ret = 0
+    for guild in guilds:
+        try:
+            await ctx.bot.tree.sync(guild=guild)
+        except discord.HTTPException:
+            pass
+        else:
+            ret += 1
+
+    await ctx.send(f"Synced the tree to {ret}/{len(guilds)}.")

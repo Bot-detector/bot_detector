@@ -3,10 +3,10 @@ import sys
 import traceback
 
 import aiohttp
+from bot_detector.discord_bot.config import Settings
 from bot_detector.discord_bot.dependencies import BotDependencies
 from discord.ext import commands
 from discord.ext.commands import Context
-from bot_detector.discord_bot.dependencies import BotDependencies
 
 logger = logging.getLogger(__name__)
 
@@ -16,9 +16,6 @@ class errorHandler(commands.Cog):
         super().__init__(*args, **kwargs)
         self.bot = bot
         self.deps = deps
-
-    @commands.Cog.listener()
-    async def on_command_error(self, ctx: Context, error):
 
     @commands.Cog.listener()
     async def on_command_error(self, ctx: Context, error):
@@ -58,9 +55,9 @@ class errorHandler(commands.Cog):
             logger.error({"error": error})
             await ctx.send("An error occured.")
 
-            if self.settings.WEBHOOK:
+            if Settings().WEBHOOK:
                 async with aiohttp.ClientSession() as session:
-                    webhook = Webhook.from_url(self.settings.WEBHOOK, session=session)
+                    webhook = Webhook.from_url(Settings().WEBHOOK, session=session)
                     error_traceback = traceback.format_exception(
                         type(error), error, error.__traceback__
                     )
