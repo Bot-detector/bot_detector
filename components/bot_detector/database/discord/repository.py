@@ -2,10 +2,7 @@ import logging
 from datetime import datetime
 
 from bot_detector.database.discord.interface import DiscordVerificationInterface
-from bot_detector.database.discord.structs import (
-    DiscordVerificationStruct,
-    DiscordVerificationTableStruct,
-)
+from bot_detector.database.discord.structs import DiscordVerificationTableStruct
 from sqlalchemy import insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,7 +16,7 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
         discord_id: str | None = None,
         player_id: int | None = None,
         is_verified: bool | None = None,
-    ) -> DiscordVerificationStruct | None:
+    ) -> DiscordVerificationTableStruct | None:
         query = select(DiscordVerificationTableStruct)
 
         if discord_id is not None:
@@ -39,28 +36,13 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
 
         async with async_session.begin():
             result = await async_session.execute(query)
-            row = result.scalar_one_or_none()
-
-            if row is None:
-                return None
-
-            return DiscordVerificationStruct(
-                Entry=row.Entry,
-                Discord_id=row.Discord_id,
-                Player_id=row.Player_id,
-                primary_rsn=row.primary_rsn,
-                Code=row.Code,
-                verified_status=row.verified_status,
-                token_used=row.token_used,
-                created_at=row.created_at,
-                updated_at=row.updated_at,
-            )
+            return result.scalar_one_or_none()
 
     async def get_linked_accounts(
         self,
         async_session: AsyncSession,
         discord_id: str,
-    ) -> list[DiscordVerificationStruct]:
+    ) -> list[DiscordVerificationTableStruct]:
         query = (
             select(DiscordVerificationTableStruct)
             .where(DiscordVerificationTableStruct.Discord_id == discord_id)
@@ -70,22 +52,7 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
 
         async with async_session.begin():
             result = await async_session.execute(query)
-            rows = result.scalars().all()
-
-            return [
-                DiscordVerificationStruct(
-                    Entry=row.Entry,
-                    Discord_id=row.Discord_id,
-                    Player_id=row.Player_id,
-                    primary_rsn=row.primary_rsn,
-                    Code=row.Code,
-                    verified_status=row.verified_status,
-                    token_used=row.token_used,
-                    created_at=row.created_at,
-                    updated_at=row.updated_at,
-                )
-                for row in rows
-            ]
+            return list(result.scalars().all())
 
     async def create_verification(
         self,
@@ -93,7 +60,7 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
         discord_id: str,
         player_id: int,
         code: str,
-    ) -> DiscordVerificationStruct:
+    ) -> DiscordVerificationTableStruct:
         query = insert(DiscordVerificationTableStruct).values(
             Discord_id=discord_id,
             Player_id=player_id,
@@ -107,11 +74,11 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
             await async_session.execute(query)
             await async_session.commit()
 
-            return DiscordVerificationStruct(
+            return DiscordVerificationTableStruct(
                 Discord_id=discord_id,
                 Player_id=player_id,
                 Code=code,
-                primary_rsn=False,
+                primary_rsn=0,
                 verified_status=0,
                 token_used=0,
             )
