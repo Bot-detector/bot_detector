@@ -362,6 +362,26 @@ services:
       retries: 3
       start_period: 30s
 
+  discord_bot:
+    container_name: discord_bot
+    image: bd/discord_bot:prd
+    build:
+      context: .
+      dockerfile: ./projects/discord_bot/Dockerfile
+      target: prod
+    # command: ["sleep", "infinity"]
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=mysql+asyncmy://discord-bot:discord_bot_pw@mysql:3306/playerdata
+    networks:
+      - botdetector-network
+    depends_on:
+      mysql_setup:
+        condition: service_completed_successfully
+      kafka_setup:
+        condition: service_completed_successfully
+
 networks:
   botdetector-network:
     name: bd-network
