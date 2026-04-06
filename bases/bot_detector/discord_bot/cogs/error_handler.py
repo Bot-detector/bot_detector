@@ -56,9 +56,10 @@ class errorHandler(commands.Cog):
             logger.error({"error": error})
             await ctx.send("An error occured.")
 
-            if Settings().WEBHOOK:
+            webhook = Settings().WEBHOOK
+            if webhook:
                 async with aiohttp.ClientSession() as session:
-                    webhook = Webhook.from_url(Settings().WEBHOOK, session=session)
+                    webhook = Webhook.from_url(webhook, session=session)
                     error_traceback = traceback.format_exception(
                         type(error), error, error.__traceback__
                     )
@@ -72,9 +73,3 @@ class errorHandler(commands.Cog):
                     for secret in getattr(self.deps.settings, "SECRETS", []):
                         error_message = error_message.replace(secret, "***")
                     await webhook.send(error_message, username="bd-error")
-
-
-async def setup(bot: commands.Bot):
-    from bot_detector.discord_bot.dependencies import DEPS
-
-    await bot.add_cog(errorHandler(bot, deps=DEPS))

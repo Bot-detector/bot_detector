@@ -30,6 +30,7 @@ class projectStatsCommands(Cog):
         data = None
         if response.ok:
             data = await response.json()
+            assert isinstance(data, dict)
             data = data.get("bot-detector")
         return data
 
@@ -56,9 +57,3 @@ class projectStatsCommands(Cog):
             url="https://user-images.githubusercontent.com/5789682/117360948-60a24f80-ae87-11eb-8a5a-7ba57f85deb2.png"
         )
         await ctx.reply(embed=embed)
-
-
-async def setup(bot: commands.Bot):
-    from bot_detector.discord_bot.dependencies import DEPS
-
-    await bot.add_cog(projectStatsCommands(bot, deps=DEPS))

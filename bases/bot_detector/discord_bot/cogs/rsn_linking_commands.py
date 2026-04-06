@@ -23,6 +23,9 @@ class rsnLinkingCommands(commands.Cog):
     async def send_pm(self, ctx: Context, *args, **kwargs):
         try:
             await ctx.author.send(*args, **kwargs)
+            await ctx.author.send(
+                "https://media.discordapp.net/attachments/1008397996108566558/1011736267265937478/sentry_verify.gif?ex=69d4c293&is=69d37113&hm=cb23d156ad1b6cc7f2ae99a037af0c61ce93bd0936808b20cbbb0aef9b07e032"
+            )
             await ctx.reply("Please check your PMs.")
         except discord.Forbidden:
             await ctx.reply(
@@ -255,9 +258,3 @@ class rsnLinkingCommands(commands.Cog):
 
         if embeds:
             await ctx.reply(embeds=embeds)
-
-
-async def setup(bot: commands.Bot):
-    from bot_detector.discord_bot.dependencies import DEPS
-
-    await bot.add_cog(rsnLinkingCommands(bot, deps=DEPS))

@@ -386,9 +386,3 @@ class mapCommands(Cog):
         region_true_name = name_index[index]
         region_id = location_index[index]
         return region_true_name, region_id
-
-
-async def setup(bot: commands.Bot):
-    from bot_detector.discord_bot.dependencies import DEPS
-
-    await bot.add_cog(mapCommands(bot, deps=DEPS))

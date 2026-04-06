@@ -1,28 +1,48 @@
+import logging
 from datetime import datetime, timezone
 from inspect import cleandoc
 from typing import Any
 
 import discord
-import logging
 from bot_detector.discord_bot.dependencies import BotDependencies
-from from bot_detector.discord_bot.utils import VERIFIED_PLAYER_ROLE
+from bot_detector.discord_bot.utils import VERIFIED_PLAYER_ROLE
 from discord import Color, Embed
-    from discord.ext import commands
-    from discord.ext.commands import Cog, Context
+from discord.ext import commands
+from discord.ext.commands import Cog, Context
 
 logger = logging.getLogger(__name__)
 
 BOT_HUNTER_ROLES = [
-    {"role_id": 825165287526498314, "role_name": "Bot Hunter I", "min": 1, "max": 5},
-    {"role_id": 825165422721499167, "role_name": "Bot Hunter II", "min": 5, "max": 10},
+    {
+        "role_id": 825165287526498314,
+        "role_name": "Bot Hunter I",
+        "min": 1,
+        "max": 5,
+    },
+    {
+        "role_id": 825165422721499167,
+        "role_name": "Bot Hunter II",
+        "min": 5,
+        "max": 10,
+    },
     {
         "role_id": 825165526262874133,
         "role_name": "Bot Hunter III",
         "min": 10,
         "max": 25,
     },
-    {"role_id": 825169068667305995, "role_name": "Bot Hunter IV", "min": 25, "max": 50},
-    {"role_id": 825165991503069225, "role_name": "Bot Hunter V", "min": 50, "max": 100},
+    {
+        "role_id": 825169068667305995,
+        "role_name": "Bot Hunter IV",
+        "min": 25,
+        "max": 50,
+    },
+    {
+        "role_id": 825165991503069225,
+        "role_name": "Bot Hunter V",
+        "min": 50,
+        "max": 100,
+    },
     {
         "role_id": 825166170989658112,
         "role_name": "Bot Hunter VI",
@@ -187,7 +207,7 @@ class playerStatsCommands(Cog):
         exclude = ["id", "timestamp", "ts_date", "Player_id"]
         skills_lower = [s.lower() for s in SKILLS_LIST]
         bosses = [k for k in player_hiscore.keys() if k not in skills_lower + exclude]
-        embed = None  # type: Optional[discord.Embed]
+        embed = None
 
         for boss in bosses:
             if embed is None:
@@ -202,6 +222,7 @@ class playerStatsCommands(Cog):
             if kc is None or kc <= 0:
                 continue
 
+            assert isinstance(embed, discord.Embed)
             embed.add_field(name=f"{boss}", value=f"KC - {int(kc):,d}", inline=True)
 
             if len(embed.fields) >= 21:
@@ -380,7 +401,9 @@ class playerStatsCommands(Cog):
         logger.debug(confirmed_bans)
 
         role_dict = [
-            r for r in BOT_HUNTER_ROLES if r.get("max") > confirmed_bans >= r.get("min")
+            r
+            for r in BOT_HUNTER_ROLES
+            if r.get("max", 0) > confirmed_bans >= r.get("min", 0)
         ]
         if not role_dict:
             embed = discord.Embed(
@@ -397,7 +420,7 @@ class playerStatsCommands(Cog):
 
         if ctx.author.get_role(int(role.get("role_id"))):  # type: ignore[union-attr]
             embed = discord.Embed(
-                description=f"You are not yet eligible for a new role. Only **{role.get('max') - confirmed_bans}** more confirmed bans and you'll be there! :D",
+                description=f"You are not yet eligible for a new role. Only **{role.get('max', 0) - confirmed_bans}** more confirmed bans and you'll be there! :D",
                 color=new_role.color if new_role else discord.Color.default(),
             )
             await ctx.reply(embed=embed)
@@ -582,8 +605,3 @@ class playerStatsCommands(Cog):
 
             embed.set_footer(text=f"Last Updated: {timestamp}")
             await ctx.reply(embed=embed)
-
-
-async def setup(bot: commands.Bot):
-    from bot_detector.discord_bot.dependencies import DEPS
-    await bot.add_cog(playerStatsCommands(bot, deps=DEPS))

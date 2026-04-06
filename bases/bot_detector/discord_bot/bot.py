@@ -4,7 +4,7 @@ from typing import Literal, Optional
 import discord
 from bot_detector.discord_bot import cogs
 from bot_detector.discord_bot.config import Settings
-from bot_detector.discord_bot.dependencies import DEPS, BotDependencies
+from bot_detector.discord_bot.dependencies import DEPS
 from bot_detector.discord_bot.utils import checks
 from discord import AllowedMentions, Game, Intents
 from discord.ext import commands
@@ -41,7 +41,8 @@ async def globally_block_dms(ctx: Context):
 
 @bot.check
 async def globally_check_channel(ctx: Context):
-    return await checks.is_allowed_channel(ctx)
+    is_allowed = await checks.is_allowed_channel(ctx)
+    return is_allowed
 
 
 @bot.event

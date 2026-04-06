@@ -42,7 +42,3 @@ class modCommands(Cog):
         )
 
         await ctx.reply("Admin linked command - needs database implementation")
-
-
-async def setup(bot: commands.Bot):
-    await bot.add_cog(modCommands(bot))
