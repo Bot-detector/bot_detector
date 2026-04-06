@@ -12,10 +12,8 @@ from discord.ext.commands import Bot, Context, Greedy
 
 logger = logging.getLogger(__name__)
 
-settings = Settings()
-
 bot = Bot(
-    command_prefix=settings.COMMAND_PREFIX,
+    command_prefix=Settings().COMMAND_PREFIX,
     description="busting bots",
     case_insensitive=True,
     activity=Game("OSRS", type=discord.ActivityType.watching),
@@ -47,6 +45,7 @@ async def globally_check_channel(ctx: Context):
 
 @bot.event
 async def setup_hook():
+    DEPS.init(settings=Settings())
     await bot.add_cog(cogs.funCommands(bot, deps=DEPS))
     await bot.add_cog(cogs.botDetectiveCommands(bot, deps=DEPS))
     await bot.add_cog(cogs.errorHandler(bot, deps=DEPS))

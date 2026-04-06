@@ -15,6 +15,7 @@ dependencies = [
     "prometheus-client==0.22.0",
     "pydantic-settings==2.7.0",
     "pydantic==2.10.4",
+    "asyncmy==0.2.11",
 ]
 
 [project.scripts]
