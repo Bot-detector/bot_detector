@@ -118,6 +118,7 @@ class mapCommands(Cog):
                     )
                     await ctx.reply("https://i.redd.it/lel3o4e2hhp11.jpg")
         else:
+            assert self.deps.public_api is not None
             data_region = await self.deps.public_api.get_heatmap_region(
                 region_name=region
             )  # type: ignore
@@ -185,6 +186,7 @@ class mapCommands(Cog):
         if region.isdigit():
             msg = f"https://raw.githubusercontent.com/Ferrariic/OSRS-Visible-Region-Images/main/Region_Maps/{region}.png"
         else:
+            assert self.deps.public_api is not None
             data_region = await self.deps.public_api.get_heatmap_region(
                 region_name=region
             )  # type: ignore

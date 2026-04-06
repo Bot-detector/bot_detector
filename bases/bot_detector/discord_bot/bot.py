@@ -50,7 +50,7 @@ async def setup_hook():
     await bot.add_cog(cogs.botDetectiveCommands(bot, deps=DEPS))
     await bot.add_cog(cogs.errorHandler(bot, deps=DEPS))
     await bot.add_cog(cogs.rsnLinkingCommands(bot, deps=DEPS))
-    await bot.add_cog(cogs.modCommands(bot))
+    await bot.add_cog(cogs.modCommands(bot, deps=DEPS))
     await bot.add_cog(cogs.projectStatsCommands(bot, deps=DEPS))
     await bot.add_cog(cogs.playerStatsCommands(bot, deps=DEPS))
     await bot.add_cog(cogs.mapCommands(bot, deps=DEPS))

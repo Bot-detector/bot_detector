@@ -233,9 +233,10 @@ class rsnLinkingCommands(commands.Cog):
     async def linked(self, ctx: Context):
         logger.debug(f"{ctx.author.name=}, {ctx.author.id=}, Requesting linked")
 
+        assert self.deps.public_api is not None
         links = await self.deps.public_api.get_discord_links(
             discord_id=str(ctx.author.id)
-        )  # type: ignore
+        )
 
         if not links or len(links) == 0:
             await ctx.send(
@@ -252,6 +253,7 @@ class rsnLinkingCommands(commands.Cog):
                 embed.add_field(name="Account:", value=link.get("name"), inline=True)
             embeds.append(embed)
 
+            # max 10 embeds per reply
             if i != 0 and i % 9 == 0:
                 await ctx.reply(embeds=embeds)
                 embeds = []
