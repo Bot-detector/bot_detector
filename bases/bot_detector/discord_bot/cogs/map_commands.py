@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 import PIL
 import seaborn as sns
+from bot_detector.discord_bot.dependencies import BotDependencies
 from bot_detector.discord_bot.utils import OWNER_ROLE, PATREON_ROLE
 from discord.ext import commands
 from discord.ext.commands import Cog, Context
@@ -20,11 +21,12 @@ logger = logging.getLogger(__name__)
 
 
 class mapCommands(Cog):
-    def __init__(self, bot: commands.Bot) -> None:
+    def __init__(self, bot: commands.Bot, deps: BotDependencies) -> None:
         self.bot = bot
+        self.deps = deps
 
     async def _web_request(self, url: str) -> dict | None:
-        async with self.bot.session.get(url) as response:  # type: ignore
+        async with self.deps.session.get(url) as response:
             if response.status != 200:
                 logger.error({"status": response.status, "url": url})
                 return None
@@ -39,7 +41,7 @@ class mapCommands(Cog):
         }
         logger.debug(debug)
 
-        data_region = await self.bot.public_api.get_heatmap_region(
+        data_region = await self.deps.public_api.get_heatmap_region(
             region_name=region_name
         )  # type: ignore
         if not data_region:
@@ -116,7 +118,7 @@ class mapCommands(Cog):
                     )
                     await ctx.reply("https://i.redd.it/lel3o4e2hhp11.jpg")
         else:
-            data_region = await self.bot.public_api.get_heatmap_region(
+            data_region = await self.deps.public_api.get_heatmap_region(
                 region_name=region
             )  # type: ignore
             if not data_region:
@@ -183,7 +185,7 @@ class mapCommands(Cog):
         if region.isdigit():
             msg = f"https://raw.githubusercontent.com/Ferrariic/OSRS-Visible-Region-Images/main/Region_Maps/{region}.png"
         else:
-            data_region = await self.bot.public_api.get_heatmap_region(
+            data_region = await self.deps.public_api.get_heatmap_region(
                 region_name=region
             )  # type: ignore
             if not data_region:
@@ -231,7 +233,7 @@ class mapCommands(Cog):
 
         region_id_int = int(region_id)
 
-        data = await self.bot.public_api.get_heatmap_data(region_id=region_id_int)  # type: ignore
+        data = await self.deps.public_api.get_heatmap_data(region_id=region_id_int)  # type: ignore
         if not data:
             return False
 
@@ -387,4 +389,6 @@ class mapCommands(Cog):
 
 
 async def setup(bot: commands.Bot):
-    await bot.add_cog(mapCommands(bot))
+    from bot_detector.discord_bot.dependencies import DEPS
+
+    await bot.add_cog(mapCommands(bot, deps=DEPS))

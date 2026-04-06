@@ -104,7 +104,7 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
             result = await async_session.execute(query)
             await async_session.commit()
 
-            return result.rowcount > 0
+            return result.rowcount > 0  # type: ignore[attr-defined]
 
     async def set_primary_rsn(
         self,
@@ -131,4 +131,4 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
             result = await async_session.execute(set_query)
             await async_session.commit()
 
-            return result.rowcount > 0
+            return result.rowcount > 0  # type: ignore[attr-defined]

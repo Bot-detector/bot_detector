@@ -5,6 +5,7 @@ import traceback
 import aiohttp
 from bot_detector.discord_bot.config import Settings
 from bot_detector.discord_bot.dependencies import BotDependencies
+from discord import Webhook
 from discord.ext import commands
 from discord.ext.commands import Context
 
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 class errorHandler(commands.Cog):
     def __init__(self, bot: commands.Bot, deps: BotDependencies) -> None:
-        super().__init__(*args, **kwargs)
+        super().__init__()
         self.bot = bot
         self.deps = deps
 
@@ -68,10 +69,12 @@ class errorHandler(commands.Cog):
                     )
                     error_message = "".join(error_message)
 
-                    for secret in getattr(self.settings, "SECRETS", []):
+                    for secret in getattr(self.deps.settings, "SECRETS", []):
                         error_message = error_message.replace(secret, "***")
                     await webhook.send(error_message, username="bd-error")
 
 
 async def setup(bot: commands.Bot):
-    await bot.add_cog(errorHandler(bot))
+    from bot_detector.discord_bot.dependencies import DEPS
+
+    await bot.add_cog(errorHandler(bot, deps=DEPS))

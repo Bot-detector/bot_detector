@@ -2,6 +2,7 @@ import logging
 import random
 
 import discord
+from bot_detector.discord_bot.dependencies import BotDependencies
 from discord.ext import commands
 from discord.ext.commands import Cog, Context
 
@@ -9,11 +10,12 @@ logger = logging.getLogger(__name__)
 
 
 class funCommands(Cog):
-    def __init__(self, bot: commands.Bot) -> None:
+    def __init__(self, bot: commands.Bot, deps: BotDependencies) -> None:
         self.bot = bot
+        self.deps = deps
 
     async def _web_request(self, url: str) -> dict | None:
-        async with self.bot.session.get(url) as response:
+        async with self.deps.session.get(url) as response:
             if response.status != 200:
                 logger.error({"status": response.status, "url": url})
                 return None
@@ -88,4 +90,6 @@ class funCommands(Cog):
 
 
 async def setup(bot: commands.Bot):
-    await bot.add_cog(funCommands(bot))
+    from bot_detector.discord_bot.dependencies import DEPS
+
+    await bot.add_cog(funCommands(bot, deps=DEPS))

@@ -46,14 +46,14 @@ async def globally_check_channel(ctx: Context):
 
 @bot.event
 async def setup_hook():
-    await bot.add_cog(cogs.funCommands(bot))
+    await bot.add_cog(cogs.funCommands(bot, deps=DEPS))
     await bot.add_cog(cogs.botDetectiveCommands(bot, deps=DEPS))
     await bot.add_cog(cogs.errorHandler(bot, deps=DEPS))
-    await bot.add_cog(cogs.rsnLinkingCommands(bot))
+    await bot.add_cog(cogs.rsnLinkingCommands(bot, deps=DEPS))
     await bot.add_cog(cogs.modCommands(bot))
-    await bot.add_cog(cogs.projectStatsCommands(bot))
-    await bot.add_cog(cogs.playerStatsCommands(bot))
-    await bot.add_cog(cogs.mapCommands(bot))
+    await bot.add_cog(cogs.projectStatsCommands(bot, deps=DEPS))
+    await bot.add_cog(cogs.playerStatsCommands(bot, deps=DEPS))
+    await bot.add_cog(cogs.mapCommands(bot, deps=DEPS))
 
 
 # default events

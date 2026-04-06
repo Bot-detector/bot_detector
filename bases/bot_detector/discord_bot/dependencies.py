@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 
 import aiohttp
 from bot_detector.database.discord import DiscordVerificationRepo
@@ -21,12 +22,16 @@ class BotDependencies:
 
         if settings.SQL_URI:
             engine = create_async_engine(settings.SQL_URI, echo=False)
-            self.session_factory = async_sessionmaker(
-                engine,
-                class_=AsyncSession,
-                expire_on_commit=False,
+            self.session_factory: Optional[async_sessionmaker[AsyncSession]] = (
+                async_sessionmaker(
+                    engine,
+                    class_=AsyncSession,
+                    expire_on_commit=False,
+                )
             )
-            self.discord_repo = DiscordVerificationRepo()
+            self.discord_repo: Optional[DiscordVerificationRepo] = (
+                DiscordVerificationRepo()
+            )
         else:
             self.session_factory = None
             self.discord_repo = None

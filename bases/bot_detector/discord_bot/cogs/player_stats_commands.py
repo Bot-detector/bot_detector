@@ -1,13 +1,14 @@
-import logging
 from datetime import datetime, timezone
 from inspect import cleandoc
 from typing import Any
 
 import discord
-from bot_detector.discord_bot.utils import VERIFIED_PLAYER_ROLE
+import logging
+from bot_detector.discord_bot.dependencies import BotDependencies
+from from bot_detector.discord_bot.utils import VERIFIED_PLAYER_ROLE
 from discord import Color, Embed
-from discord.ext import commands
-from discord.ext.commands import Cog, Context
+    from discord.ext import commands
+    from discord.ext.commands import Cog, Context
 
 logger = logging.getLogger(__name__)
 
@@ -143,8 +144,9 @@ SKILLS_LIST = [
 
 
 class playerStatsCommands(Cog):
-    def __init__(self, bot: commands.Bot) -> None:
+    def __init__(self, bot: commands.Bot, deps: BotDependencies) -> None:
         self.bot = bot
+        self.deps = deps
 
     @commands.hybrid_command()
     @commands.has_any_role(VERIFIED_PLAYER_ROLE)
@@ -152,13 +154,13 @@ class playerStatsCommands(Cog):
         logger.debug(f"{ctx.author.name=}, {ctx.author.id=}, looking up: {player_name}")
         await ctx.typing()
 
-        player = await self.bot.public_api.get_player(player_name=player_name)  # type: ignore
+        player = await self.deps.public_api.get_player(player_name=player_name)  # type: ignore
 
         if not player:
             await ctx.reply("Something went terribly wrong. :(")
             return
 
-        player_hiscore = await self.bot.public_api.get_hiscore_latest(
+        player_hiscore = await self.deps.public_api.get_hiscore_latest(
             player_id=player.get("id")
         )  # type: ignore
 
@@ -185,7 +187,7 @@ class playerStatsCommands(Cog):
         exclude = ["id", "timestamp", "ts_date", "Player_id"]
         skills_lower = [s.lower() for s in SKILLS_LIST]
         bosses = [k for k in player_hiscore.keys() if k not in skills_lower + exclude]
-        embed = None
+        embed = None  # type: Optional[discord.Embed]
 
         for boss in bosses:
             if embed is None:
@@ -222,7 +224,7 @@ class playerStatsCommands(Cog):
         logger.debug(f"{ctx.author.name=}, {ctx.author.id=}, Requesting kc")
         await ctx.typing()
 
-        linked_accounts = await self.bot.public_api.get_discord_links(
+        linked_accounts = await self.deps.public_api.get_discord_links(
             discord_id=str(ctx.author.id)
         )  # type: ignore
 
@@ -244,7 +246,7 @@ class playerStatsCommands(Cog):
             if acc.get("Verified_status") == 1
         ]
 
-        data = await self.bot.public_api.get_report_score(  # type: ignore
+        data = await self.deps.public_api.get_report_score(  # type: ignore
             player_names=[n["name"] for n in linked_accounts]
         )
 
@@ -350,7 +352,7 @@ class playerStatsCommands(Cog):
             await ctx.reply("This command must be used in a guild.")
             return
 
-        linked_accounts = await self.bot.public_api.get_discord_links(
+        linked_accounts = await self.deps.public_api.get_discord_links(
             discord_id=str(ctx.author.id)
         )  # type: ignore
 
@@ -371,7 +373,7 @@ class playerStatsCommands(Cog):
             for acc in linked_accounts
             if acc.get("Verified_status") == 1
         ]
-        data = await self.bot.public_api.get_report_score(  # type: ignore
+        data = await self.deps.public_api.get_report_score(  # type: ignore
             player_names=[n["name"] for n in linked_accounts]
         )
         confirmed_bans = sum(d["count"] for d in data if d.get("confirmed_ban"))
@@ -393,7 +395,7 @@ class playerStatsCommands(Cog):
             lambda r: r.id == role.get("role_id"), ctx.guild.roles
         )
 
-        if ctx.author.get_role(role.get("role_id")):  # type: ignore[union-attr]
+        if ctx.author.get_role(int(role.get("role_id"))):  # type: ignore[union-attr]
             embed = discord.Embed(
                 description=f"You are not yet eligible for a new role. Only **{role.get('max') - confirmed_bans}** more confirmed bans and you'll be there! :D",
                 color=new_role.color if new_role else discord.Color.default(),
@@ -423,7 +425,7 @@ class playerStatsCommands(Cog):
         )
         await ctx.typing()
 
-        prediction = await self.bot.public_api.get_prediction(
+        prediction = await self.deps.public_api.get_prediction(
             player_name=player_name, breakdown=True
         )  # type: ignore
 
@@ -456,7 +458,7 @@ class playerStatsCommands(Cog):
         logger.debug(
             f"{ctx.author.name=}, {ctx.author.id=}, Requesting pwned: {player_name}"
         )
-        player = await self.bot.public_api.get_player(player_name=player_name)  # type: ignore
+        player = await self.deps.public_api.get_player(player_name=player_name)  # type: ignore
 
         if not player:
             await ctx.reply(f"I couldn't get data for {player_name} :(")
@@ -473,7 +475,7 @@ class playerStatsCommands(Cog):
         logger.debug(
             f"{ctx.author.name=}, {ctx.author.id=}, Requesting gear: {player_name}"
         )
-        sighting = await self.bot.public_api.get_latest_sighting(
+        sighting = await self.deps.public_api.get_latest_sighting(
             player_name=player_name
         )  # type: ignore
 
@@ -490,8 +492,6 @@ class playerStatsCommands(Cog):
         sighting_data = sighting[0] if isinstance(sighting, list) else sighting
 
         for k, v in sighting_data.items():
-            k: str
-            v: int
             parts = k.split("_")
             if len(parts) > 1:
                 slot = parts[1].capitalize()
@@ -521,7 +521,7 @@ class playerStatsCommands(Cog):
             f"{ctx.author.name=}, {ctx.author.id=}, Requesting xpgain: {player_name}"
         )
 
-        gains = await self.bot.public_api.get_xp_gains(player_name=player_name)  # type: ignore
+        gains = await self.deps.public_api.get_xp_gains(player_name=player_name)  # type: ignore
 
         if not gains:
             await ctx.reply(f"I couldn't locate {player_name}'s hiscores gains. Sorry!")
@@ -585,4 +585,5 @@ class playerStatsCommands(Cog):
 
 
 async def setup(bot: commands.Bot):
-    await bot.add_cog(playerStatsCommands(bot))
+    from bot_detector.discord_bot.dependencies import DEPS
+    await bot.add_cog(playerStatsCommands(bot, deps=DEPS))

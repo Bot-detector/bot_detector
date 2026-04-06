@@ -2,6 +2,7 @@ import logging
 from inspect import cleandoc
 
 import discord
+from bot_detector.discord_bot.dependencies import BotDependencies
 from discord.ext import commands
 from discord.ext.commands import Cog, Context
 from pydantic import BaseModel
@@ -16,11 +17,12 @@ class Stats(BaseModel):
 
 
 class projectStatsCommands(Cog):
-    def __init__(self, bot: commands.Bot) -> None:
+    def __init__(self, bot: commands.Bot, deps: BotDependencies) -> None:
         self.bot = bot
+        self.deps = deps
 
     async def get_active_installs(self) -> int | None:
-        session = self.bot.session
+        session = self.deps.session
         url = "https://api.runelite.net/runelite/pluginhub"
 
         response = await session.get(url)
@@ -36,8 +38,8 @@ class projectStatsCommands(Cog):
         logger.debug(f"{ctx.author.name=}, {ctx.author.id=}, Requesting stats")
 
         active_installs = await self.get_active_installs()
-        active_installs = active_installs if active_installs else "N/A"
-        logger.info(f"{active_installs=}")
+        active_installs_str: int | str = active_installs if active_installs else "N/A"
+        logger.info(f"{active_installs_str=}")
 
         embed = discord.Embed(title="Bot Detector Plugin", color=0x00FF00)
         embed.add_field(
@@ -45,7 +47,7 @@ class projectStatsCommands(Cog):
             inline=False,
             value=cleandoc(
                 f"""
-                Active Installs: {active_installs:,}
+                Active Installs: {active_installs_str:,}
             """
             ),
         )
@@ -57,4 +59,6 @@ class projectStatsCommands(Cog):
 
 
 async def setup(bot: commands.Bot):
-    await bot.add_cog(projectStatsCommands(bot))
+    from bot_detector.discord_bot.dependencies import DEPS
+
+    await bot.add_cog(projectStatsCommands(bot, deps=DEPS))

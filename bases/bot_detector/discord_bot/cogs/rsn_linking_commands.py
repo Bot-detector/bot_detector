@@ -2,6 +2,7 @@ import logging
 from inspect import cleandoc
 
 import discord
+from bot_detector.discord_bot.dependencies import BotDependencies
 from bot_detector.discord_bot.utils import checks, string_processing
 from discord.ext import commands
 from discord.ext.commands import Context
@@ -10,8 +11,9 @@ logger = logging.getLogger(__name__)
 
 
 class rsnLinkingCommands(commands.Cog):
-    def __init__(self, bot: commands.Bot) -> None:
+    def __init__(self, bot: commands.Bot, deps: BotDependencies) -> None:
         self.bot = bot
+        self.deps = deps
 
     def _batch(self, iterable, n=1):
         length = len(iterable)
@@ -135,13 +137,13 @@ class rsnLinkingCommands(commands.Cog):
             await ctx.reply(f"{name} isn't a valid Runescape user name.")
             return
 
-        player = await self.bot.public_api.get_player(player_name=name)  # type: ignore
+        player = await self.deps.public_api.get_player(player_name=name)  # type: ignore
         if not player:
             embed = await self.install_plugin_msg()
             await ctx.reply(embed=embed)
             return
 
-        linked_users = await self.bot.public_api.get_discord_player(player_name=name)  # type: ignore
+        linked_users = await self.deps.public_api.get_discord_player(player_name=name)  # type: ignore
         if not linked_users:
             linked_users = []
 
@@ -164,7 +166,7 @@ class rsnLinkingCommands(commands.Cog):
 
         code = string_processing.get_random_id()
 
-        await self.bot.public_api.post_discord_code(  # type: ignore
+        await self.deps.public_api.post_discord_code(  # type: ignore
             discord_id=str(ctx.author.id),
             player_name=player.get("name"),
             code=code,
@@ -179,13 +181,13 @@ class rsnLinkingCommands(commands.Cog):
             f"{ctx.author.name=}, {ctx.author.id=}, Requesting verify, {name=}"
         )
 
-        player = await self.bot.public_api.get_player(player_name=name)  # type: ignore
+        player = await self.deps.public_api.get_player(player_name=name)  # type: ignore
         if not player:
             embed = await self.install_plugin_msg()
             await ctx.reply(embed=embed)
             return
 
-        linked_users = await self.bot.public_api.get_discord_player(player_name=name)  # type: ignore
+        linked_users = await self.deps.public_api.get_discord_player(player_name=name)  # type: ignore
         if not linked_users:
             linked_users = []
 
@@ -228,7 +230,7 @@ class rsnLinkingCommands(commands.Cog):
     async def linked(self, ctx: Context):
         logger.debug(f"{ctx.author.name=}, {ctx.author.id=}, Requesting linked")
 
-        links = await self.bot.public_api.get_discord_links(
+        links = await self.deps.public_api.get_discord_links(
             discord_id=str(ctx.author.id)
         )  # type: ignore
 
@@ -256,4 +258,6 @@ class rsnLinkingCommands(commands.Cog):
 
 
 async def setup(bot: commands.Bot):
-    await bot.add_cog(rsnLinkingCommands(bot))
+    from bot_detector.discord_bot.dependencies import DEPS
+
+    await bot.add_cog(rsnLinkingCommands(bot, deps=DEPS))
