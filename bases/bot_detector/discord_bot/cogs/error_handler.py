@@ -60,16 +60,11 @@ class errorHandler(commands.Cog):
             if webhook:
                 async with aiohttp.ClientSession() as session:
                     webhook = Webhook.from_url(webhook, session=session)
-                    error_traceback = traceback.format_exception(
-                        type(error), error, error.__traceback__
-                    )
                     error_message = (
                         f"`{ctx.author}` running `{ctx.command}` caused `{error.__class__.__name__}`\n"
                         f"Message Link: {ctx.message.jump_url}\n"
-                        f"```{''.join(error_traceback)}```"
+                        f"```{''.join(error)}```"
                     )
                     error_message = "".join(error_message)
 
-                    for secret in getattr(self.deps.settings, "SECRETS", []):
-                        error_message = error_message.replace(secret, "***")
                     await webhook.send(error_message, username="bd-error")
