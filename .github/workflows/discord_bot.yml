@@ -1,0 +1,70 @@
+name: discord_bot
+
+on:
+  push:
+    paths:
+      - bases/bot_detector/discord_bot/**
+      - components/bot_detector/database/**
+      - components/bot_detector/public_api/**
+      - components/bot_detector/osrs_items/**
+      - components/bot_detector/logfmt/**
+      - projects/discord_bot/**
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deploy environment"
+        required: true
+        default: "test"
+        type: choice
+        options:
+          - test
+          - deploy to prd
+env:
+  QUAY_REGISTERY: quay.io/bot_detector/bd-discord-bot
+  DOCKERFILE: ./projects/discord_bot/Dockerfile
+  DEPLOYMENT_FILE: bd-discord-prd/deployment.yaml
+  PROJECT_DIR: projects/discord_bot
+
+jobs:
+  env_vars:
+    runs-on: [self-hosted, "hetzner"]
+    outputs:
+      QUAY_REGISTERY: ${{ env.QUAY_REGISTERY }}
+      DOCKERFILE: ${{ env.DOCKERFILE }}
+      DEPLOYMENT_FILE: ${{ env.DEPLOYMENT_FILE }}
+      PROJECT_DIR: ${{ env.PROJECT_DIR }}
+    steps:
+      - run: | 
+          echo "Exposing env vars to other jobs"
+          echo "QUAY_REGISTERY=${{ env.QUAY_REGISTERY }}"
+          echo "DOCKERFILE=${{ env.DOCKERFILE }}"
+          echo "DEPLOYMENT_FILE=${{ env.DEPLOYMENT_FILE }}"
+          echo "PROJECT_DIR=${{ env.PROJECT_DIR }}"
+
+  common:
+    uses: ./.github/workflows/_common.yml
+    needs: [env_vars]
+    with:
+      project_dir: ${{ needs.env_vars.outputs.PROJECT_DIR }}
+
+  build:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'deploy to prd' }}
+    uses: ./.github/workflows/_build.yml
+    needs: [common, env_vars]
+    with:
+      registry: ${{ needs.env_vars.outputs.QUAY_REGISTERY }}
+      environment: ${{ (github.event.inputs.environment == 'deploy to prd' && 'prd') }}
+      BUILD_ARGS: "--target=prod"
+      DOCKERFILE: ${{ needs.env_vars.outputs.DOCKERFILE }}
+    secrets:
+      QUAY_REGISTERY_PASSWORD: ${{ secrets.QUAY_REGISTERY_PASSWORD }}
+
+  deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'deploy to prd' }}
+    uses: ./.github/workflows/_deploy.yml
+    needs: [build, env_vars]
+    with:
+      registry: ${{ needs.env_vars.outputs.QUAY_REGISTERY }}
+      value_file: ${{ needs.env_vars.outputs.DEPLOYMENT_FILE }}
+    secrets:
+      HETZNER_ACTIONS_RUNNER_TOKEN: ${{ secrets.HETZNER_ACTIONS_RUNNER_TOKEN }}
