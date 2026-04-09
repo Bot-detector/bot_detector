@@ -79,7 +79,9 @@ async def insert_predictions(player_ids: list[int], count: int) -> None:
     for prediction in create_predictions(player_ids=player_ids, count=pred_count):
         data = prediction.model_dump(mode="json")
         data["predictions"] = json.dumps(data.get("predictions"))
-        print(f"  -> Prediction for player {prediction.player_id}: {prediction.prediction}")
+        print(
+            f"  -> Prediction for player {prediction.player_id}: {prediction.prediction}"
+        )
         async with Session.begin() as session:
             await session.execute(sql, data)
 
@@ -115,7 +117,9 @@ async def insert_reports(player_ids: list[int], count: int) -> None:
 
     for sighting in create_report_sightings(player_ids=player_ids, count=count):
         async with Session.begin() as session:
-            result = await session.execute(sighting_sql, sighting.model_dump(mode="json"))
+            result = await session.execute(
+                sighting_sql, sighting.model_dump(mode="json")
+            )
             sighting_ids.append(result.lastrowid)
 
     for gear in create_report_gear(count=count):
@@ -125,7 +129,9 @@ async def insert_reports(player_ids: list[int], count: int) -> None:
 
     for location in create_report_locations(count=count):
         async with Session.begin() as session:
-            result = await session.execute(location_sql, location.model_dump(mode="json"))
+            result = await session.execute(
+                location_sql, location.model_dump(mode="json")
+            )
             location_ids.append(result.lastrowid)
 
     for report in create_reports(

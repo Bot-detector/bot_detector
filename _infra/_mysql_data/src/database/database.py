@@ -45,7 +45,9 @@ async def wait_for_db() -> None:
             logger.info("Database connection established")
             return
         except Exception as e:
-            logger.warning(f"DB connection attempt {attempt}/{SETTINGS.DB_RETRY_ATTEMPTS} failed: {e}")
+            logger.warning(
+                f"DB connection attempt {attempt}/{SETTINGS.DB_RETRY_ATTEMPTS} failed: {e}"
+            )
             if attempt < SETTINGS.DB_RETRY_ATTEMPTS:
                 await asyncio.sleep(SETTINGS.DB_RETRY_DELAY)
             else:
