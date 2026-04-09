@@ -174,15 +174,17 @@ class playerStatsCommands(Cog):
         logger.debug(f"{ctx.author.name=}, {ctx.author.id=}, looking up: {player_name}")
         await ctx.typing()
 
-        player = await self.deps.public_api.get_player(player_name=player_name)  # type: ignore
+        assert self.deps.public_api is not None
+        player = await self.deps.public_api.get_player(player_name=player_name)
 
         if not player:
             await ctx.reply("Something went terribly wrong. :(")
             return
 
+        assert self.deps.public_api is not None
         player_hiscore = await self.deps.public_api.get_hiscore_latest(
             player_id=player.get("id")
-        )  # type: ignore
+        )
 
         if not player_hiscore:
             await ctx.reply("Could not find the user in our database")
@@ -245,9 +247,10 @@ class playerStatsCommands(Cog):
         logger.debug(f"{ctx.author.name=}, {ctx.author.id=}, Requesting kc")
         await ctx.typing()
 
+        assert self.deps.public_api is not None
         linked_accounts = await self.deps.public_api.get_discord_links(
             discord_id=str(ctx.author.id)
-        )  # type: ignore
+        )
 
         if not linked_accounts:
             embed = discord.Embed(
@@ -373,9 +376,10 @@ class playerStatsCommands(Cog):
             await ctx.reply("This command must be used in a guild.")
             return
 
+        assert self.deps.public_api is not None
         linked_accounts = await self.deps.public_api.get_discord_links(
             discord_id=str(ctx.author.id)
-        )  # type: ignore
+        )
 
         if not linked_accounts:
             embed = discord.Embed(
@@ -394,7 +398,8 @@ class playerStatsCommands(Cog):
             for acc in linked_accounts
             if acc.get("Verified_status") == 1
         ]
-        data = await self.deps.public_api.get_report_score(  # type: ignore
+        assert self.deps.public_api is not None
+        data = await self.deps.public_api.get_report_score(
             player_names=[n["name"] for n in linked_accounts]
         )
         confirmed_bans = sum(d["count"] for d in data if d.get("confirmed_ban"))
@@ -448,9 +453,10 @@ class playerStatsCommands(Cog):
         )
         await ctx.typing()
 
+        assert self.deps.public_api is not None
         prediction = await self.deps.public_api.get_prediction(
             player_name=player_name, breakdown=True
-        )  # type: ignore
+        )
 
         if not prediction:
             await ctx.reply(f"I couldn't get a prediction for **{player_name}**.")
@@ -481,7 +487,8 @@ class playerStatsCommands(Cog):
         logger.debug(
             f"{ctx.author.name=}, {ctx.author.id=}, Requesting pwned: {player_name}"
         )
-        player = await self.deps.public_api.get_player(player_name=player_name)  # type: ignore
+        assert self.deps.public_api is not None
+        player = await self.deps.public_api.get_player(player_name=player_name)
 
         if not player:
             await ctx.reply(f"I couldn't get data for {player_name} :(")
@@ -498,9 +505,10 @@ class playerStatsCommands(Cog):
         logger.debug(
             f"{ctx.author.name=}, {ctx.author.id=}, Requesting gear: {player_name}"
         )
+        assert self.deps.public_api is not None
         sighting = await self.deps.public_api.get_latest_sighting(
             player_name=player_name
-        )  # type: ignore
+        )
 
         if not sighting:
             await ctx.reply(f"I was unable to grab {player_name}'s latest outfit.")
@@ -544,7 +552,8 @@ class playerStatsCommands(Cog):
             f"{ctx.author.name=}, {ctx.author.id=}, Requesting xpgain: {player_name}"
         )
 
-        gains = await self.deps.public_api.get_xp_gains(player_name=player_name)  # type: ignore
+        assert self.deps.public_api is not None
+        gains = await self.deps.public_api.get_xp_gains(player_name=player_name)
 
         if not gains:
             await ctx.reply(f"I couldn't locate {player_name}'s hiscores gains. Sorry!")

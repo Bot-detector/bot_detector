@@ -3,9 +3,8 @@ from datetime import datetime
 from typing import Any
 
 import aiohttp
-from pydantic import BaseModel
-
 from bot_detector.osrs_items import OsrsItemsClient
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 

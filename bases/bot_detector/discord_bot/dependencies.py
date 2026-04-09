@@ -24,7 +24,10 @@ class BotDependencies:
     def init_public_api(self):
         assert self.session is not None
         if self.public_api is None:
-            self.public_api = PublicApiClient(session=self.session)
+            self.public_api = PublicApiClient(
+                session=self.session,
+                token=Settings().API_TOKEN,
+            )
 
     def init_osrs_items(self, user_agent: str):
         assert self.session is not None

@@ -14,7 +14,7 @@ def run():
 async def run_async():
     settings = Settings()
 
-    await bot.bot.start(settings.DISCORD_TOKEN)
+    await bot.bot.start(token=settings.DISCORD_TOKEN)
 
 
 if __name__ == "__main__":
