@@ -17,8 +17,8 @@ from bot_detector.event_queue.lag_probe import LagProbeProtocol
 from bot_detector.event_queue.structs import ToScrapeStruct
 from bot_detector.structs import MetaData, PlayerStruct
 from bot_detector.wide_event import WideEventLogger
-from pydantic_settings import BaseSettings
 
+from .config import Settings
 from .states import (
     ScrapeEvent,
     ScraperCtx,
@@ -30,11 +30,6 @@ from .states import (
 
 logger = logging.getLogger(__name__)
 wide_event = WideEventLogger()
-
-
-class Settings(BaseSettings):
-    LIMIT: int = 10_000
-    MAX_LAG: int = 100_000
 
 
 async def produce_players(

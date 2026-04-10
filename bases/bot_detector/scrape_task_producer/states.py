@@ -3,6 +3,7 @@ from dataclasses import asdict
 from bot_detector.scrape_task_producer.sm import StateMachine
 from bot_detector.wide_event import WideEventLogger
 
+from .config import Settings
 from .structs import ScrapeEvent, ScraperCtx, ScrapeState
 
 wide_event = WideEventLogger()
@@ -84,9 +85,9 @@ def determine_event(
         return ScrapeEvent.FETCH_MORE
 
     day_limits = {
-        ScrapeState.NORMAL: 1,
-        ScrapeState.POSSIBLE_BAN: 7,
-        ScrapeState.CONFIRMED_BAN: 14,
+        ScrapeState.NORMAL: Settings().NORMAL_DAY_LIMIT,
+        ScrapeState.POSSIBLE_BAN: Settings().POSSIBLE_BAN_DAY_LIMIT,
+        ScrapeState.CONFIRMED_BAN: Settings().CONFIRMED_BAN_DAY_LIMIT,
     }
 
     threshold = day_limits.get(state)
