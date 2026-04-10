@@ -19,7 +19,14 @@ from bot_detector.structs import MetaData, PlayerStruct
 from bot_detector.wide_event import WideEventLogger
 from pydantic_settings import BaseSettings
 
-from .states import ScrapeEvent, ScraperCtx, ScrapeState, _force_log, scraper_sm
+from .states import (
+    ScrapeEvent,
+    ScraperCtx,
+    ScrapeState,
+    _force_log,
+    determine_event,
+    scraper_sm,
+)
 
 logger = logging.getLogger(__name__)
 wide_event = WideEventLogger()
@@ -48,25 +55,6 @@ async def produce_players(
             raise err
 
 
-def determine_event(
-    ctx: ScraperCtx, state: ScrapeState, player_count: int
-) -> ScrapeEvent:
-    if player_count >= ctx.limit:
-        return ScrapeEvent.FETCH_MORE
-
-    day_limits = {
-        ScrapeState.NORMAL: 1,
-        ScrapeState.POSSIBLE_BAN: 7,
-        ScrapeState.CONFIRMED_BAN: 14,
-    }
-
-    threshold = day_limits.get(state)
-    if threshold is not None and ctx.days > threshold:
-        return ScrapeEvent.REDUCE_DAYS
-
-    return ScrapeEvent.NEXT_STEP
-
-
 async def process_players(
     async_session,
     player_repo: PlayerRepo,
@@ -91,10 +79,11 @@ async def process_players(
 
             if state == ScrapeState.DONE:
                 now = datetime.now()
-                sleep_time = max(
-                    int((datetime.combine(now.date(), time.max) - now).total_seconds()),
-                    1,
-                )
+                end_of_today = datetime.combine(now.date(), time.max)
+
+                time_remaining = end_of_today - now
+                # at least sleep for 1 second
+                sleep_time = max(int(time_remaining.total_seconds()), 1)
                 wide_event.add({"done_for_day": {"sleep_seconds": sleep_time}})
                 _force_log()
                 await asyncio.sleep(sleep_time)

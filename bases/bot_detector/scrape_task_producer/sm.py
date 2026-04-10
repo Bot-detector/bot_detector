@@ -2,9 +2,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Callable, Generic, Iterable, TypeVar
 
-S = TypeVar("S", bound=Enum)
-E = TypeVar("E", bound=Enum)
-C = TypeVar("C")
+S = TypeVar("S", bound=Enum)  # state
+E = TypeVar("E", bound=Enum)  # event
+C = TypeVar("C")  # context
 
 Action = Callable[[C], None]
 
@@ -28,12 +28,13 @@ class StateMachine(Generic[S, E, C]):
         except KeyError as e:
             raise InvalidTransition(f"Cannot {event.name} when {state.name}") from e
 
+    # see: .states.py for the transition definitions
     def handle(self, ctx: C, state: S, event: E) -> S:
         next_state, action = self.next_transition(state, event)
         action(ctx)
         return next_state
 
-    def transition(self, from_state: S | Iterable[S], event: E, to_state: S):
+    def transition(self, from_state: S | Iterable[S], event: E, to_state: S | None):
         if not isinstance(from_state, Iterable):
             states = (from_state,)
         else:
@@ -41,7 +42,8 @@ class StateMachine(Generic[S, E, C]):
 
         def decorator(func: Action) -> Action:
             for s in states:
-                self.add_transition(s, event, to_state, func)
+                _to = s if to_state is None else to_state
+                self.add_transition(s, event, _to, func)
             return func
 
         return decorator

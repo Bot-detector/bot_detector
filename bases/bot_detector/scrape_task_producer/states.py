@@ -10,24 +10,22 @@ wide_event = WideEventLogger()
 
 scraper_sm = StateMachine[ScrapeState, ScrapeEvent, ScraperCtx]()
 ALL = (ScrapeState.NORMAL, ScrapeState.POSSIBLE_BAN, ScrapeState.CONFIRMED_BAN)
+ALL_DONE = (
+    ScrapeState.NORMAL,
+    ScrapeState.POSSIBLE_BAN,
+    ScrapeState.CONFIRMED_BAN,
+    ScrapeState.DONE,
+)
 
 
 # fmt: off
-@scraper_sm.transition(from_state=ALL, event=ScrapeEvent.FETCH_MORE, to_state=ScrapeState.NORMAL)
-@scraper_sm.transition(from_state=ALL, event=ScrapeEvent.FETCH_MORE, to_state=ScrapeState.POSSIBLE_BAN)
-@scraper_sm.transition(from_state=ALL, event=ScrapeEvent.FETCH_MORE,to_state=ScrapeState.CONFIRMED_BAN)
+@scraper_sm.transition(from_state=ALL, event=ScrapeEvent.FETCH_MORE, to_state=None)
 # fmt: on
 def fetch_more(ctx: ScraperCtx) -> None:
-    # Hack to keep same state: manually set to_state per from_state.
-    # Decorator maps explicitly above, but engine needs exact to_state.
-    # Alternative: return state from action.
-    # Here, engine updates state. We just update context.
     ctx.player_id = ctx.last_fetched_id
 
 # fmt: off
-@scraper_sm.transition(from_state=ScrapeState.NORMAL, event=ScrapeEvent.REDUCE_DAYS, to_state=ScrapeState.NORMAL)
-@scraper_sm.transition(from_state=ScrapeState.POSSIBLE_BAN, event=ScrapeEvent.REDUCE_DAYS, to_state=ScrapeState.POSSIBLE_BAN)
-@scraper_sm.transition(from_state=ScrapeState.CONFIRMED_BAN, event=ScrapeEvent.REDUCE_DAYS, to_state=ScrapeState.CONFIRMED_BAN)
+@scraper_sm.transition(from_state=ALL, event=ScrapeEvent.REDUCE_DAYS, to_state=None)
 # fmt: on
 def reduce_days(ctx: ScraperCtx) -> None:
     wide_event.add({"reduce_days": {"fetch_params": asdict(ctx)}})
@@ -69,7 +67,7 @@ def to_done(ctx: ScraperCtx) -> None:
     ctx.update_date(days=20, infinity=True)
 
 # fmt: off
-@scraper_sm.transition((ScrapeState.DONE, ScrapeState.NORMAL), ScrapeEvent.NEW_DAY, ScrapeState.NORMAL)
+@scraper_sm.transition(ALL_DONE, ScrapeEvent.NEW_DAY, ScrapeState.NORMAL)
 # fmt: on
 def reset_new_day(ctx: ScraperCtx) -> None:
     wide_event.add({"new_day_reset": True})
@@ -78,3 +76,21 @@ def reset_new_day(ctx: ScraperCtx) -> None:
     ctx.confirmed_ban = False
     ctx.player_id = 0
     ctx.update_date(days=20, infinity=True)
+
+def determine_event(
+    ctx: ScraperCtx, state: ScrapeState, player_count: int
+) -> ScrapeEvent:
+    if player_count >= ctx.limit:
+        return ScrapeEvent.FETCH_MORE
+
+    day_limits = {
+        ScrapeState.NORMAL: 1,
+        ScrapeState.POSSIBLE_BAN: 7,
+        ScrapeState.CONFIRMED_BAN: 14,
+    }
+
+    threshold = day_limits.get(state)
+    if threshold is not None and ctx.days > threshold:
+        return ScrapeEvent.REDUCE_DAYS
+
+    return ScrapeEvent.NEXT_STEP
