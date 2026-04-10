@@ -1,4 +1,6 @@
+import pytest
 from bot_detector.scrape_task_producer.core import determine_event
+from bot_detector.scrape_task_producer.sm import InvalidTransition
 from bot_detector.scrape_task_producer.states import (
     ScrapeEvent,
     ScraperCtx,
@@ -128,3 +130,17 @@ def test_determine_event_next_step_possible_ban():
     # Days <= 7 threshold for POSSIBLE_BAN
     event = determine_event(ctx, ScrapeState.POSSIBLE_BAN, player_count=0)
     assert event == ScrapeEvent.NEXT_STEP
+
+
+@pytest.mark.parametrize(
+    "event",
+    [
+        ScrapeEvent.FETCH_MORE,
+        ScrapeEvent.REDUCE_DAYS,
+        ScrapeEvent.NEXT_STEP,
+    ],
+)
+def test_invalid_transition_from_done(event):
+    ctx = make_ctx(state=ScrapeState.DONE)
+    with pytest.raises(InvalidTransition):
+        scraper_sm.handle(ctx, ScrapeState.DONE, event)
