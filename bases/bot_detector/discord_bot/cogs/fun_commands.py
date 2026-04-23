@@ -16,6 +16,7 @@ class funCommands(Cog):
         self.deps = deps
 
     async def _web_request(self, url: str) -> dict | None:
+        assert self.deps.session is not None, "Session is not initialized"
         async with self.deps.session.get(url) as response:
             if response.status != 200:
                 logger.error({"status": response.status, "url": url})
@@ -25,6 +26,7 @@ class funCommands(Cog):
     @commands.hybrid_command(name="poke")
     async def poke(self, ctx: Context):
         logger.debug(f"{ctx.author.name=}, {ctx.author.id=}, requested a poke")
+        await ctx.defer()
         url = "https://api.prd.osrsbotdetector.com"
 
         start_time = time.time()

@@ -41,9 +41,9 @@ class mapCommands(Cog):
         }
         logger.debug(debug)
 
-        data_region = await self.deps.public_api.get_heatmap_region(
+        data_region = await self.deps.legacy_api.get_heatmap_region(
             region_name=region_name
-        )  # type: ignore
+        )
         if not data_region:
             embed = discord.Embed(
                 color=discord.Colour.dark_red(),
@@ -118,10 +118,10 @@ class mapCommands(Cog):
                     )
                     await ctx.reply("https://i.redd.it/lel3o4e2hhp11.jpg")
         else:
-            assert self.deps.public_api is not None
-            data_region = await self.deps.public_api.get_heatmap_region(
+            assert self.deps.legacy_api is not None
+            data_region = await self.deps.legacy_api.get_heatmap_region(
                 region_name=region
-            )  # type: ignore
+            )
             if not data_region:
                 embed = discord.Embed(
                     description=cleandoc(
@@ -186,10 +186,10 @@ class mapCommands(Cog):
         if region.isdigit():
             msg = f"https://raw.githubusercontent.com/Ferrariic/OSRS-Visible-Region-Images/main/Region_Maps/{region}.png"
         else:
-            assert self.deps.public_api is not None
-            data_region = await self.deps.public_api.get_heatmap_region(
+            assert self.deps.legacy_api is not None
+            data_region = await self.deps.legacy_api.get_heatmap_region(
                 region_name=region
-            )  # type: ignore
+            )
             if not data_region:
                 embed = discord.Embed(
                     description=cleandoc(
@@ -235,7 +235,7 @@ class mapCommands(Cog):
 
         region_id_int = int(region_id)
 
-        data = await self.deps.public_api.get_heatmap_data(region_id=region_id_int)  # type: ignore
+        data = await self.deps.legacy_api.get_heatmap_data(region_id=region_id_int)  # type: ignore
         if not data:
             return False
 

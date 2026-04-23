@@ -140,13 +140,13 @@ class rsnLinkingCommands(commands.Cog):
             await ctx.reply(f"{name} isn't a valid Runescape user name.")
             return
 
-        player = await self.deps.public_api.get_player(player_name=name)  # type: ignore
+        player = await self.deps.legacy_api.get_player(player_name=name)
         if not player:
             embed = await self.install_plugin_msg()
             await ctx.reply(embed=embed)
             return
 
-        linked_users = await self.deps.public_api.get_discord_player(player_name=name)  # type: ignore
+        linked_users = await self.deps.legacy_api.get_discord_player(player_name=name)
         if not linked_users:
             linked_users = []
 
@@ -169,7 +169,7 @@ class rsnLinkingCommands(commands.Cog):
 
         code = string_processing.get_random_id()
 
-        await self.deps.public_api.post_discord_code(  # type: ignore
+        await self.deps.legacy_api.post_discord_code(
             discord_id=str(ctx.author.id),
             player_name=player.get("name"),
             code=code,
@@ -184,13 +184,13 @@ class rsnLinkingCommands(commands.Cog):
             f"{ctx.author.name=}, {ctx.author.id=}, Requesting verify, {name=}"
         )
 
-        player = await self.deps.public_api.get_player(player_name=name)  # type: ignore
+        player = await self.deps.legacy_api.get_player(player_name=name)
         if not player:
             embed = await self.install_plugin_msg()
             await ctx.reply(embed=embed)
             return
 
-        linked_users = await self.deps.public_api.get_discord_player(player_name=name)  # type: ignore
+        linked_users = await self.deps.legacy_api.get_discord_player(player_name=name)
         if not linked_users:
             linked_users = []
 
@@ -233,8 +233,8 @@ class rsnLinkingCommands(commands.Cog):
     async def linked(self, ctx: Context):
         logger.debug(f"{ctx.author.name=}, {ctx.author.id=}, Requesting linked")
 
-        assert self.deps.public_api is not None
-        links = await self.deps.public_api.get_discord_links(
+        assert self.deps.legacy_api is not None
+        links = await self.deps.legacy_api.get_discord_links(
             discord_id=str(ctx.author.id)
         )
 

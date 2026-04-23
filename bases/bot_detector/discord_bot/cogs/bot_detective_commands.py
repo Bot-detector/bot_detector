@@ -71,7 +71,7 @@ class botDetectiveCommands(commands.Cog):
         logger.debug(f"posting, {len(user_names)} to api")
 
         asyncio.gather(
-            *[self.bot.public_api.create_player(name) for name in user_names]  # type: ignore
+            *[self.deps.legacy_api.create_player(name) for name in user_names]
         )
 
         logger.debug(f"[DONE] posting, {len(user_names)} to api")
@@ -102,9 +102,9 @@ class botDetectiveCommands(commands.Cog):
 
         players = []
         for name in user_names:
-            player: dict = await self.deps.public_api.get_player(
+            player: dict = await self.deps.legacy_api.get_player(
                 player_name=name.replace("_", " ")
-            )  # type: ignore
+            )  # type: ignore[assignment]
             players.append(player)
 
         logger.debug(f"got players: {len(players)}")
