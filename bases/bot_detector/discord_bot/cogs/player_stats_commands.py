@@ -182,7 +182,7 @@ class playerStatsCommands(Cog):
 
         player_hiscore = await self.deps.legacy_api.get_hiscore_latest(
             player_id=player.get("id")
-        )  # type: ignore
+        )
 
         if not player_hiscore:
             await ctx.reply("Could not find the user in our database")
@@ -247,7 +247,7 @@ class playerStatsCommands(Cog):
 
         linked_accounts = await self.deps.legacy_api.get_discord_links(
             discord_id=str(ctx.author.id)
-        )  # type: ignore
+        )
 
         if not linked_accounts:
             embed = discord.Embed(
@@ -375,7 +375,7 @@ class playerStatsCommands(Cog):
 
         linked_accounts = await self.deps.legacy_api.get_discord_links(
             discord_id=str(ctx.author.id)
-        )  # type: ignore
+        )
 
         if not linked_accounts:
             embed = discord.Embed(
@@ -501,7 +501,7 @@ class playerStatsCommands(Cog):
         )
         sighting = await self.deps.legacy_api.get_latest_sighting(
             player_name=player_name
-        )  # type: ignore
+        )
 
         if not sighting:
             await ctx.reply(f"I was unable to grab {player_name}'s latest outfit.")
@@ -546,6 +546,7 @@ class playerStatsCommands(Cog):
         )
 
         gains = await self.deps.legacy_api.get_xp_gains(player_name=player_name)
+
 
         if not gains:
             await ctx.reply(f"I couldn't locate {player_name}'s hiscores gains. Sorry!")
