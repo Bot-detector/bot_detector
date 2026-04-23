@@ -1,5 +1,6 @@
-from bot_detector.public_api import core
+from bot_detector.public_api import LegacyApiClient, PublicApiClient
 
 
 def test_sample():
-    assert core is not None
+    assert PublicApiClient is not None
+    assert LegacyApiClient is not None
