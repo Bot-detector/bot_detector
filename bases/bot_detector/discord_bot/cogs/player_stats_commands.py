@@ -275,27 +275,27 @@ class playerStatsCommands(Cog):
             await ctx.reply("No data found.")
             return
 
-        reports_submitted = sum(d["count"] for d in data if not d.manual_detect)
+        reports_submitted = sum(d.count for d in data if not d.manual_detect)
         possible_bans = sum(
-            d["count"]
+            d.count
             for d in data
             if not d.manual_detect and not d.confirmed_ban and d.possible_ban
         )
         confirmed_bans = sum(
-            d["count"]
+            d.count
             for d in data
             if not d.manual_detect and d.confirmed_ban and d.possible_ban
         )
 
         manual_confirmed_ban = sum(
-            d["count"] for d in data if d.manual_detect and d.confirmed_ban
+            d.count for d in data if d.manual_detect and d.confirmed_ban
         )
         manual_confirmed_player = sum(
-            d["count"]
+            d.count
             for d in data
             if d.manual_detect and not d.confirmed_ban and d.confirmed_player
         )
-        manual_flags = sum(d["count"] for d in data if d.manual_detect)
+        manual_flags = sum(d.count for d in data if d.manual_detect)
         confirmed_manual_flags = manual_confirmed_ban + manual_confirmed_player
         manual_flag_accuracy = (
             (manual_confirmed_ban / confirmed_manual_flags) * 100
@@ -389,7 +389,7 @@ class playerStatsCommands(Cog):
         data = await self.deps.public_api.get_report_score(
             names=[n["name"] for n in linked_accounts]
         )
-        confirmed_bans = sum(d["count"] for d in data if d.confirmed_ban)
+        confirmed_bans = sum(d.count for d in data if d.confirmed_ban)
         logger.debug(confirmed_bans)
 
         role_dict = [
