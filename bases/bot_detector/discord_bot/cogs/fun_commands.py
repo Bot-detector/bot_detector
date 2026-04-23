@@ -25,6 +25,7 @@ class funCommands(Cog):
     @commands.hybrid_command(name="poke")
     async def poke(self, ctx: Context):
         logger.debug(f"{ctx.author.name=}, {ctx.author.id=}, requested a poke")
+        await ctx.defer()
         url = "https://api.prd.osrsbotdetector.com"
 
         start_time = time.time()
