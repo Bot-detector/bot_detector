@@ -15,7 +15,7 @@ from bot_detector.rate_limiter import RateLimiter
 
 
 class LegacyApiClient:
-    DEFAULT_BASE_URL = "https://www.api-v1.osrsbotdetector.com/"
+    DEFAULT_BASE_URL = "https://api-v1.prd.osrsbotdetector.com/"
 
     def __init__(
         self,

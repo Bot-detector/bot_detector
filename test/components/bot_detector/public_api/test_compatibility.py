@@ -139,7 +139,7 @@ def test_public_api_no_legacy_methods():
 
 
 def test_legacy_base_url():
-    assert LegacyApiClient.DEFAULT_BASE_URL == "https://www.api-v1.osrsbotdetector.com/"
+    assert LegacyApiClient.DEFAULT_BASE_URL == "https://api-v1.prd.osrsbotdetector.com/"
 
 
 def test_public_base_url():
