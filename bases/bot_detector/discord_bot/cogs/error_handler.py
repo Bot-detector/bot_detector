@@ -54,7 +54,7 @@ class errorHandler(commands.Cog):
             )
 
             logger.error({"error": error})
-            await ctx.send("An error occured.")
+            await self._safe_respond(ctx, "An error occured.")
 
             webhook = Settings().WEBHOOK
             if webhook:
@@ -68,3 +68,12 @@ class errorHandler(commands.Cog):
                     error_message = "".join(error_message)
 
                     await webhook.send(error_message, username="bd-error")
+
+    async def _safe_respond(self, ctx: Context, message: str):
+        try:
+            if ctx.interaction and ctx.interaction.response.is_done():
+                await ctx.followup.send(message, ephemeral=True)
+            else:
+                await ctx.send(message)
+        except Exception:
+            logger.warning("Failed to respond to expired interaction")
