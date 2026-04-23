@@ -16,6 +16,7 @@ class funCommands(Cog):
         self.deps = deps
 
     async def _web_request(self, url: str) -> dict | None:
+        assert self.deps.session is not None, "Session is not initialized"
         async with self.deps.session.get(url) as response:
             if response.status != 200:
                 logger.error({"status": response.status, "url": url})
