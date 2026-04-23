@@ -25,10 +25,7 @@ class BotDependencies:
     def init_public_api(self):
         assert self.session is not None
         if self.public_api is None:
-            self.public_api = PublicApiClient(
-                session=self.session,
-                token=Settings().API_TOKEN,
-            )
+            self.public_api = PublicApiClient(session=self.session)
 
     def init_legacy_api(self, token: str, base_url: str | None = None):
         assert self.session is not None
