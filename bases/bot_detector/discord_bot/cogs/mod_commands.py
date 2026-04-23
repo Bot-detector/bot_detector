@@ -51,8 +51,8 @@ class modCommands(Cog):
         }
         logger.debug(debug)
 
-        assert self.deps.public_api is not None
-        links = await self.deps.public_api.get_discord_links(
+        assert self.deps.legacy_api is not None
+        links = await self.deps.legacy_api.get_discord_links(
             discord_id=str(ctx.author.id)
         )
 

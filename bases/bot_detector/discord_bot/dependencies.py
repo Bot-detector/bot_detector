@@ -6,7 +6,7 @@ from bot_detector.database.core import Settings as DatabaseSettings
 from bot_detector.database.core import get_session_factory
 from bot_detector.discord_bot.config import Settings
 from bot_detector.osrs_items import OsrsItemsClient
-from bot_detector.public_api import PublicApiClient
+from bot_detector.public_api import LegacyApiClient, PublicApiClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 
@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 class BotDependencies:
     session: Optional[aiohttp.ClientSession] = None
     public_api: Optional[PublicApiClient] = None
+    legacy_api: Optional[LegacyApiClient] = None
     osrs_items: Optional[OsrsItemsClient] = None
     session_factory: Optional[async_sessionmaker[AsyncSession]] = None
 
@@ -25,6 +26,15 @@ class BotDependencies:
         assert self.session is not None
         if self.public_api is None:
             self.public_api = PublicApiClient(session=self.session)
+
+    def init_legacy_api(self, token: str, base_url: str | None = None):
+        assert self.session is not None
+        if self.legacy_api is None:
+            self.legacy_api = LegacyApiClient(
+                session=self.session,
+                token=token,
+                base_url=base_url,
+            )
 
     def init_osrs_items(self, user_agent: str):
         assert self.session is not None
@@ -43,6 +53,11 @@ class BotDependencies:
     def init(self, settings: Settings, session: Optional[aiohttp.ClientSession] = None):
         self.init_session(session)
         self.init_public_api()
+        if settings.API_TOKEN:
+            self.init_legacy_api(
+                token=settings.API_TOKEN,
+                base_url=settings.API_URL,
+            )
         self.init_osrs_items(user_agent=settings.OSRS_ITEMS_USER_AGENT)
         assert isinstance(settings.DATABASE_URL, str)
         self.init_session_factory(sql_uri=settings.DATABASE_URL)
@@ -54,6 +69,10 @@ class BotDependencies:
     def get_public_api(self) -> PublicApiClient:
         assert self.public_api is not None
         return self.public_api
+
+    def get_legacy_api(self) -> LegacyApiClient:
+        assert self.legacy_api is not None
+        return self.legacy_api
 
     def get_osrs_items(self) -> OsrsItemsClient:
         assert self.osrs_items is not None

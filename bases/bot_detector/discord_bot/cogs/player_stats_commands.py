@@ -174,13 +174,13 @@ class playerStatsCommands(Cog):
         logger.debug(f"{ctx.author.name=}, {ctx.author.id=}, looking up: {player_name}")
         await ctx.typing()
 
-        player = await self.deps.public_api.get_player(player_name=player_name)  # type: ignore
+        player = await self.deps.legacy_api.get_player(player_name=player_name)
 
         if not player:
             await ctx.reply("Something went terribly wrong. :(")
             return
 
-        player_hiscore = await self.deps.public_api.get_hiscore_latest(
+        player_hiscore = await self.deps.legacy_api.get_hiscore_latest(
             player_id=player.get("id")
         )  # type: ignore
 
@@ -245,7 +245,7 @@ class playerStatsCommands(Cog):
         logger.debug(f"{ctx.author.name=}, {ctx.author.id=}, Requesting kc")
         await ctx.typing()
 
-        linked_accounts = await self.deps.public_api.get_discord_links(
+        linked_accounts = await self.deps.legacy_api.get_discord_links(
             discord_id=str(ctx.author.id)
         )  # type: ignore
 
@@ -267,43 +267,43 @@ class playerStatsCommands(Cog):
             if acc.get("Verified_status") == 1
         ]
 
-        data = await self.deps.public_api.get_report_score(  # type: ignore
-            player_names=[n["name"] for n in linked_accounts]
+        data = await self.deps.public_api.get_report_score(
+            names=[n["name"] for n in linked_accounts]
         )
 
         if not data:
             await ctx.reply("No data found.")
             return
 
-        reports_submitted = sum(d["count"] for d in data if not d.get("manual_detect"))
+        reports_submitted = sum(d["count"] for d in data if not d.manual_detect)
         possible_bans = sum(
             d["count"]
             for d in data
-            if not d.get("manual_detect")
-            and not d.get("confirmed_ban")
-            and d.get("possible_ban")
+            if not d.manual_detect
+            and not d.confirmed_ban
+            and d.possible_ban
         )
         confirmed_bans = sum(
             d["count"]
             for d in data
-            if not d.get("manual_detect")
-            and d.get("confirmed_ban")
-            and d.get("possible_ban")
+            if not d.manual_detect
+            and d.confirmed_ban
+            and d.possible_ban
         )
 
         manual_confirmed_ban = sum(
             d["count"]
             for d in data
-            if d.get("manual_detect") and d.get("confirmed_ban")
+            if d.manual_detect and d.confirmed_ban
         )
         manual_confirmed_player = sum(
             d["count"]
             for d in data
-            if d.get("manual_detect")
-            and not d.get("confirmed_ban")
-            and d.get("confirmed_player")
+            if d.manual_detect
+            and not d.confirmed_ban
+            and d.confirmed_player
         )
-        manual_flags = sum(d["count"] for d in data if d.get("manual_detect"))
+        manual_flags = sum(d["count"] for d in data if d.manual_detect)
         confirmed_manual_flags = manual_confirmed_ban + manual_confirmed_player
         manual_flag_accuracy = (
             (manual_confirmed_ban / confirmed_manual_flags) * 100
@@ -373,7 +373,7 @@ class playerStatsCommands(Cog):
             await ctx.reply("This command must be used in a guild.")
             return
 
-        linked_accounts = await self.deps.public_api.get_discord_links(
+        linked_accounts = await self.deps.legacy_api.get_discord_links(
             discord_id=str(ctx.author.id)
         )  # type: ignore
 
@@ -394,10 +394,10 @@ class playerStatsCommands(Cog):
             for acc in linked_accounts
             if acc.get("Verified_status") == 1
         ]
-        data = await self.deps.public_api.get_report_score(  # type: ignore
-            player_names=[n["name"] for n in linked_accounts]
+        data = await self.deps.public_api.get_report_score(
+            names=[n["name"] for n in linked_accounts]
         )
-        confirmed_bans = sum(d["count"] for d in data if d.get("confirmed_ban"))
+        confirmed_bans = sum(d["count"] for d in data if d.confirmed_ban)
         logger.debug(confirmed_bans)
 
         role_dict = [
@@ -448,17 +448,18 @@ class playerStatsCommands(Cog):
         )
         await ctx.typing()
 
-        prediction = await self.deps.public_api.get_prediction(
-            player_name=player_name, breakdown=True
-        )  # type: ignore
+        predictions = await self.deps.public_api.get_prediction(
+            names=[player_name], breakdown=True
+        )
 
-        if not prediction:
+        if not predictions:
             await ctx.reply(f"I couldn't get a prediction for **{player_name}**.")
             return
 
+        prediction = predictions[0]
         name = prediction.player_name
         pred_label = prediction.prediction_label or "N/A"
-        confidence = prediction.prediction or 0
+        confidence = prediction.prediction_confidence or 0
 
         color = Color.green() if pred_label.lower() == "real_player" else Color.red()
 
@@ -481,7 +482,7 @@ class playerStatsCommands(Cog):
         logger.debug(
             f"{ctx.author.name=}, {ctx.author.id=}, Requesting pwned: {player_name}"
         )
-        player = await self.deps.public_api.get_player(player_name=player_name)  # type: ignore
+        player = await self.deps.legacy_api.get_player(player_name=player_name)
 
         if not player:
             await ctx.reply(f"I couldn't get data for {player_name} :(")
@@ -498,7 +499,7 @@ class playerStatsCommands(Cog):
         logger.debug(
             f"{ctx.author.name=}, {ctx.author.id=}, Requesting gear: {player_name}"
         )
-        sighting = await self.deps.public_api.get_latest_sighting(
+        sighting = await self.deps.legacy_api.get_latest_sighting(
             player_name=player_name
         )  # type: ignore
 
@@ -544,7 +545,7 @@ class playerStatsCommands(Cog):
             f"{ctx.author.name=}, {ctx.author.id=}, Requesting xpgain: {player_name}"
         )
 
-        gains = await self.deps.public_api.get_xp_gains(player_name=player_name)  # type: ignore
+        gains = await self.deps.legacy_api.get_xp_gains(player_name=player_name)
 
         if not gains:
             await ctx.reply(f"I couldn't locate {player_name}'s hiscores gains. Sorry!")
