@@ -52,9 +52,7 @@ class modCommands(Cog):
         logger.debug(debug)
 
         assert self.deps.legacy_api is not None
-        links = await self.deps.legacy_api.get_discord_links(
-            discord_id=str(ctx.author.id)
-        )
+        links = await self.deps.legacy_api.get_discord_links(discord_id=str(discord_id))
 
         if len(links) == 0:
             await ctx.send(
