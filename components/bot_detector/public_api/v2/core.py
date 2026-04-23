@@ -2,7 +2,6 @@ import logging
 
 import aiohttp
 import orjson
-
 from bot_detector.public_api._retry import RetryableError, retry
 from bot_detector.public_api.v2.structs import (
     Detection,
@@ -32,9 +31,7 @@ class PublicApiClient:
         self.limiter = limiter or RateLimiter()
 
     @retry(max_attempts=3)
-    async def get_report_score(
-        self, names: list[str]
-    ) -> list[ReportScoreResponse]:
+    async def get_report_score(self, names: list[str]) -> list[ReportScoreResponse]:
         await self.limiter.check()
         async with self.session.get(
             self.base_url + "/v2/player/report/score",
@@ -45,9 +42,7 @@ class PublicApiClient:
             return [ReportScoreResponse(**r) for r in data]
 
     @retry(max_attempts=3)
-    async def get_feedback_score(
-        self, names: list[str]
-    ) -> list[FeedbackScoreResponse]:
+    async def get_feedback_score(self, names: list[str]) -> list[FeedbackScoreResponse]:
         await self.limiter.check()
         async with self.session.get(
             self.base_url + "/v2/player/feedback/score",

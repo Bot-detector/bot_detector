@@ -1,8 +1,7 @@
 import inspect
-
-import pytest
 from unittest.mock import AsyncMock
 
+import pytest
 from bot_detector.public_api import LegacyApiClient, PublicApiClient
 
 
@@ -13,7 +12,9 @@ def _make_public_client() -> PublicApiClient:
 
 def _make_legacy_client() -> LegacyApiClient:
     session = AsyncMock()
-    return LegacyApiClient(session=session, token="test-token", base_url="http://localhost/")
+    return LegacyApiClient(
+        session=session, token="test-token", base_url="http://localhost/"
+    )
 
 
 PUBLIC_API_METHODS = {
@@ -68,7 +69,9 @@ def test_public_api_method_params(method_name: str, expected_params: set[str]):
     actual_params = {
         name
         for name, param in sig.parameters.items()
-        if name != "self" and param.kind not in (
+        if name != "self"
+        and param.kind
+        not in (
             inspect.Parameter.VAR_POSITIONAL,
             inspect.Parameter.VAR_KEYWORD,
         )
@@ -99,7 +102,9 @@ def test_legacy_api_method_params(method_name: str, expected_params: set[str]):
     actual_params = {
         name
         for name, param in sig.parameters.items()
-        if name != "self" and param.kind not in (
+        if name != "self"
+        and param.kind
+        not in (
             inspect.Parameter.VAR_POSITIONAL,
             inspect.Parameter.VAR_KEYWORD,
         )
@@ -113,14 +118,24 @@ def test_legacy_api_method_params(method_name: str, expected_params: set[str]):
 
 def test_public_api_no_legacy_methods():
     client = _make_public_client()
-    legacy_only = {"get_player", "get_discord_player", "post_discord_code",
-                   "get_discord_links", "get_hiscore_latest", "create_player",
-                   "get_heatmap_region", "get_heatmap_data", "get_latest_sighting",
-                   "get_xp_gains", "get_region", "get_linked_accounts"}
+    legacy_only = {
+        "get_player",
+        "get_discord_player",
+        "post_discord_code",
+        "get_discord_links",
+        "get_hiscore_latest",
+        "create_player",
+        "get_heatmap_region",
+        "get_heatmap_data",
+        "get_latest_sighting",
+        "get_xp_gains",
+        "get_region",
+        "get_linked_accounts",
+    }
     for method_name in legacy_only:
-        assert not hasattr(client, method_name) or not callable(getattr(client, method_name, None)), (
-            f"PublicApiClient should not have v1 method '{method_name}'"
-        )
+        assert not hasattr(client, method_name) or not callable(
+            getattr(client, method_name, None)
+        ), f"PublicApiClient should not have v1 method '{method_name}'"
 
 
 def test_legacy_base_url():
@@ -131,9 +146,17 @@ def test_public_base_url():
     assert PublicApiClient.DEFAULT_BASE_URL == "https://api.prd.osrsbotdetector.com"
 
 
-ALIAS_METHODS = {"get_discord_player", "post_discord_code", "get_discord_links", "get_heatmap_region"}
+ALIAS_METHODS = {
+    "get_discord_player",
+    "post_discord_code",
+    "get_discord_links",
+    "get_heatmap_region",
+}
 
-@pytest.mark.parametrize("method_name", [m for m in LEGACY_API_METHODS if m not in ALIAS_METHODS])
+
+@pytest.mark.parametrize(
+    "method_name", [m for m in LEGACY_API_METHODS if m not in ALIAS_METHODS]
+)
 def test_legacy_methods_use_base_url(method_name: str):
     method = getattr(LegacyApiClient, method_name)
     source = inspect.getsource(method)
@@ -144,10 +167,26 @@ def test_legacy_methods_use_base_url(method_name: str):
 
 def test_aliases_delegate():
     client = _make_legacy_client()
-    assert client.get_discord_player.__wrapped__ if hasattr(client.get_discord_player, '__wrapped__') else True
-    assert client.post_discord_code.__wrapped__ if hasattr(client.post_discord_code, '__wrapped__') else True
-    assert client.get_discord_links.__wrapped__ if hasattr(client.get_discord_links, '__wrapped__') else True
-    assert client.get_heatmap_region.__wrapped__ if hasattr(client.get_heatmap_region, '__wrapped__') else True
+    assert (
+        client.get_discord_player.__wrapped__
+        if hasattr(client.get_discord_player, "__wrapped__")
+        else True
+    )
+    assert (
+        client.post_discord_code.__wrapped__
+        if hasattr(client.post_discord_code, "__wrapped__")
+        else True
+    )
+    assert (
+        client.get_discord_links.__wrapped__
+        if hasattr(client.get_discord_links, "__wrapped__")
+        else True
+    )
+    assert (
+        client.get_heatmap_region.__wrapped__
+        if hasattr(client.get_heatmap_region, "__wrapped__")
+        else True
+    )
 
 
 def test_exports_from_init():

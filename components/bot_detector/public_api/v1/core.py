@@ -2,7 +2,6 @@ from typing import Any
 
 import aiohttp
 import orjson
-
 from bot_detector.public_api._retry import retry
 from bot_detector.public_api.v1.structs import (
     Bots,
@@ -119,8 +118,7 @@ class LegacyApiClient:
     async def get_linked_accounts(self, discord_id: int) -> Any:
         await self.limiter.check()
         async with self.session.get(
-            self.base_url
-            + f"discord/get_linked_accounts/{self.token}/{discord_id}",
+            self.base_url + f"discord/get_linked_accounts/{self.token}/{discord_id}",
         ) as res:
             res.raise_for_status()
             return orjson.loads(await res.read())

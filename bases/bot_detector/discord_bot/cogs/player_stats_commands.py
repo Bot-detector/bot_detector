@@ -279,29 +279,21 @@ class playerStatsCommands(Cog):
         possible_bans = sum(
             d["count"]
             for d in data
-            if not d.manual_detect
-            and not d.confirmed_ban
-            and d.possible_ban
+            if not d.manual_detect and not d.confirmed_ban and d.possible_ban
         )
         confirmed_bans = sum(
             d["count"]
             for d in data
-            if not d.manual_detect
-            and d.confirmed_ban
-            and d.possible_ban
+            if not d.manual_detect and d.confirmed_ban and d.possible_ban
         )
 
         manual_confirmed_ban = sum(
-            d["count"]
-            for d in data
-            if d.manual_detect and d.confirmed_ban
+            d["count"] for d in data if d.manual_detect and d.confirmed_ban
         )
         manual_confirmed_player = sum(
             d["count"]
             for d in data
-            if d.manual_detect
-            and not d.confirmed_ban
-            and d.confirmed_player
+            if d.manual_detect and not d.confirmed_ban and d.confirmed_player
         )
         manual_flags = sum(d["count"] for d in data if d.manual_detect)
         confirmed_manual_flags = manual_confirmed_ban + manual_confirmed_player
@@ -546,7 +538,6 @@ class playerStatsCommands(Cog):
         )
 
         gains = await self.deps.legacy_api.get_xp_gains(player_name=player_name)
-
 
         if not gains:
             await ctx.reply(f"I couldn't locate {player_name}'s hiscores gains. Sorry!")

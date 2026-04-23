@@ -1,8 +1,8 @@
-import pytest
-import aiohttp
-from aioresponses import aioresponses
 from unittest.mock import AsyncMock
 
+import aiohttp
+import pytest
+from aioresponses import aioresponses
 from bot_detector.public_api.v2.core import PublicApiClient
 from bot_detector.rate_limiter import RateLimiter
 
@@ -43,15 +43,19 @@ async def test_get_report_score_retries_on_connection_error(limiter):
             url,
             exception=aiohttp.ClientConnectionError("connection lost"),
         )
-        mocked.get(url, status=200, payload=[
-            {
-                "count": 1,
-                "possible_ban": False,
-                "confirmed_ban": False,
-                "confirmed_player": True,
-                "manual_detect": False,
-            }
-        ])
+        mocked.get(
+            url,
+            status=200,
+            payload=[
+                {
+                    "count": 1,
+                    "possible_ban": False,
+                    "confirmed_ban": False,
+                    "confirmed_player": True,
+                    "manual_detect": False,
+                }
+            ],
+        )
 
         async with aiohttp.ClientSession() as session:
             client = PublicApiClient(session=session, limiter=limiter)
