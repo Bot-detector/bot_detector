@@ -59,7 +59,7 @@ class PublicApiClient:
         await self.limiter.check()
         async with self.session.get(
             self.base_url + "/v2/player/prediction",
-            params={"name": names, "breakdown": breakdown},
+            params={"name": names, "breakdown": str(breakdown)},
         ) as res:
             if res.status == 404:
                 return None
