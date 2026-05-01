@@ -7,6 +7,7 @@ from bot_detector.database.core import get_session_factory
 from bot_detector.discord_bot.config import Settings
 from bot_detector.osrs_items import OsrsItemsClient
 from bot_detector.public_api import LegacyApiClient, PublicApiClient
+from bot_detector.rate_limiter import RateLimiter
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 
@@ -34,6 +35,7 @@ class BotDependencies:
                 session=self.session,
                 token=token,
                 base_url=base_url,
+                limiter=RateLimiter(calls_per_interval=500, interval=60),
             )
 
     def init_osrs_items(self, user_agent: str):
