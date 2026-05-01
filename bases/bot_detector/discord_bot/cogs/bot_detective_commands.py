@@ -23,6 +23,7 @@ class botDetectiveCommands(commands.Cog):
 
     async def _get_pastebin(self, url: str) -> str | None:
         url = url.replace("https://pastebin.com/", "https://pastebin.com/raw/")
+        assert self.deps.session is not None
         async with self.deps.session.get(url) as resp:
             if not resp.ok:
                 return None
@@ -70,6 +71,8 @@ class botDetectiveCommands(commands.Cog):
         )
         logger.debug(f"posting, {len(user_names)} to api")
 
+        assert self.deps.legacy_api is not None
+
         asyncio.gather(
             *[self.deps.legacy_api.create_player(name) for name in user_names]
         )
@@ -101,6 +104,7 @@ class botDetectiveCommands(commands.Cog):
         user_names = await self._parse_pastebin(data)
 
         players = []
+        assert self.deps.legacy_api is not None
         for name in user_names:
             player: dict = await self.deps.legacy_api.get_player(
                 player_name=name.replace("_", " ")

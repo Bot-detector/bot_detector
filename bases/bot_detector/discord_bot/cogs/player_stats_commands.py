@@ -174,21 +174,24 @@ class playerStatsCommands(Cog):
         logger.debug(f"{ctx.author.name=}, {ctx.author.id=}, looking up: {player_name}")
         await ctx.typing()
 
+        assert self.deps.legacy_api is not None
         player = await self.deps.legacy_api.get_player(player_name=player_name)
 
         if not player:
             await ctx.reply("Something went terribly wrong. :(")
             return
 
-        player_hiscore = await self.deps.legacy_api.get_hiscore_latest(
-            player_id=player.get("id")
+        player_id = player.get("id")
+        assert isinstance(player_id, int)
+        player_hiscore_result = await self.deps.legacy_api.get_hiscore_latest(
+            player_id=player_id
         )
 
-        if not player_hiscore:
+        if not player_hiscore_result:
             await ctx.reply("Could not find the user in our database")
             return
 
-        player_hiscore: dict[str, Any] = player_hiscore[0]  # type: ignore
+        player_hiscore: dict[str, Any] = player_hiscore_result[0]  # type: ignore
         ts = player_hiscore.get("timestamp")
 
         embeds = []
@@ -245,6 +248,7 @@ class playerStatsCommands(Cog):
         logger.debug(f"{ctx.author.name=}, {ctx.author.id=}, Requesting kc")
         await ctx.typing()
 
+        assert self.deps.legacy_api is not None
         linked_accounts = await self.deps.legacy_api.get_discord_links(
             discord_id=str(ctx.author.id)
         )
@@ -267,6 +271,7 @@ class playerStatsCommands(Cog):
             if acc.get("Verified_status") == 1
         ]
 
+        assert self.deps.public_api is not None
         data = await self.deps.public_api.get_report_score(
             names=[n["name"] for n in linked_accounts]
         )
@@ -365,6 +370,7 @@ class playerStatsCommands(Cog):
             await ctx.reply("This command must be used in a guild.")
             return
 
+        assert self.deps.legacy_api is not None
         linked_accounts = await self.deps.legacy_api.get_discord_links(
             discord_id=str(ctx.author.id)
         )
@@ -386,6 +392,8 @@ class playerStatsCommands(Cog):
             for acc in linked_accounts
             if acc.get("Verified_status") == 1
         ]
+
+        assert self.deps.public_api is not None
         data = await self.deps.public_api.get_report_score(
             names=[n["name"] for n in linked_accounts]
         )
@@ -440,6 +448,7 @@ class playerStatsCommands(Cog):
         )
         await ctx.typing()
 
+        assert self.deps.public_api is not None
         predictions = await self.deps.public_api.get_prediction(
             names=[player_name], breakdown=True
         )
@@ -452,6 +461,7 @@ class playerStatsCommands(Cog):
         name = prediction.player_name
         pred_label = prediction.prediction_label or "N/A"
         confidence = prediction.prediction_confidence or 0
+        breakdown = prediction.predictions_breakdown or {}
 
         color = Color.green() if pred_label.lower() == "real_player" else Color.red()
 
@@ -462,8 +472,24 @@ class playerStatsCommands(Cog):
             "============"
         )
 
+        # Build breakdown section
+        _breakdown = [
+            f"- **{k}:** {v * 100:.2f}%" for k, v in breakdown.items() if v > 0
+        ]
+        _breakdown_txt = "No breakdown available."
+        _breakdown_txt = "\n".join(_breakdown) if _breakdown else _breakdown_txt
+
         embed = Embed(color=color, timestamp=datetime.now(timezone.utc))
-        embed.add_field(name="Player Prediction", value=summary_text, inline=False)
+        embed.add_field(
+            name="Player Prediction",
+            value=summary_text,
+            inline=False,
+        )
+        embed.add_field(
+            name="Predictions Breakdown",
+            value=_breakdown_txt,
+            inline=False,
+        )
         embed.set_footer(text=f"Requested by {ctx.author.name}")
 
         await ctx.reply(embed=embed)
@@ -474,6 +500,7 @@ class playerStatsCommands(Cog):
         logger.debug(
             f"{ctx.author.name=}, {ctx.author.id=}, Requesting pwned: {player_name}"
         )
+        assert self.deps.legacy_api is not None
         player = await self.deps.legacy_api.get_player(player_name=player_name)
 
         if not player:
@@ -491,6 +518,7 @@ class playerStatsCommands(Cog):
         logger.debug(
             f"{ctx.author.name=}, {ctx.author.id=}, Requesting gear: {player_name}"
         )
+        assert self.deps.legacy_api is not None
         sighting = await self.deps.legacy_api.get_latest_sighting(
             player_name=player_name
         )
@@ -537,6 +565,7 @@ class playerStatsCommands(Cog):
             f"{ctx.author.name=}, {ctx.author.id=}, Requesting xpgain: {player_name}"
         )
 
+        assert self.deps.legacy_api is not None
         gains = await self.deps.legacy_api.get_xp_gains(player_name=player_name)
 
         if not gains:
