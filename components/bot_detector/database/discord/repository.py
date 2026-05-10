@@ -36,7 +36,8 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
 
         async with async_session.begin():
             result = await async_session.execute(query)
-            return result.scalar_one_or_none()
+            row = result.scalar_one_or_none()
+        return row
 
     async def get_linked_accounts(
         self,
@@ -52,7 +53,8 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
 
         async with async_session.begin():
             result = await async_session.execute(query)
-            return list(result.scalars().all())
+            rows = list(result.scalars().all())
+        return rows
 
     async def create_verification(
         self,
@@ -72,16 +74,15 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
 
         async with async_session.begin():
             await async_session.execute(query)
-            await async_session.commit()
 
-            return DiscordVerificationTableStruct(
-                Discord_id=discord_id,
-                Player_id=player_id,
-                Code=code,
-                primary_rsn=0,
-                verified_status=0,
-                token_used=0,
-            )
+        return DiscordVerificationTableStruct(
+            Discord_id=discord_id,
+            Player_id=player_id,
+            Code=code,
+            primary_rsn=0,
+            verified_status=0,
+            token_used=0,
+        )
 
     async def update_verification_status(
         self,
@@ -102,9 +103,8 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
 
         async with async_session.begin():
             result = await async_session.execute(query)
-            await async_session.commit()
-
-            return result.rowcount > 0  # type: ignore[attr-defined]
+            updated = result.rowcount > 0
+        return updated  # type: ignore[attr-defined]
 
     async def set_primary_rsn(
         self,
@@ -129,6 +129,5 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
         async with async_session.begin():
             await async_session.execute(clear_query)
             result = await async_session.execute(set_query)
-            await async_session.commit()
-
-            return result.rowcount > 0  # type: ignore[attr-defined]
+            updated = result.rowcount > 0
+        return updated  # type: ignore[attr-defined]
