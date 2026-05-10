@@ -30,6 +30,7 @@ class DiscordVerificationInterface(ABC):
         discord_id: str,
         player_id: int,
         code: str,
+        auto_commit: bool = True,
     ) -> None:
         pass
 
@@ -40,6 +41,7 @@ class DiscordVerificationInterface(ABC):
         discord_id: str,
         player_id: int,
         verified_status: int,
+        auto_commit: bool = True,
     ) -> bool:
         pass
 
@@ -50,5 +52,6 @@ class DiscordVerificationInterface(ABC):
         discord_id: str,
         player_id: int,
         is_primary: bool,
+        auto_commit: bool = True,
     ) -> bool:
         pass
