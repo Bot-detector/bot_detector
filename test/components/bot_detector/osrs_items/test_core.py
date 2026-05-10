@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 import pytest_asyncio
 from datetime import datetime, timedelta
@@ -287,4 +289,23 @@ async def test_lazy_load_on_first_lookup(session, sample_items_data):
 
         assert result is not None
         assert client._loaded_at is not None
+        assert len(client._items_by_id) == 3
+
+
+@pytest.mark.asyncio
+async def test_thundering_herd_only_one_request(session, sample_items_data):
+    client = OsrsItemsClient(session=session, user_agent=TEST_USER_AGENT)
+    client._loaded_at = datetime.now() - timedelta(hours=25)
+
+    with aioresponses() as m:
+        m.get(
+            "https://prices.runescape.wiki/api/v1/osrs/mapping",
+            payload=sample_items_data,
+            status=200,
+        )
+
+        coros = [client.lookup_by_item_id(1) for _ in range(10)]
+        results = await asyncio.gather(*coros)
+
+        assert all(r is not None for r in results)
         assert len(client._items_by_id) == 3
