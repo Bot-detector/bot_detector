@@ -36,7 +36,8 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
 
         async with async_session.begin():
             result = await async_session.execute(query)
-            return result.scalar_one_or_none()
+            row = result.scalar_one_or_none()
+        return row
 
     async def get_linked_accounts(
         self,
@@ -52,7 +53,8 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
 
         async with async_session.begin():
             result = await async_session.execute(query)
-            return list(result.scalars().all())
+            rows = list(result.scalars().all())
+        return rows
 
     async def create_verification(
         self,
@@ -60,7 +62,8 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
         discord_id: str,
         player_id: int,
         code: str,
-    ) -> DiscordVerificationTableStruct:
+        auto_commit: bool = True,
+    ) -> None:
         query = insert(DiscordVerificationTableStruct).values(
             Discord_id=discord_id,
             Player_id=player_id,
@@ -70,18 +73,9 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
             token_used=0,
         )
 
-        async with async_session.begin():
-            await async_session.execute(query)
+        await async_session.execute(query)
+        if auto_commit:
             await async_session.commit()
-
-            return DiscordVerificationTableStruct(
-                Discord_id=discord_id,
-                Player_id=player_id,
-                Code=code,
-                primary_rsn=0,
-                verified_status=0,
-                token_used=0,
-            )
 
     async def update_verification_status(
         self,
@@ -89,6 +83,7 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
         discord_id: str,
         player_id: int,
         verified_status: int,
+        auto_commit: bool = True,
     ) -> bool:
         query = (
             update(DiscordVerificationTableStruct)
@@ -100,11 +95,10 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
             )
         )
 
-        async with async_session.begin():
-            result = await async_session.execute(query)
+        result = await async_session.execute(query)
+        if auto_commit:
             await async_session.commit()
-
-            return result.rowcount > 0  # type: ignore[attr-defined]
+        return result.rowcount > 0  # type: ignore[attr-defined]
 
     async def set_primary_rsn(
         self,
@@ -112,6 +106,7 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
         discord_id: str,
         player_id: int,
         is_primary: bool,
+        auto_commit: bool = True,
     ) -> bool:
         clear_query = (
             update(DiscordVerificationTableStruct)
@@ -126,9 +121,8 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
             .values(primary_rsn=1 if is_primary else 0, updated_at=datetime.now())
         )
 
-        async with async_session.begin():
-            await async_session.execute(clear_query)
-            result = await async_session.execute(set_query)
+        await async_session.execute(clear_query)
+        result = await async_session.execute(set_query)
+        if auto_commit:
             await async_session.commit()
-
-            return result.rowcount > 0  # type: ignore[attr-defined]
+        return result.rowcount > 0  # type: ignore[attr-defined]
