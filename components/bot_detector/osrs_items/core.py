@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timedelta
 
 import aiohttp
@@ -26,6 +27,7 @@ class OsrsItemsClient:
         self._items_by_id: dict[int, ItemStruct] = {}
         self._items_by_name: dict[str, ItemStruct] = {}
         self._loaded_at: datetime | None = None
+        self._lock = asyncio.Lock()
 
     async def _load_items(self) -> None:
         headers = {"User-Agent": self.user_agent}
@@ -54,7 +56,9 @@ class OsrsItemsClient:
 
     async def _refresh_if_stale(self) -> None:
         if self._loaded_at is None or self._is_stale():
-            await self._load_items()
+            async with self._lock:
+                if self._loaded_at is None or self._is_stale():
+                    await self._load_items()
 
     async def lookup_by_item_id(self, item_id: int) -> ItemStruct | None:
         await self._refresh_if_stale()
