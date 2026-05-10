@@ -62,7 +62,7 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
         discord_id: str,
         player_id: int,
         code: str,
-    ) -> DiscordVerificationTableStruct:
+    ) -> None:
         query = insert(DiscordVerificationTableStruct).values(
             Discord_id=discord_id,
             Player_id=player_id,
@@ -72,17 +72,8 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
             token_used=0,
         )
 
-        async with async_session.begin():
-            await async_session.execute(query)
-
-        return DiscordVerificationTableStruct(
-            Discord_id=discord_id,
-            Player_id=player_id,
-            Code=code,
-            primary_rsn=0,
-            verified_status=0,
-            token_used=0,
-        )
+        await async_session.execute(query)
+        await async_session.commit()
 
     async def update_verification_status(
         self,
@@ -101,10 +92,9 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
             )
         )
 
-        async with async_session.begin():
-            result = await async_session.execute(query)
-            updated = result.rowcount > 0
-        return updated  # type: ignore[attr-defined]
+        result = await async_session.execute(query)
+        await async_session.commit()
+        return result.rowcount > 0  # type: ignore[attr-defined]
 
     async def set_primary_rsn(
         self,
@@ -126,8 +116,7 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
             .values(primary_rsn=1 if is_primary else 0, updated_at=datetime.now())
         )
 
-        async with async_session.begin():
-            await async_session.execute(clear_query)
-            result = await async_session.execute(set_query)
-            updated = result.rowcount > 0
-        return updated  # type: ignore[attr-defined]
+        await async_session.execute(clear_query)
+        result = await async_session.execute(set_query)
+        await async_session.commit()
+        return result.rowcount > 0  # type: ignore[attr-defined]

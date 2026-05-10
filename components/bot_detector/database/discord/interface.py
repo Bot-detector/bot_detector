@@ -30,7 +30,7 @@ class DiscordVerificationInterface(ABC):
         discord_id: str,
         player_id: int,
         code: str,
-    ) -> DiscordVerificationTableStruct:
+    ) -> None:
         pass
 
     @abstractmethod
