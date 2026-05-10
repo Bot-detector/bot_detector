@@ -1,4 +1,4 @@
-import json
+import orjson
 import logging
 
 import sqlalchemy as sqla
@@ -156,8 +156,8 @@ class HighscoreDataRepo(HighscoreDataLatestInterface):
             _data = {
                 "player_id": data.player_id,
                 "scrape_date": data.scrape_date.isoformat(),
-                "skills": json.dumps(data.skills),
-                "activities": json.dumps(data.activities),
+                "skills": orjson.dumps(data.skills).decode(),
+                "activities": orjson.dumps(data.activities).decode(),
             }
             data_list.append(_data)
 
