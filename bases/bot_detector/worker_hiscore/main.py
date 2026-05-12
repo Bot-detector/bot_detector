@@ -24,19 +24,23 @@ from .worker import HiscoreWorker
 
 logger = logging.getLogger(__name__)
 
+SETTINGS = Settings()
+KAFKA_SETTINGS = KafkaSettings()
+
 
 def partition_key_fn(msg: ScrapedStruct) -> str:
     return str(msg.player_data.id % 10)
 
 
 async def get_data_to_predict_producer() -> QueueProducer[DataToPredictStruct]:
+    global KAFKA_SETTINGS
     data_to_predict_producer = QueueFactory.create_queue(
         model=DataToPredictStruct,
         queue_type="producer",
         backend_type="kafka",
         config=KafkaConfig(
             topic="data.to_predict",
-            bootstrap_servers=KafkaSettings().bootstrap_servers,
+            bootstrap_servers=KAFKA_SETTINGS.bootstrap_servers,
             producer=True,
             producer_config=KafkaProducerConfig(partition_key_fn=partition_key_fn),
         ),
@@ -51,7 +55,7 @@ async def get_data_to_predict_producer() -> QueueProducer[DataToPredictStruct]:
 
 
 async def main():
-    SETTINGS = Settings()
+    global SETTINGS, KAFKA_SETTINGS
     session_factory, async_engine = db.get_session_factory(SETTINGS=DBSettings())
 
     player_repo = PlayerRepo()
@@ -70,7 +74,7 @@ async def main():
         )
         kafka_config = KafkaConfig(
             topic="players.scraped",
-            bootstrap_servers=KafkaSettings().bootstrap_servers,
+            bootstrap_servers=KAFKA_SETTINGS.bootstrap_servers,
             producer=True,
             consumer=True,
             producer_config=KafkaProducerConfig(partition_key_fn=partition_key_fn),
