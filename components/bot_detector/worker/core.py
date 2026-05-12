@@ -42,9 +42,13 @@ class WorkerRunner(Generic[T]):
         model: Type[T],
         worker: Worker[T],
         batch_size: int = 1000,
+        empty_batch_sleep: float = 0.1,
+        error_sleep: float = 1.0,
     ) -> None:
         self._worker = worker
         self._batch_size = batch_size
+        self._empty_batch_sleep = empty_batch_sleep
+        self._error_sleep = error_sleep
         self._config = config
         self._model = model
         self._queue: Queue[T] = self._create_queue()
@@ -104,7 +108,7 @@ class WorkerRunner(Generic[T]):
 
                 batch = result
                 if not batch:
-                    await asyncio.sleep(0.1)
+                    await asyncio.sleep(self._empty_batch_sleep)
                     continue
 
                 logger.info(f"Consumed {len(batch)} messages")
@@ -123,4 +127,4 @@ class WorkerRunner(Generic[T]):
                 logger.error(f"Error processing batch: {e}", exc_info=True)
                 if batch:
                     await self._requeue(batch)
-                await asyncio.sleep(1)
+                await asyncio.sleep(self._error_sleep)

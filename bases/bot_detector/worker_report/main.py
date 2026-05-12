@@ -1,7 +1,5 @@
 import asyncio
 import logging
-import traceback
-from asyncio import Queue
 
 from bot_detector import database as db
 from bot_detector.database import Settings as DBSettings
@@ -12,52 +10,12 @@ from bot_detector.event_queue.adapters.kafka import (
     KafkaProducerConfig,
     KafkaSettings,
 )
-from bot_detector.event_queue.core import Queue as EventQueue
-from bot_detector.event_queue.factory import QueueFactory
 from bot_detector.event_queue.structs import ReportsToInsertStruct
 from bot_detector.structs import ParsedDetection
-from sqlalchemy.exc import OperationalError
+from bot_detector.worker import Worker, WorkerRunner
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 logger = logging.getLogger(__name__)
-
-
-async def add_to_error_queue(report: ReportsToInsertStruct, queue: Queue) -> bool:
-    if not isinstance(report, ReportsToInsertStruct):
-        logger.warning(
-            {
-                "msg": "invalid report",
-                "expected": "ReportsToInsertStruct",
-                "received": report.__class__,
-            }
-        )
-        return False
-
-    try:
-        await queue.put(item=report)
-    except Exception as error:
-        logger.error(f"Failed to enqueue report in error queue: {error}")
-        logger.debug(f"Traceback: \n{traceback.format_exc()}")
-        return False
-
-    return True
-
-
-async def insert_batch(
-    report_repo: ReportRepo,
-    batch: list[ParsedDetection],
-    session_factory: async_sessionmaker[AsyncSession],
-) -> tuple[None, str | None]:
-    logger.debug(f"batch inserting: {len(batch)}")
-    try:
-        async with session_factory() as session:
-            async with session.begin():
-                await report_repo.insert(async_session=session, reports=batch)
-                await session.commit()
-    except OperationalError as e:
-        return None, str(e)
-    logger.info(f"inserted: {len(batch)}")
-    return None, None
 
 
 async def parse_detections(
@@ -75,78 +33,29 @@ async def parse_detections(
     return parsed_detections
 
 
-async def consume_many_task(
-    report_queue: EventQueue[ReportsToInsertStruct],
-    max_messages: int,
-    session_factory: async_sessionmaker[AsyncSession],
-    report_repo: ReportRepo,
-    error_queue: Queue,
-):
-    while True:
-        should_commit = False
-        try:
-            reports = await report_queue.get_many(count=max_messages)
+class ReportWorker(Worker[ReportsToInsertStruct]):
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession],
+        report_repo: ReportRepo,
+    ) -> None:
+        self._session_factory = session_factory
+        self._report_repo = report_repo
 
-            if isinstance(reports, Exception):
-                logger.error(f"Errors during consumption: {reports}")
-                raise reports
+    async def handle(self, batch: list[ReportsToInsertStruct]) -> None:
+        parsed = await parse_detections(batch)
+        if not parsed:
+            logger.info("No valid reports to process.")
+            return
 
-            logger.debug(f"consumed {len(reports)} reports")
-            parsed_detections = await parse_detections(reports)
+        logger.debug(f"Parsed {len(parsed)} valid reports.")
 
-            if not parsed_detections:
-                logger.info("No valid reports to process.")
-                should_commit = True
-                await asyncio.sleep(15)
-                continue
+        async with self._session_factory() as session:
+            async with session.begin():
+                await self._report_repo.insert(async_session=session, reports=parsed)
+                await session.commit()
 
-            logger.debug(f"Parsed {len(parsed_detections)} valid reports.")
-
-            _, error = await insert_batch(
-                report_repo=report_repo,
-                batch=parsed_detections,
-                session_factory=session_factory,
-            )
-            if error:
-                # the error queue will add the messages at the end of the queue
-                logger.error(error)
-                enqueue_results = await asyncio.gather(
-                    *[add_to_error_queue(report=r, queue=error_queue) for r in reports]
-                )
-                should_commit = all(enqueue_results)
-                if not should_commit:
-                    logger.error(
-                        "Failed to enqueue all reports to error queue. "
-                        "Skipping commit to retry later."
-                    )
-                await asyncio.sleep(15)
-                continue
-
-            should_commit = True
-        except Exception as e:
-            logger.error(f"Error consuming reports: {e}")
-            logger.debug(f"Traceback: \n{traceback.format_exc()}")
-            await asyncio.sleep(5)
-        if should_commit:
-            commit_result = await report_queue.commit()
-            if isinstance(commit_result, Exception):
-                logger.error(f"Failed to commit processed reports: {commit_result}")
-                await asyncio.sleep(5)
-
-
-async def error_task(
-    error_queue: Queue,
-    report_queue: EventQueue[ReportsToInsertStruct],
-):
-    while True:
-        report: ReportsToInsertStruct = await error_queue.get()
-        if not isinstance(report, ReportsToInsertStruct):
-            logger.warning(f"invalid {report=}")
-            continue
-        put_result = await report_queue.put(message=[report])
-        if isinstance(put_result, Exception):
-            logger.error(f"Failed to requeue report from error queue: {put_result}")
-            await asyncio.sleep(5)
+        logger.info(f"inserted: {len(parsed)}")
 
 
 async def main():
@@ -155,16 +64,15 @@ async def main():
     max_batch_size = 10_000
     max_interval_ms = 1_000
 
-    error_queue = Queue()
+    worker = ReportWorker(
+        session_factory=session_factory,
+        report_repo=report_repo,
+    )
 
-    b_server = KafkaSettings().bootstrap_servers
-    report_queue = QueueFactory.create_queue(
-        model=ReportsToInsertStruct,
-        queue_type="queue",
-        backend_type="kafka",
+    runner = WorkerRunner(
         config=KafkaConfig(
             topic="reports.to_insert",
-            bootstrap_servers=b_server,
+            bootstrap_servers=KafkaSettings().bootstrap_servers,
             producer=True,
             consumer=True,
             producer_config=KafkaProducerConfig(partition_key_fn=None),
@@ -173,32 +81,14 @@ async def main():
                 consume_timeout_ms=max_interval_ms,
             ),
         ),
+        model=ReportsToInsertStruct,
+        worker=worker,
+        batch_size=max_batch_size,
+        empty_batch_sleep=15.0,
+        error_sleep=5.0,
     )
-    if isinstance(report_queue, Exception):
-        raise report_queue
 
-    assert isinstance(report_queue, EventQueue)
-
-    await report_queue.start()
-
-    tasks = [
-        asyncio.create_task(
-            consume_many_task(
-                report_queue=report_queue,
-                report_repo=report_repo,
-                max_messages=max_batch_size,
-                session_factory=session_factory,
-                error_queue=error_queue,
-            )
-        ),
-        asyncio.create_task(
-            error_task(
-                error_queue=error_queue,
-                report_queue=report_queue,
-            )
-        ),
-    ]
-    await asyncio.gather(*tasks)
+    await runner.run()
     await async_engine.dispose()
 
 

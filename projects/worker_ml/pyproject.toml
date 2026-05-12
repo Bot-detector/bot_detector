@@ -34,3 +34,4 @@ packages = ["bot_detector"]
 "../../components/bot_detector/event_queue" = "bot_detector/event_queue"
 "../../components/bot_detector/structs" = "bot_detector/structs"
 "../../components/bot_detector/logfmt" = "bot_detector/logfmt"
+"../../components/bot_detector/worker" = "bot_detector/worker"

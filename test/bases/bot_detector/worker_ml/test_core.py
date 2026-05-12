@@ -52,40 +52,27 @@ def test_sample():
 
 
 @pytest.mark.asyncio
-async def test_consume_data_to_predict_does_not_commit_when_requeue_fails_after_predict_error(
+async def test_data_to_predict_worker_raises_on_predict_error(
     monkeypatch: pytest.MonkeyPatch,
     data_to_predict_batch: list[DataToPredictStruct],
 ) -> None:
-    queue = AsyncMock()
-    queue.get_many = AsyncMock(return_value=data_to_predict_batch)
-    queue.put = AsyncMock(return_value=Exception("requeue failed"))
-    queue.commit = AsyncMock()
-
     monkeypatch.setattr(core, "predict", AsyncMock(side_effect=Exception("ml failed")))
-    monkeypatch.setattr(core.asyncio, "sleep", AsyncMock(side_effect=_StopLoop()))
 
-    with pytest.raises(_StopLoop):
-        await core.consume_data_to_predict(
-            max_messages=10,
-            data_to_predict_queue=queue,
-            api=AsyncMock(),
-            session_factory=AsyncMock(),
-        )
+    worker = core.DataToPredictWorker(
+        api=AsyncMock(),
+        model_name="test_model",
+        session_factory=AsyncMock(),
+    )
 
-    queue.put.assert_awaited_once_with(data_to_predict_batch)
-    queue.commit.assert_not_awaited()
+    with pytest.raises(Exception, match="ml failed"):
+        await worker.handle(data_to_predict_batch)
 
 
 @pytest.mark.asyncio
-async def test_consume_data_to_predict_does_not_commit_when_requeue_fails_after_db_error(
+async def test_data_to_predict_worker_raises_on_db_error(
     monkeypatch: pytest.MonkeyPatch,
     data_to_predict_batch: list[DataToPredictStruct],
 ) -> None:
-    queue = AsyncMock()
-    queue.get_many = AsyncMock(return_value=data_to_predict_batch)
-    queue.put = AsyncMock(return_value=Exception("requeue failed"))
-    queue.commit = AsyncMock()
-
     monkeypatch.setattr(
         core,
         "predict",
@@ -96,55 +83,39 @@ async def test_consume_data_to_predict_does_not_commit_when_requeue_fails_after_
         "insert_prediction_results",
         AsyncMock(side_effect=Exception("db failed")),
     )
-    monkeypatch.setattr(core.asyncio, "sleep", AsyncMock(side_effect=_StopLoop()))
 
-    with pytest.raises(_StopLoop):
-        await core.consume_data_to_predict(
-            max_messages=10,
-            data_to_predict_queue=queue,
-            api=AsyncMock(),
-            session_factory=AsyncMock(),
-        )
+    worker = core.DataToPredictWorker(
+        api=AsyncMock(),
+        model_name="test_model",
+        session_factory=AsyncMock(),
+    )
 
-    queue.put.assert_awaited_once_with(data_to_predict_batch)
-    queue.commit.assert_not_awaited()
+    with pytest.raises(Exception, match="db failed"):
+        await worker.handle(data_to_predict_batch)
 
 
 @pytest.mark.asyncio
-async def test_consume_player_scraped_does_not_commit_when_requeue_fails_after_predict_error(
+async def test_player_scraped_worker_raises_on_predict_error(
     monkeypatch: pytest.MonkeyPatch,
     scraped_batch: list[ScrapedStruct],
 ) -> None:
-    queue = AsyncMock()
-    queue.get_many = AsyncMock(return_value=scraped_batch)
-    queue.put = AsyncMock(return_value=Exception("requeue failed"))
-    queue.commit = AsyncMock()
-
     monkeypatch.setattr(core, "predict", AsyncMock(side_effect=Exception("ml failed")))
-    monkeypatch.setattr(core.asyncio, "sleep", AsyncMock(side_effect=_StopLoop()))
 
-    with pytest.raises(_StopLoop):
-        await core.consume_player_scraped(
-            max_messages=10,
-            player_sc_queue=queue,
-            api=AsyncMock(),
-            session_factory=AsyncMock(),
-        )
+    worker = core.PlayerScrapedWorker(
+        api=AsyncMock(),
+        model_name="test_model",
+        session_factory=AsyncMock(),
+    )
 
-    queue.put.assert_awaited_once_with(scraped_batch)
-    queue.commit.assert_not_awaited()
+    with pytest.raises(Exception, match="ml failed"):
+        await worker.handle(scraped_batch)
 
 
 @pytest.mark.asyncio
-async def test_consume_player_scraped_does_not_commit_when_requeue_fails_in_outer_handler(
+async def test_player_scraped_worker_raises_on_db_error(
     monkeypatch: pytest.MonkeyPatch,
     scraped_batch: list[ScrapedStruct],
 ) -> None:
-    queue = AsyncMock()
-    queue.get_many = AsyncMock(return_value=scraped_batch)
-    queue.put = AsyncMock(return_value=Exception("requeue failed"))
-    queue.commit = AsyncMock()
-
     monkeypatch.setattr(
         core,
         "predict",
@@ -155,15 +126,12 @@ async def test_consume_player_scraped_does_not_commit_when_requeue_fails_in_oute
         "insert_prediction_results",
         AsyncMock(side_effect=Exception("db failed")),
     )
-    monkeypatch.setattr(core.asyncio, "sleep", AsyncMock(side_effect=_StopLoop()))
 
-    with pytest.raises(_StopLoop):
-        await core.consume_player_scraped(
-            max_messages=10,
-            player_sc_queue=queue,
-            api=AsyncMock(),
-            session_factory=AsyncMock(),
-        )
+    worker = core.PlayerScrapedWorker(
+        api=AsyncMock(),
+        model_name="test_model",
+        session_factory=AsyncMock(),
+    )
 
-    queue.put.assert_awaited_once_with(scraped_batch)
-    queue.commit.assert_not_awaited()
+    with pytest.raises(Exception, match="db failed"):
+        await worker.handle(scraped_batch)

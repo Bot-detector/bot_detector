@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import traceback
 
 from bot_detector import database as db
 from bot_detector.database import Settings as DBSettings
@@ -12,13 +11,14 @@ from bot_detector.event_queue.adapters.kafka import (
     KafkaProducerConfig,
     KafkaSettings,
 )
-from bot_detector.event_queue.core import Queue, QueueProducer
+from bot_detector.event_queue.core import QueueProducer
 from bot_detector.event_queue.factory import QueueFactory
 from bot_detector.event_queue.structs import (
     DataToPredictStruct,
     HighScoreStruct,
     ScrapedStruct,
 )
+from bot_detector.worker import Worker, WorkerRunner
 from pydantic import ValidationError
 from pydantic_settings import BaseSettings
 from sqlalchemy.exc import OperationalError
@@ -40,7 +40,6 @@ async def insert_batch(
     player_repo: PlayerRepo,
 ) -> tuple[None, str | None]:
     logger.debug(f"batch inserting: {len(batch)}")
-    # extract player and highscore data
     player_batch = [d.player_data for d in batch]
     highscore_batch = [d.highscore_data for d in batch if d.highscore_data is not None]
 
@@ -128,77 +127,38 @@ async def produce_data_to_predict(
     logger.info(f"Produced {len(_tasks)} messages to data to predict topic.")
 
 
-async def consume_many_task(
-    worker_id: int,
-    max_messages: int,
-    player_sc_queue: Queue[ScrapedStruct],
-    data_to_predict_producer: QueueProducer[DataToPredictStruct],
-    highscore_repo: HighscoreDataRepo,
-    player_repo: PlayerRepo,
-    session_factory: async_sessionmaker[AsyncSession],
-):
-    while True:
-        batch: list[ScrapedStruct] = []
-        try:
-            consume_result = await player_sc_queue.get_many(count=max_messages)
-            if isinstance(consume_result, Exception):
-                logger.error(
-                    f"[{worker_id}] Error during consumption: {consume_result}"
-                )
-                await asyncio.sleep(15)
-                continue
+class HiscoreWorker(Worker[ScrapedStruct]):
+    def __init__(
+        self,
+        worker_id: int,
+        session_factory: async_sessionmaker[AsyncSession],
+        highscore_repo: HighscoreDataRepo,
+        player_repo: PlayerRepo,
+        data_to_predict_producer: QueueProducer[DataToPredictStruct],
+    ) -> None:
+        self._worker_id = worker_id
+        self._session_factory = session_factory
+        self._highscore_repo = highscore_repo
+        self._player_repo = player_repo
+        self._data_to_predict_producer = data_to_predict_producer
 
-            batch = consume_result
-            logger.info(f"[{worker_id}] consumed {len(batch)} scrapes")
+    async def handle(self, batch: list[ScrapedStruct]) -> None:
+        logger.info(f"[{self._worker_id}] consumed {len(batch)} scrapes")
 
-            if not batch:
-                logger.info("No highscore data to process.")
-                await asyncio.sleep(15)
-                continue
+        _, error = await insert_batch(
+            highscore_repo=self._highscore_repo,
+            player_repo=self._player_repo,
+            batch=batch,
+            session_factory=self._session_factory,
+        )
 
-            _, error = await insert_batch(
-                highscore_repo=highscore_repo,
-                player_repo=player_repo,
-                batch=batch,
-                session_factory=session_factory,
-            )
+        await produce_data_to_predict(
+            data_to_predict_producer=self._data_to_predict_producer,
+            batch=batch,
+        )
 
-            await produce_data_to_predict(
-                data_to_predict_producer=data_to_predict_producer,
-                batch=batch,
-            )
-
-            if error:
-                logger.error(f"{error}")
-                requeue_result = await player_sc_queue.put(batch)
-                if isinstance(requeue_result, Exception):
-                    logger.error(f"Failed to requeue scraped batch: {requeue_result}")
-                    await asyncio.sleep(15)
-                    continue
-
-            commit_result = await player_sc_queue.commit()
-            if isinstance(commit_result, Exception):
-                logger.error(f"Failed to commit scraped batch: {commit_result}")
-                await asyncio.sleep(15)
-                continue
-
-            # ideally we want batches to be as full as possible, this is more efficient on the database
-            if len(batch) < 1000:
-                await asyncio.sleep(60)
-        except Exception as e:
-            logger.error(f"[{worker_id}] Error consuming scrapes: {e}")
-            logger.debug(f"[{worker_id}] Traceback: \n{traceback.format_exc()}")
-            if batch:  # only retry if we have data
-                requeue_result = await player_sc_queue.put(batch)
-                if isinstance(requeue_result, Exception):
-                    logger.error(f"Failed to requeue scraped batch: {requeue_result}")
-                else:
-                    commit_result = await player_sc_queue.commit()
-                    if isinstance(commit_result, Exception):
-                        logger.error(
-                            f"Failed to commit requeued scraped batch: {commit_result}"
-                        )
-            await asyncio.sleep(15)
+        if error:
+            raise RuntimeError(error)
 
 
 async def main():
@@ -209,22 +169,6 @@ async def main():
 
     def partition_key_fn(msg: ScrapedStruct) -> str:
         return str(msg.player_data.id % 10)
-
-    ## queue
-    player_sc_queue = QueueFactory.create_queue(
-        model=ScrapedStruct,
-        queue_type="queue",
-        backend_type="kafka",
-        config=KafkaConfig(
-            topic="players.scraped",
-            bootstrap_servers=KafkaSettings().bootstrap_servers,
-            producer=True,
-            consumer=True,
-            producer_config=KafkaProducerConfig(partition_key_fn=partition_key_fn),
-            consumer_config=KafkaConsumerConfig(group_id="highscore_worker"),
-        ),
-    )
-    assert isinstance(player_sc_queue, Queue)
 
     data_to_predict_producer = QueueFactory.create_queue(
         model=DataToPredictStruct,
@@ -241,25 +185,38 @@ async def main():
         raise data_to_predict_producer
     assert isinstance(data_to_predict_producer, QueueProducer)
 
-    await player_sc_queue.start()
     await data_to_predict_producer.start()
 
-    # start workers
-    workers = [
-        asyncio.create_task(
-            consume_many_task(
-                worker_id=worker_id,
-                max_messages=Settings().MAX_BATCH_SIZE,
-                player_sc_queue=player_sc_queue,
-                data_to_predict_producer=data_to_predict_producer,
-                highscore_repo=highscore_repo,
-                player_repo=player_repo,
-                session_factory=session_factory,
-            )
+    settings = Settings()
+
+    runners = []
+    for worker_id in range(settings.N_WORKERS):
+        worker = HiscoreWorker(
+            worker_id=worker_id,
+            session_factory=session_factory,
+            highscore_repo=highscore_repo,
+            player_repo=player_repo,
+            data_to_predict_producer=data_to_predict_producer,
         )
-        for worker_id in range(Settings().N_WORKERS)
-    ]
-    await asyncio.gather(*workers)
+        runner = WorkerRunner(
+            config=KafkaConfig(
+                topic="players.scraped",
+                bootstrap_servers=KafkaSettings().bootstrap_servers,
+                producer=True,
+                consumer=True,
+                producer_config=KafkaProducerConfig(partition_key_fn=partition_key_fn),
+                consumer_config=KafkaConsumerConfig(group_id="highscore_worker"),
+            ),
+            model=ScrapedStruct,
+            worker=worker,
+            batch_size=settings.MAX_BATCH_SIZE,
+            empty_batch_sleep=15.0,
+            error_sleep=15.0,
+        )
+        runners.append(asyncio.create_task(runner.run()))
+
+    await asyncio.gather(*runners)
+    await data_to_predict_producer.stop()
     await async_engine.dispose()
 
 
