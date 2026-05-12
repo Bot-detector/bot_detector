@@ -1,6 +1,5 @@
-import asyncio
 from datetime import date, datetime
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -8,7 +7,7 @@ from bot_detector.event_queue.structs import ScrapedStruct
 from bot_detector.structs._metadata import MetaData
 from bot_detector.structs.hiscore import HighscoreBaseStruct
 from bot_detector.structs.player import PlayerStruct
-from bot_detector.worker_hiscore import core
+from bot_detector.worker_hiscore.worker import HiscoreWorker, insert_batch
 
 
 def _build_scraped_struct() -> ScrapedStruct:
@@ -31,76 +30,76 @@ def _build_scraped_struct() -> ScrapedStruct:
 
 
 @pytest.mark.asyncio
-async def test_consume_many_task_skips_commit_when_requeue_fails(
-    monkeypatch: pytest.MonkeyPatch,
-):
+async def test_insert_batch_calls_repos():
     batch = [_build_scraped_struct(), _build_scraped_struct()]
-    player_sc_queue = AsyncMock()
-    player_sc_queue.get_many = AsyncMock(return_value=batch)
-    player_sc_queue.put = AsyncMock(return_value=Exception("requeue-failed"))
-    player_sc_queue.commit = AsyncMock(return_value=None)
+    session = AsyncMock()
+    session.begin = MagicMock(return_value=AsyncMock())
 
-    async def _fake_insert_batch(**_kwargs):
-        return None, "insert-failed"
+    session_factory = MagicMock()
+    session_factory.return_value.__aenter__ = AsyncMock(return_value=session)
+    session_factory.return_value.__aexit__ = AsyncMock(return_value=None)
 
-    async def _fake_produce_data_to_predict(**_kwargs):
-        return None
+    highscore_repo = AsyncMock()
+    player_repo = AsyncMock()
 
-    async def _cancel_sleep(_seconds: int):
-        raise asyncio.CancelledError()
+    await insert_batch(
+        session_factory=session_factory,
+        batch=batch,
+        highscore_repo=highscore_repo,
+        player_repo=player_repo,
+    )
 
-    monkeypatch.setattr(core, "insert_batch", _fake_insert_batch)
-    monkeypatch.setattr(core, "produce_data_to_predict", _fake_produce_data_to_predict)
-    monkeypatch.setattr(core.asyncio, "sleep", _cancel_sleep)
-
-    with pytest.raises(asyncio.CancelledError):
-        await core.consume_many_task(
-            worker_id=1,
-            max_messages=10,
-            player_sc_queue=player_sc_queue,
-            data_to_predict_producer=AsyncMock(),
-            highscore_repo=AsyncMock(),
-            player_repo=AsyncMock(),
-            session_factory=AsyncMock(),
-        )
-
-    player_sc_queue.commit.assert_not_awaited()
-    player_sc_queue.put.assert_awaited_once_with(batch)
+    player_repo.update_many_players.assert_awaited_once()
+    highscore_repo.insert_highscore_many.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_consume_many_task_commits_when_requeue_succeeds(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    batch = [_build_scraped_struct(), _build_scraped_struct()]
-    player_sc_queue = AsyncMock()
-    player_sc_queue.get_many = AsyncMock(return_value=batch)
-    player_sc_queue.put = AsyncMock(return_value=None)
-    player_sc_queue.commit = AsyncMock(return_value=None)
+async def test_handle_calls_insert_and_produces():
+    batch = [_build_scraped_struct()]
+    session_factory = MagicMock()
+    highscore_repo = AsyncMock()
+    player_repo = AsyncMock()
+    data_to_predict_producer = AsyncMock()
 
-    async def _fake_insert_batch(**_kwargs):
-        return None, "insert-failed"
+    w = HiscoreWorker(
+        worker_id=1,
+        session_factory=session_factory,
+        player_repo=player_repo,
+        highscore_repo=highscore_repo,
+        data_to_predict_producer=data_to_predict_producer,
+    )
 
-    async def _fake_produce_data_to_predict(**_kwargs):
-        return None
+    with patch("bot_detector.worker_hiscore.worker.insert_batch", new_callable=AsyncMock) as mock_insert:
+        await w.handle(batch)
 
-    async def _cancel_sleep(_seconds: int):
-        raise asyncio.CancelledError()
+    mock_insert.assert_awaited_once()
+    data_to_predict_producer.put.assert_awaited_once()
 
-    monkeypatch.setattr(core, "insert_batch", _fake_insert_batch)
-    monkeypatch.setattr(core, "produce_data_to_predict", _fake_produce_data_to_predict)
-    monkeypatch.setattr(core.asyncio, "sleep", _cancel_sleep)
 
-    with pytest.raises(asyncio.CancelledError):
-        await core.consume_many_task(
-            worker_id=1,
-            max_messages=10,
-            player_sc_queue=player_sc_queue,
-            data_to_predict_producer=AsyncMock(),
-            highscore_repo=AsyncMock(),
-            player_repo=AsyncMock(),
-            session_factory=AsyncMock(),
-        )
+@pytest.mark.asyncio
+async def test_handle_skips_produce_when_highscore_is_none():
+    scraped_no_hs = ScrapedStruct(
+        metadata=MetaData(version=1, source="test"),
+        player_data=PlayerStruct(
+            id=1,
+            name="tester",
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+        ),
+        highscore_data=None,
+    )
+    batch = [scraped_no_hs]
+    data_to_predict_producer = AsyncMock()
 
-    player_sc_queue.commit.assert_awaited_once()
-    player_sc_queue.put.assert_awaited_once_with(batch)
+    w = HiscoreWorker(
+        worker_id=1,
+        session_factory=MagicMock(),
+        player_repo=AsyncMock(),
+        highscore_repo=AsyncMock(),
+        data_to_predict_producer=data_to_predict_producer,
+    )
+
+    with patch("bot_detector.worker_hiscore.worker.insert_batch", new_callable=AsyncMock):
+        await w.handle(batch)
+
+    data_to_predict_producer.put.assert_awaited_once()
