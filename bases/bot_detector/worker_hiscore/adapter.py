@@ -11,7 +11,18 @@ logger = logging.getLogger(__name__)
 
 
 def clean_dict(data: dict[str, Any]) -> dict:
-    assert isinstance(data, dict), "Input must be a dictionary"
+    """
+    Cleans a dictionary by converting keys to lowercase and removing entries with None values.
+
+    Args:
+        - data: dict with string keys and any type of values
+    Returns:
+        - dict with lowercase keys and no None values
+    Raises:
+        - TypeError if input is not a dictionary
+    """
+    if not isinstance(data, dict):
+        raise TypeError("Input must be a dictionary")
     return {k.lower(): v for k, v in data.items() if v is not None}
 
 
