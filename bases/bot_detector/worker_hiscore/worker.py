@@ -32,29 +32,24 @@ async def insert_batch(
     batch: list[ScrapedStruct],
     highscore_repo: HighscoreDataRepo,
     player_repo: PlayerRepo,
-) -> tuple[None, str | None]:
+) -> None:
     logger.debug(f"batch inserting: {len(batch)}")
     # extract player and highscore data
     player_batch = [d.player_data for d in batch]
     highscore_batch = [d.highscore_data for d in batch if d.highscore_data is not None]
 
-    try:
-        async with session_factory() as session:
-            async with session.begin():
-                await player_repo.update_many_players(
-                    async_session=session,
-                    players_data=player_batch,
-                )
-                await highscore_repo.insert_highscore_many(
-                    async_session=session,
-                    highscore_data=highscore_batch,
-                )
-                await session.commit()
-    except OperationalError as e:
-        return None, str(e)
-
+    async with session_factory() as session:
+        async with session.begin():
+            await player_repo.update_many_players(
+                async_session=session,
+                players_data=player_batch,
+            )
+            await highscore_repo.insert_highscore_many(
+                async_session=session,
+                highscore_data=highscore_batch,
+            )
+            await session.commit()
     logger.debug(f"inserted: {len(batch)}")
-    return None, None
 
 
 class HiscoreWorker(Worker[ScrapedStruct]):
@@ -66,7 +61,7 @@ class HiscoreWorker(Worker[ScrapedStruct]):
         highscore_repo: HighscoreDataRepo,
         data_to_predict_producer: QueueProducer[DataToPredictStruct],
     ) -> None:
-        self._worker_id = worker_id
+        self._id = worker_id
         self._session_factory = session_factory
         self._player_repo = player_repo
         self._highscore_repo = highscore_repo
@@ -76,23 +71,19 @@ class HiscoreWorker(Worker[ScrapedStruct]):
         """
         insert batch into DB, then produce to "players.to_predict" topic for records with highscore data.
         """
-        logger.info(f"[{self._worker_id}] consumed {len(batch)} scrapes")
+        logger.info(f"[{self._id}] consumed {len(batch)} scrapes")
 
-        _, error = await insert_batch(
+        await insert_batch(
             session_factory=self._session_factory,
             highscore_repo=self._highscore_repo,
             player_repo=self._player_repo,
             batch=batch,
         )
-        data_to_predict_batch = []
-        for record in batch:
-            data_to_predict = adapter.transform_scraped_struct(record)
-            if data_to_predict is None:
-                continue
-            data_to_predict_batch.append(data_to_predict)
 
-        if data_to_predict_batch:
-            await self._data_to_predict_producer.put(data_to_predict_batch)
+        to_predict_batch = [adapter.transform_scraped_struct(r) for r in batch]
+        to_predict_batch = [d for d in to_predict_batch if d is not None]
+        await self._data_to_predict_producer.put(to_predict_batch)
+        logger.info(f"[{self._id}] processed {len(to_predict_batch)} scrapes")
 
 
 async def main():
