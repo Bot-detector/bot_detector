@@ -18,7 +18,6 @@ from bot_detector.event_queue.structs import (
     ScrapedStruct,
 )
 from bot_detector.worker.core import Worker, WorkerRunner
-from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from . import adapter
@@ -111,6 +110,7 @@ async def main():
     if isinstance(data_to_predict_producer, Exception):
         raise data_to_predict_producer
     assert isinstance(data_to_predict_producer, QueueProducer)
+    await data_to_predict_producer.start()
 
     tasks = []
     for worker_id in range(SETTINGS.N_WORKERS):

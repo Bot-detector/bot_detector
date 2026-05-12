@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from typing import Generic, Literal, Type, TypeVar
+from typing import Generic, Type, TypeVar
 
 from bot_detector.event_queue.adapters.kafka import KafkaConfig
 from bot_detector.event_queue.adapters.memory import InMemoryConfig
