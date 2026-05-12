@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from typing import Generic, Type, TypeVar
+from typing import Generic, Literal, Type, TypeVar
 
 from bot_detector.event_queue.adapters.kafka import KafkaConfig
 from bot_detector.event_queue.adapters.memory import InMemoryConfig
@@ -48,7 +48,7 @@ class WorkerRunner(Generic[T]):
         self._model = model
         self._queue: Queue[T] = self._create_queue()
 
-    def _detect_backend(self):
+    def _detect_backend(self) -> Literal["kafka", "memory"]:
         if isinstance(self._config, KafkaConfig):
             return "kafka"
         if isinstance(self._config, InMemoryConfig):
