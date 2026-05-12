@@ -124,8 +124,5 @@ class WorkerRunner(Generic[T]):
                 if batch:
                     await self._requeue(batch)
                 await asyncio.sleep(1)
-        else:
-            logger.info("WorkerRunner consume loop exiting.")
-            if batch:
-                await self._requeue(batch)
-            await self._queue.stop()
+
+        logger.info("WorkerRunner consume loop exiting.")

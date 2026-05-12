@@ -48,7 +48,9 @@ async def get_data_to_predict_producer() -> QueueProducer[DataToPredictStruct]:
     if isinstance(data_to_predict_producer, Exception):
         raise data_to_predict_producer
 
-    assert isinstance(data_to_predict_producer, QueueProducer)
+    if not isinstance(data_to_predict_producer, QueueProducer):
+        raise TypeError(f"Expected QueueProducer, got {type(data_to_predict_producer)}")
+
     await data_to_predict_producer.start()
     return data_to_predict_producer
 
