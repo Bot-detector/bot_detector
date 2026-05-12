@@ -36,8 +36,7 @@ async def insert_batch(
                 async_session=session,
                 highscore_data=highscore_batch,
             )
-            # session.begin() context manager will commit if no exceptions, rollback if exception, so no need for explicit commit/rollback
-            # await session.commit()
+            # session.begin() context manager will commit if no exceptions, rollback if exception occurs
     logger.debug(f"inserted: {len(batch)}")
 
 
