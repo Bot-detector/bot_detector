@@ -10,7 +10,7 @@ from bot_detector.event_queue.structs import (
 logger = logging.getLogger(__name__)
 
 
-def clean_dict(data: dict[str, Any]) -> dict:
+def clean_dict(data: dict[str, Any]) -> dict[str, Any]:
     """
     Cleans a dictionary by converting keys to lowercase and removing entries with None values.
 

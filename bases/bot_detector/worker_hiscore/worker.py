@@ -8,9 +8,8 @@ from bot_detector.event_queue.structs import (
     ScrapedStruct,
 )
 from bot_detector.worker.core import Worker
+from bot_detector.worker_hiscore import adapter
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-
-from . import adapter
 
 logger = logging.getLogger(__name__)
 

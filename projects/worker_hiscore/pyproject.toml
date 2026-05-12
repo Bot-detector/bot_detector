@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.scripts]
-worker_hiscore = "bot_detector.worker_hiscore.core:run"
+worker_hiscore = "bot_detector.worker_hiscore.main:run"
 
 # This section is needed for building
 [tool.hatch.build.targets.wheel]
@@ -32,3 +32,4 @@ packages = ["bot_detector"]
 "../../components/bot_detector/event_queue" = "bot_detector/event_queue"
 "../../components/bot_detector/structs" = "bot_detector/structs"
 "../../components/bot_detector/logfmt" = "bot_detector/logfmt"
+"../../components/bot_detector/worker" = "bot_detector/worker"

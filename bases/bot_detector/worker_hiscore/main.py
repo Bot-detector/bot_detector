@@ -18,9 +18,8 @@ from bot_detector.event_queue.structs import (
     ScrapedStruct,
 )
 from bot_detector.worker.core import WorkerRunner
-
-from .settings import Settings
-from .worker import HiscoreWorker
+from bot_detector.worker_hiscore.settings import Settings
+from bot_detector.worker_hiscore.worker import HiscoreWorker
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +40,7 @@ async def get_data_to_predict_producer() -> QueueProducer[DataToPredictStruct]:
             topic="data.to_predict",
             bootstrap_servers=KAFKA_SETTINGS.bootstrap_servers,
             producer=True,
-            producer_config=KafkaProducerConfig(partition_key_fn=partition_key_fn),
+            producer_config=KafkaProducerConfig(partition_key_fn=None),
         ),
     )
 
