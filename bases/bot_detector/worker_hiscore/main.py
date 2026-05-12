@@ -90,6 +90,8 @@ async def main():
 
     await asyncio.gather(*tasks)
     await async_engine.dispose()
+    await data_to_predict_producer.stop()
+    await runner._queue.stop()
 
 
 async def run_async():
