@@ -60,7 +60,7 @@ async def main():
     highscore_repo = HighscoreDataRepo()
 
     data_to_predict_producer = await get_data_to_predict_producer()
-
+    stop_event = asyncio.Event()
     tasks = []
     for worker_id in range(SETTINGS.N_WORKERS):
         worker = HiscoreWorker(
@@ -86,6 +86,7 @@ async def main():
             config=kafka_config,
             model=ScrapedStruct,
             batch_size=SETTINGS.MAX_BATCH_SIZE,
+            stop_event=stop_event,
         )
         task = asyncio.create_task(runner.run())
         tasks.append(task)
@@ -93,9 +94,9 @@ async def main():
     try:
         await asyncio.gather(*tasks)
     finally:
+        stop_event.set()
         await async_engine.dispose()
         await data_to_predict_producer.stop()
-        await runner._queue.stop()
 
 
 async def run_async():

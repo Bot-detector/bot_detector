@@ -40,12 +40,14 @@ class WorkerRunner(Generic[T]):
         config: KafkaConfig | InMemoryConfig,
         model: Type[T],
         worker: Worker[T],
+        stop_event: asyncio.Event,
         batch_size: int = 1000,
     ) -> None:
         self._worker = worker
         self._batch_size = batch_size
         self._config = config
         self._model = model
+        self._stop_event = stop_event
         self._queue: Queue[T] = self._create_queue()
 
     def _detect_backend(self) -> Literal["kafka", "memory"]:
@@ -93,7 +95,7 @@ class WorkerRunner(Generic[T]):
 
     async def _consume(self) -> None:
         """Main loop: get_many → handle → commit. Requeue on error."""
-        while True:
+        while not self._stop_event.is_set():
             batch: list[T] = []
             try:
                 result = await self._queue.get_many(self._batch_size)
@@ -113,7 +115,6 @@ class WorkerRunner(Generic[T]):
                 commit_err = await self._queue.commit()
                 if isinstance(commit_err, Exception):
                     logger.error(f"Failed to commit batch: {commit_err}")
-
             except asyncio.CancelledError:
                 if batch:
                     await self._requeue(batch)
@@ -123,3 +124,8 @@ class WorkerRunner(Generic[T]):
                 if batch:
                     await self._requeue(batch)
                 await asyncio.sleep(1)
+        else:
+            logger.info("WorkerRunner consume loop exiting.")
+            if batch:
+                await self._requeue(batch)
+            await self._queue.stop()
