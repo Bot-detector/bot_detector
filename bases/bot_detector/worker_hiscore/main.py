@@ -33,7 +33,6 @@ def partition_key_fn(msg: ScrapedStruct) -> str:
 
 
 async def get_data_to_predict_producer() -> QueueProducer[DataToPredictStruct]:
-    global KAFKA_SETTINGS
     data_to_predict_producer = QueueFactory.create_queue(
         model=DataToPredictStruct,
         queue_type="producer",
@@ -55,7 +54,6 @@ async def get_data_to_predict_producer() -> QueueProducer[DataToPredictStruct]:
 
 
 async def main():
-    global SETTINGS, KAFKA_SETTINGS
     session_factory, async_engine = db.get_session_factory(SETTINGS=DBSettings())
 
     player_repo = PlayerRepo()
