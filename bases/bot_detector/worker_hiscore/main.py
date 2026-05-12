@@ -88,10 +88,12 @@ async def main():
         task = asyncio.create_task(runner.run())
         tasks.append(task)
 
-    await asyncio.gather(*tasks)
-    await async_engine.dispose()
-    await data_to_predict_producer.stop()
-    await runner._queue.stop()
+    try:
+        await asyncio.gather(*tasks)
+    finally:
+        await async_engine.dispose()
+        await data_to_predict_producer.stop()
+        await runner._queue.stop()
 
 
 async def run_async():
