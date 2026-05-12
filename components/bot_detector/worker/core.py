@@ -1,14 +1,13 @@
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from typing import Generic, Type, TypeVar
-
-from pydantic import BaseModel
+from typing import Generic, Literal, Type, TypeVar
 
 from bot_detector.event_queue.adapters.kafka import KafkaConfig
 from bot_detector.event_queue.adapters.memory import InMemoryConfig
 from bot_detector.event_queue.core import Queue
 from bot_detector.event_queue.factory import QueueFactory
+from pydantic import BaseModel
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -49,7 +48,7 @@ class WorkerRunner(Generic[T]):
         self._model = model
         self._queue: Queue[T] = self._create_queue()
 
-    def _detect_backend(self) -> str:
+    def _detect_backend(self):
         if isinstance(self._config, KafkaConfig):
             return "kafka"
         if isinstance(self._config, InMemoryConfig):
