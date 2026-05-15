@@ -49,3 +49,20 @@ class ApiUserRepo(ApiUserInterface):
             result = await async_session.execute(query)
             row = result.scalar_one_or_none()
         return row is not None
+
+    async def get_user(
+        self,
+        async_session: AsyncSession,
+        user_name: str,
+        is_active: bool | None = None,
+    ) -> ApiUserTableStruct | None:
+        if not user_name:
+            raise ValueError("user_name is required")
+        query = select(ApiUserTableStruct).where(
+            ApiUserTableStruct.username == user_name,
+        )
+        if is_active is not None:
+            query = query.where(ApiUserTableStruct.is_active == is_active)
+        async with async_session.begin():
+            result = await async_session.execute(query)
+            return result.scalar_one_or_none()

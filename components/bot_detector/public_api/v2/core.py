@@ -5,6 +5,7 @@ import orjson
 from bot_detector.public_api._retry import RetryableError, retry
 from bot_detector.public_api.v2.structs import (
     Detection,
+    FeedbackExportResponse,
     FeedbackInput,
     FeedbackScoreResponse,
     LabelResponse,
@@ -25,10 +26,12 @@ class PublicApiClient:
         session: aiohttp.ClientSession,
         base_url: str | None = None,
         limiter: RateLimiter | None = None,
+        token: str | None = None,
     ):
         self.session = session
         self.base_url = base_url or self.DEFAULT_BASE_URL
         self.limiter = limiter or RateLimiter()
+        self.token = token
 
     @retry(max_attempts=3)
     async def get_report_score(self, names: list[str]) -> list[ReportScoreResponse]:
@@ -112,3 +115,27 @@ class PublicApiClient:
             if data is None:
                 return None
             return LabelResponse(**data)
+
+    @retry(max_attempts=3)
+    async def get_feedback_export(
+        self, player_name: str
+    ) -> FeedbackExportResponse | None:
+        await self.limiter.check()
+        headers: dict[str, str] = {}
+        if self.token:
+            headers["Authorization"] = f"Bearer {self.token}"
+        async with self.session.get(
+            self.base_url + "/v2/feedback/export",
+            params={"player_name": player_name},
+            headers=headers,
+        ) as res:
+            if res.status == 204:
+                return None
+            if res.status == 404:
+                return None
+            if res.status == 401:
+                logger.error(f"Unauthorized feedback export request for {player_name}")
+                return None
+            res.raise_for_status()
+            data = orjson.loads(await res.read())
+            return FeedbackExportResponse(**data)

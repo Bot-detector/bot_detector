@@ -11,6 +11,7 @@ from bot_detector.public_api.v1 import (
 from bot_detector.public_api.v2 import (
     Detection,
     Equipment,
+    FeedbackExportResponse,
     FeedbackInput,
     FeedbackScoreResponse,
     LabelResponse,
@@ -30,6 +31,7 @@ __all__ = [
     "DiscordVerifyInfo",
     "Equipment",
     "ExportInfo",
+    "FeedbackExportResponse",
     "FeedbackInput",
     "FeedbackScoreResponse",
     "LabelResponse",

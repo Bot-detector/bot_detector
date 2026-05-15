@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 
+from bot_detector.database.api.structs import ApiUserTableStruct
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -22,4 +23,13 @@ class ApiUserInterface(ABC):
         token: str,
         permission: str,
     ) -> bool:
+        pass
+
+    @abstractmethod
+    async def get_user(
+        self,
+        async_session: AsyncSession,
+        user_name: str,
+        is_active: bool | None = None,
+    ) -> ApiUserTableStruct | None:
         pass
