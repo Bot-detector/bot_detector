@@ -6,10 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 class ApiUserInterface(ABC):
     @abstractmethod
-    async def get_by_username(
+    async def get_by_user_name(
         self,
         async_session: AsyncSession,
-        username: str,
+        user_name: str,
     ) -> ApiUserTableStruct | None:
         pass
 

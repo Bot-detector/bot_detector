@@ -22,10 +22,10 @@ def session():
 
 
 def _sample_user(
-    username: str = "testuser", is_active: bool = True
+    user_name: str = "testuser", is_active: bool = True
 ) -> ApiUserTableStruct:
     return ApiUserTableStruct(
-        username=username,
+        username=user_name,
         token="testtoken",
         is_active=is_active,
         ratelimit=100,
@@ -39,29 +39,29 @@ def _mock_scalar(result_value):
 
 
 @pytest.mark.asyncio
-async def test_get_by_username_returns_user_when_active(repo, session):
+async def test_get_by_user_name_returns_user_when_active(repo, session):
     user = _sample_user()
     session.execute = AsyncMock(return_value=_mock_scalar(user))
 
-    result = await repo.get_by_username(session, "testuser")
+    result = await repo.get_by_user_name(session, "testuser")
 
     assert result == user
 
 
 @pytest.mark.asyncio
-async def test_get_by_username_returns_none_when_not_found(repo, session):
+async def test_get_by_user_name_returns_none_when_not_found(repo, session):
     session.execute = AsyncMock(return_value=_mock_scalar(None))
 
-    result = await repo.get_by_username(session, "nonexistent")
+    result = await repo.get_by_user_name(session, "nonexistent")
 
     assert result is None
 
 
 @pytest.mark.asyncio
-async def test_get_by_username_returns_none_when_inactive(repo, session):
+async def test_get_by_user_name_returns_none_when_inactive(repo, session):
     session.execute = AsyncMock(return_value=_mock_scalar(None))
 
-    result = await repo.get_by_username(session, "inactiveuser")
+    result = await repo.get_by_user_name(session, "inactiveuser")
 
     assert result is None
 
@@ -102,7 +102,9 @@ async def test_log_usage_skips_commit_when_disabled(repo, session):
 async def test_has_permission_returns_true_when_found(repo, session):
     session.execute = AsyncMock(return_value=_mock_scalar(MagicMock()))
 
-    result = await repo.has_permission(session, user_name="testuser", permission="request_highscores")
+    result = await repo.has_permission(
+        session, user_name="testuser", permission="request_highscores"
+    )
 
     assert result is True
 
@@ -111,7 +113,9 @@ async def test_has_permission_returns_true_when_found(repo, session):
 async def test_has_permission_returns_false_when_not_found(repo, session):
     session.execute = AsyncMock(return_value=_mock_scalar(None))
 
-    result = await repo.has_permission(session, user_name="testuser", permission="nonexistent_perm")
+    result = await repo.has_permission(
+        session, user_name="testuser", permission="nonexistent_perm"
+    )
 
     assert result is False
 
@@ -120,6 +124,8 @@ async def test_has_permission_returns_false_when_not_found(repo, session):
 async def test_has_permission_returns_false_when_user_not_exists(repo, session):
     session.execute = AsyncMock(return_value=_mock_scalar(None))
 
-    result = await repo.has_permission(session, user_name="ghost", permission="request_highscores")
+    result = await repo.has_permission(
+        session, user_name="ghost", permission="request_highscores"
+    )
 
     assert result is False

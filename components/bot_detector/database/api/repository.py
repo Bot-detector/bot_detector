@@ -10,14 +10,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class ApiUserRepo(ApiUserInterface):
-    async def get_by_username(
+    async def get_by_user_name(
         self,
         async_session: AsyncSession,
-        username: str,
+        user_name: str,
     ) -> ApiUserTableStruct | None:
         query = (
             select(ApiUserTableStruct)
-            .where(ApiUserTableStruct.username == username)
+            .where(ApiUserTableStruct.username == user_name)
             .where(ApiUserTableStruct.is_active == True)  # noqa: E712
             .limit(1)
         )
