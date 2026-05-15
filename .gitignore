@@ -176,3 +176,4 @@ test.py
 _infra/_minio_data/*
 !_infra/_minio_data/.gitkeep
 */*spec*.md
+/spec/*
