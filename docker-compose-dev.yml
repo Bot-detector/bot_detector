@@ -44,7 +44,7 @@ services:
       - KAFKA_BROKER=kafka:9092
       - SEED_PLAYERS=100
       - SEED_SCRAPES_PER_PLAYER=10
-      - SEED_REPORTS=0
+      - SEED_REPORTS=1000
       - RESET_TOPICS=true
       - RANDOM_SEED=42
     networks:
@@ -214,6 +214,8 @@ services:
       - botdetector-network
     env_file:
       - .env
+    environment:
+      - MAX_BATCH_SIZE=10
     depends_on:
       kafka_setup:
         condition: service_completed_successfully
