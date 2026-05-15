@@ -143,6 +143,7 @@ async def transform_player_stats(
     player.updated_at = datetime.now()
     player.possible_ban = False
     player.confirmed_ban = False
+    player.label_jagex = 0
 
     skills = {s.name: s.xp for s in player_stats.skills if s.xp > 0}
     activities = {a.name: a.score for a in player_stats.activities if a.score > 0}
