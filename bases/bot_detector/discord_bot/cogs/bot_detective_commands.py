@@ -1,6 +1,10 @@
 import asyncio
 import logging
 import re
+import shutil
+import tempfile
+import time
+from pathlib import Path
 from typing import List
 
 import discord
@@ -115,23 +119,42 @@ class botDetectiveCommands(commands.Cog):
         players = [p for p in players if p is not None]
         logger.debug(f"got players after filter: {len(players)}")
 
-        embeds = []
-        i = 0
-        for batch in self._batch(players, n=21):
-            embed = discord.Embed(title="Ban list", color=discord.Color.red())
-            for player in batch:
-                if not player:
-                    continue
-                banned = player.get("label_jagex") == 2
-                value = f"```{banned}```" if banned else str(banned)
-                embed.add_field(name=player.get("name"), value=value, inline=True)
-            embed.set_footer(text="True=Banned, False=Not banned")
-            embeds.append(embed)
+        if not players:
+            await ctx.reply("No valid players found.")
+            return
 
-            if i != 0 and i % 9 == 0:
-                await ctx.reply(embeds=embeds)
-                embeds = []
-            i += 1
+        banned_names: list[str] = []
+        not_banned_names: list[str] = []
 
-        if embeds:
-            await ctx.reply(embeds=embeds)
+        for player in players:
+            name = player.get("name", "unknown")
+            if player.get("label_jagex") == 2:
+                banned_names.append(name)
+            else:
+                not_banned_names.append(name)
+
+        epoch = int(time.time())
+        tmp_dir = tempfile.mkdtemp()
+
+        banned_path = Path(tmp_dir) / f"{epoch}_banned.txt"
+        not_banned_path = Path(tmp_dir) / f"{epoch}_not_banned.txt"
+
+        banned_path.write_text("\n".join(banned_names))
+        not_banned_path.write_text("\n".join(not_banned_names))
+
+        embed = discord.Embed(title="Ban List", color=discord.Color.red())
+        embed.add_field(name="Total", value=str(len(players)), inline=True)
+        embed.add_field(name="Banned", value=str(len(banned_names)), inline=True)
+        embed.add_field(
+            name="Not Banned", value=str(len(not_banned_names)), inline=True
+        )
+
+        files = [
+            discord.File(banned_path, filename=banned_path.name),
+            discord.File(not_banned_path, filename=not_banned_path.name),
+        ]
+
+        try:
+            await ctx.reply(embed=embed, files=files)
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
