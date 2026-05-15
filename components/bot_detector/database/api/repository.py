@@ -15,10 +15,11 @@ class ApiUserRepo(ApiUserInterface):
         async_session: AsyncSession,
         user_name: str,
     ) -> ApiUserTableStruct | None:
+        u = ApiUserTableStruct
         query = (
-            select(ApiUserTableStruct)
-            .where(ApiUserTableStruct.username == user_name)
-            .where(ApiUserTableStruct.is_active == True)  # noqa: E712
+            select(u)
+            .where(u.username == user_name)
+            .where(u.is_active == True)  # noqa: E712
             .limit(1)
         )
 
@@ -48,18 +49,15 @@ class ApiUserRepo(ApiUserInterface):
         user_name: str,
         permission: str,
     ) -> bool:
+        u = ApiUserTableStruct
+        up = ApiUserPermTableStruct
+        p = ApiPermissionTableStruct
         query = (
-            select(ApiUserPermTableStruct)
-            .join(
-                ApiUserTableStruct,
-                ApiUserPermTableStruct.user_id == ApiUserTableStruct.id,
-            )
-            .join(
-                ApiPermissionTableStruct,
-                ApiUserPermTableStruct.permission_id == ApiPermissionTableStruct.id,
-            )
-            .where(ApiUserTableStruct.username == user_name)
-            .where(ApiPermissionTableStruct.permission == permission)
+            select(up)
+            .join(u, up.user_id == u.id)
+            .join(p, up.permission_id == p.id)
+            .where(u.username == user_name)
+            .where(p.permission == permission)
             .limit(1)
         )
 
