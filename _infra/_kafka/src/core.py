@@ -9,6 +9,7 @@ sys.path.insert(0, "/app/_shared")
 from config import KafkaSeederConfig, load_names
 from seeders.players_scraped import create_players_scraped
 from seeders.players_to_scrape import create_players_to_scrape
+from seeders.reports_to_insert import create_reports_to_insert
 from topics import create_topics
 
 config = KafkaSeederConfig()
@@ -65,6 +66,26 @@ def seed_players_scraped(
     print("Done seeding players.scraped")
 
 
+def seed_reports_to_insert(
+    producer: KafkaProducer, names: list[str], player_count: int, reports_per_player: int
+):
+    print(
+        f"Seeding {player_count} players with {reports_per_player} reports each to reports.to_insert..."
+    )
+
+    players = []
+    for to_scrape in create_players_to_scrape(names=names, count=player_count):
+        players.append(to_scrape.player_data)
+
+    for report in create_reports_to_insert(players, reports_per_player):
+        producer.send(
+            topic="reports.to_insert",
+            value=report.model_dump(mode="json"),
+        )
+    producer.flush()
+    print("Done seeding reports.to_insert")
+
+
 def main():
     random.seed(config.RANDOM_SEED)
 
@@ -91,7 +112,12 @@ def main():
         )
 
     if config.SEED_REPORTS > 0:
-        print("Report seeding not yet implemented")
+        seed_reports_to_insert(
+            producer=producer,
+            names=names,
+            player_count=config.SEED_PLAYERS,
+            reports_per_player=config.SEED_REPORTS,
+        )
 
 
 if __name__ == "__main__":
