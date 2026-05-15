@@ -3,7 +3,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from bot_detector.database.api.repository import ApiUserRepo
-from bot_detector.database.api.structs import ApiUserTableStruct
 
 
 @pytest.fixture
@@ -21,49 +20,10 @@ def session():
     return session
 
 
-def _sample_user(
-    user_name: str = "testuser", is_active: bool = True
-) -> ApiUserTableStruct:
-    return ApiUserTableStruct(
-        username=user_name,
-        token="testtoken",
-        is_active=is_active,
-        ratelimit=100,
-    )
-
-
 def _mock_scalar(result_value):
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = result_value
     return mock_result
-
-
-@pytest.mark.asyncio
-async def test_get_by_user_name_returns_user_when_active(repo, session):
-    user = _sample_user()
-    session.execute = AsyncMock(return_value=_mock_scalar(user))
-
-    result = await repo.get_by_user_name(session, "testuser")
-
-    assert result == user
-
-
-@pytest.mark.asyncio
-async def test_get_by_user_name_returns_none_when_not_found(repo, session):
-    session.execute = AsyncMock(return_value=_mock_scalar(None))
-
-    result = await repo.get_by_user_name(session, "nonexistent")
-
-    assert result is None
-
-
-@pytest.mark.asyncio
-async def test_get_by_user_name_returns_none_when_inactive(repo, session):
-    session.execute = AsyncMock(return_value=_mock_scalar(None))
-
-    result = await repo.get_by_user_name(session, "inactiveuser")
-
-    assert result is None
 
 
 @pytest.mark.asyncio

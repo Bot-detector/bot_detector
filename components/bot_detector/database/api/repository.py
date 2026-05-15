@@ -10,24 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class ApiUserRepo(ApiUserInterface):
-    async def get_by_user_name(
-        self,
-        async_session: AsyncSession,
-        user_name: str,
-    ) -> ApiUserTableStruct | None:
-        api_user = ApiUserTableStruct
-        query = (
-            select(api_user)
-            .where(api_user.username == user_name)
-            .where(api_user.is_active == True)  # noqa: E712
-            .limit(1)
-        )
-
-        async with async_session.begin():
-            result = await async_session.execute(query)
-            row = result.scalar_one_or_none()
-        return row
-
     async def log_usage(
         self,
         async_session: AsyncSession,
