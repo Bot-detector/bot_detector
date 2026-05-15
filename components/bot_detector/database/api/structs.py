@@ -35,9 +35,7 @@ class ApiUserPermTableStruct(Base):
         Integer, primary_key=True, autoincrement=True, init=False
     )
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("apiUser.id"))
-    permission_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("apiPermissions.id")
-    )
+    permission_id: Mapped[int] = mapped_column(Integer, ForeignKey("apiPermissions.id"))
 
 
 class ApiUsageTableStruct(Base):
