@@ -30,7 +30,9 @@ def _build_parsed_detection(**overrides) -> ParsedDetection:
     return ParsedDetection(**defaults)
 
 
-def _build_report_struct(version: int = 1, **detection_overrides) -> ReportsToInsertStruct:
+def _build_report_struct(
+    version: int = 1, **detection_overrides
+) -> ReportsToInsertStruct:
     return ReportsToInsertStruct(
         metadata=MetaData(version=version, source="test"),
         report=_build_parsed_detection(**detection_overrides),
@@ -84,7 +86,9 @@ async def test_handle_calls_insert_batch():
         report_repo=report_repo,
     )
 
-    with patch("bot_detector.worker_report.worker.insert_batch", new_callable=AsyncMock) as mock_insert:
+    with patch(
+        "bot_detector.worker_report.worker.insert_batch", new_callable=AsyncMock
+    ) as mock_insert:
         await w.handle(batch)
 
     mock_insert.assert_awaited_once()

@@ -41,9 +41,7 @@ class ReportWorker(Worker[ReportsToInsertStruct]):
     async def handle(self, batch: list[ReportsToInsertStruct]) -> None:
         logger.info(f"[{self._id}] consumed {len(batch)} reports")
         parsed = [
-            r
-            for r in (transform_report(record) for record in batch)
-            if r is not None
+            r for r in (transform_report(record) for record in batch) if r is not None
         ]
         if not parsed:
             logger.info("No valid reports to process.")
