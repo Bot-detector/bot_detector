@@ -1,0 +1,65 @@
+from bot_detector.database.api.interface import ApiUserInterface
+from bot_detector.database.api.structs import (
+    ApiPermissionTableStruct,
+    ApiUsageTableStruct,
+    ApiUserPermTableStruct,
+    ApiUserTableStruct,
+)
+from sqlalchemy import insert, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+
+class ApiUserRepo(ApiUserInterface):
+    async def get_by_username(
+        self,
+        async_session: AsyncSession,
+        username: str,
+    ) -> ApiUserTableStruct | None:
+        query = (
+            select(ApiUserTableStruct)
+            .where(ApiUserTableStruct.username == username)
+            .where(ApiUserTableStruct.is_active == True)  # noqa: E712
+            .limit(1)
+        )
+
+        async with async_session.begin():
+            result = await async_session.execute(query)
+            row = result.scalar_one_or_none()
+        return row
+
+    async def log_usage(
+        self,
+        async_session: AsyncSession,
+        user_id: int,
+        route: str,
+        auto_commit: bool = True,
+    ) -> None:
+        query = insert(ApiUsageTableStruct).values(
+            user_id=user_id,
+            route=route,
+        )
+        await async_session.execute(query)
+        if auto_commit:
+            await async_session.commit()
+
+    async def has_permission(
+        self,
+        async_session: AsyncSession,
+        user_id: int,
+        permission: str,
+    ) -> bool:
+        query = (
+            select(ApiUserPermTableStruct)
+            .join(
+                ApiPermissionTableStruct,
+                ApiUserPermTableStruct.permission_id == ApiPermissionTableStruct.id,
+            )
+            .where(ApiUserPermTableStruct.user_id == user_id)
+            .where(ApiPermissionTableStruct.permission == permission)
+            .limit(1)
+        )
+
+        async with async_session.begin():
+            result = await async_session.execute(query)
+            row = result.scalar_one_or_none()
+        return row is not None

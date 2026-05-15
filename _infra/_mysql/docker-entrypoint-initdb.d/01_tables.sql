@@ -351,3 +351,53 @@ CREATE TABLE `activity` (
   PRIMARY KEY (`activity_id`),
   UNIQUE KEY `unique_activity_name` (`activity_name`)
 );
+
+CREATE TABLE `apiUser` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `username` tinytext NOT NULL,
+  `token` tinytext NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `last_used` datetime DEFAULT NULL,
+  `ratelimit` int NOT NULL DEFAULT '100',
+  `is_active` tinyint(1) NOT NULL DEFAULT '1',
+  PRIMARY KEY (`id`),
+  KEY `idx_token` (`token`(15))
+);
+
+CREATE TABLE `apiPermissions` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `permission` text NOT NULL,
+  PRIMARY KEY (`id`)
+);
+
+INSERT INTO apiPermissions (permission) VALUES
+  ('request_highscores'),
+  ('verify_ban'),
+  ('create_token'),
+  ('verify_players'),
+  ('discord_general');
+
+CREATE TABLE `apiUserPerms` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `user_id` int NOT NULL,
+  `permission_id` int NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `FK_apiUserPerms_apiUser` (`user_id`),
+  KEY `FK_apiUserPerms_apiPermission` (`permission_id`),
+  CONSTRAINT `FK_apiUserPerms_apiPermission`
+    FOREIGN KEY (`permission_id`) REFERENCES `apiPermissions` (`id`),
+  CONSTRAINT `FK_apiUserPerms_apiUser`
+    FOREIGN KEY (`user_id`) REFERENCES `apiUser` (`id`)
+);
+
+CREATE TABLE `apiUsage` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `user_id` int NOT NULL,
+  `timestamp` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `route` text,
+  PRIMARY KEY (`id`),
+  KEY `FK_apiUsage_apiUser` (`user_id`),
+  KEY `idx_usr_ts` (`user_id`,`timestamp`),
+  CONSTRAINT `FK_apiUsage_apiUser`
+    FOREIGN KEY (`user_id`) REFERENCES `apiUser` (`id`)
+);
