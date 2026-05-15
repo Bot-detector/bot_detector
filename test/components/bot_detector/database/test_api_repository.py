@@ -63,7 +63,10 @@ async def test_has_permission_returns_true_when_found(repo, session):
     session.execute = AsyncMock(return_value=_mock_scalar(MagicMock()))
 
     result = await repo.has_permission(
-        session, user_name="testuser", token="testtoken", permission="request_highscores"
+        session,
+        user_name="testuser",
+        token="testtoken",
+        permission="request_highscores",
     )
 
     assert result is True
