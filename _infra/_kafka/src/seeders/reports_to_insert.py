@@ -3,7 +3,6 @@ import time
 from typing import Generator
 
 from pydantic import BaseModel, Field
-
 from seeders.players_to_scrape import PlayerStruct
 
 
@@ -31,7 +30,7 @@ class ParsedDetection(BaseModel):
     on_members_world: int = Field(0, ge=0, le=1)
     on_pvp_world: int = Field(0, ge=0, le=1)
     world_number: int = Field(0, ge=300, le=1_000)
-    equipment: Equipment = Field(default_factory=Equipment)
+    equipment: Equipment
     equip_ge_value: int = Field(0, ge=0)
 
 
@@ -71,6 +70,10 @@ def create_reports_to_insert(
                         equip_legs_id=random.randint(0, 500),
                         equip_boots_id=random.randint(0, 500),
                         equip_weapon_id=random.randint(0, 500),
+                        equip_amulet_id=random.randint(0, 500),
+                        equip_cape_id=random.randint(0, 500),
+                        equip_hands_id=random.randint(0, 500),
+                        equip_shield_id=random.randint(0, 500),
                     ),
                     equip_ge_value=random.randint(0, 1_000_000),
                 ),
