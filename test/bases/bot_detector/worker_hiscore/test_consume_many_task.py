@@ -69,7 +69,9 @@ async def test_handle_calls_insert_and_produces():
         data_to_predict_producer=data_to_predict_producer,
     )
 
-    with patch("bot_detector.worker_hiscore.worker.insert_batch", new_callable=AsyncMock) as mock_insert:
+    with patch(
+        "bot_detector.worker_hiscore.worker.insert_batch", new_callable=AsyncMock
+    ) as mock_insert:
         await w.handle(batch)
 
     mock_insert.assert_awaited_once()
@@ -99,7 +101,9 @@ async def test_handle_skips_produce_when_highscore_is_none():
         data_to_predict_producer=data_to_predict_producer,
     )
 
-    with patch("bot_detector.worker_hiscore.worker.insert_batch", new_callable=AsyncMock):
+    with patch(
+        "bot_detector.worker_hiscore.worker.insert_batch", new_callable=AsyncMock
+    ):
         await w.handle(batch)
 
     data_to_predict_producer.put.assert_awaited_once()
