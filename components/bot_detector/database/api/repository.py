@@ -47,6 +47,7 @@ class ApiUserRepo(ApiUserInterface):
         self,
         async_session: AsyncSession,
         user_name: str,
+        token: str,
         permission: str,
     ) -> bool:
         api_user = ApiUserTableStruct
@@ -57,6 +58,7 @@ class ApiUserRepo(ApiUserInterface):
             .join(api_user, api_user_perms.user_id == api_user.id)
             .join(api_permissions, api_user_perms.permission_id == api_permissions.id)
             .where(api_user.username == user_name)
+            .where(api_user.token == token)
             .where(api_permissions.permission == permission)
             .limit(1)
         )

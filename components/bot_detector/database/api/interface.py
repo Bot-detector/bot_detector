@@ -28,6 +28,7 @@ class ApiUserInterface(ABC):
         self,
         async_session: AsyncSession,
         user_name: str,
+        token: str,
         permission: str,
     ) -> bool:
         pass
