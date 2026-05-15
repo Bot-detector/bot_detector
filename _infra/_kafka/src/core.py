@@ -67,7 +67,10 @@ def seed_players_scraped(
 
 
 def seed_reports_to_insert(
-    producer: KafkaProducer, names: list[str], player_count: int, reports_per_player: int
+    producer: KafkaProducer,
+    names: list[str],
+    player_count: int,
+    reports_per_player: int,
 ):
     print(
         f"Seeding {player_count} players with {reports_per_player} reports each to reports.to_insert..."
