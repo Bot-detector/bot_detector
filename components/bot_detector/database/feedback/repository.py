@@ -7,7 +7,7 @@ from sqlalchemy import case
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
-from .structs import PredictionFeedbackTableStruct
+from bot_detector.database.feedback.structs import PredictionFeedbackTableStruct
 
 logger = logging.getLogger(__name__)
 

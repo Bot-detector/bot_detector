@@ -1,4 +1,4 @@
-from .repository import FeedbackExportRepo
-from .structs import PredictionFeedbackTableStruct
+from bot_detector.database.feedback.repository import FeedbackExportRepo
+from bot_detector.database.feedback.structs import PredictionFeedbackTableStruct
 
 __all__ = ["FeedbackExportRepo", "PredictionFeedbackTableStruct"]
