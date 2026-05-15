@@ -102,3 +102,60 @@ async def test_get_feedback_export_multiple_rows_same_voter():
     result = await repo.get_feedback_export(session, voter_player_id=5)
 
     assert len(result) == 3
+
+
+@pytest.mark.asyncio
+async def test_get_feedback_export_by_name():
+    rows = [
+        {
+            "subject_name": "player1",
+            "is_banned": True,
+            "vote": 1,
+            "prediction": "bot",
+        },
+    ]
+    session = _mock_session(rows)
+    repo = FeedbackExportRepo()
+
+    result = await repo.get_feedback_export(session, voter_player_name="voter123")
+
+    assert len(result) == 1
+    assert result[0].subject_name == "player1"
+
+
+@pytest.mark.asyncio
+async def test_get_feedback_export_by_name_returns_empty():
+    session = _mock_session([])
+    repo = FeedbackExportRepo()
+
+    result = await repo.get_feedback_export(session, voter_player_name="nobody")
+
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_get_feedback_export_by_id_and_name():
+    rows = [
+        {
+            "subject_name": "player1",
+            "is_banned": False,
+            "vote": 0,
+            "prediction": "human",
+        },
+    ]
+    session = _mock_session(rows)
+    repo = FeedbackExportRepo()
+
+    result = await repo.get_feedback_export(
+        session, voter_player_id=42, voter_player_name="voter123"
+    )
+
+    assert len(result) == 1
+
+
+@pytest.mark.asyncio
+async def test_get_feedback_export_raises_when_no_identifier():
+    repo = FeedbackExportRepo()
+
+    with pytest.raises(ValueError, match="Either voter_player_id or voter_player_name"):
+        await repo.get_feedback_export(AsyncMock())
