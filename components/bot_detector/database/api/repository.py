@@ -45,16 +45,20 @@ class ApiUserRepo(ApiUserInterface):
     async def has_permission(
         self,
         async_session: AsyncSession,
-        user_id: int,
+        user_name: str,
         permission: str,
     ) -> bool:
         query = (
             select(ApiUserPermTableStruct)
             .join(
+                ApiUserTableStruct,
+                ApiUserPermTableStruct.user_id == ApiUserTableStruct.id,
+            )
+            .join(
                 ApiPermissionTableStruct,
                 ApiUserPermTableStruct.permission_id == ApiPermissionTableStruct.id,
             )
-            .where(ApiUserPermTableStruct.user_id == user_id)
+            .where(ApiUserTableStruct.username == user_name)
             .where(ApiPermissionTableStruct.permission == permission)
             .limit(1)
         )

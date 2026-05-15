@@ -102,7 +102,7 @@ async def test_log_usage_skips_commit_when_disabled(repo, session):
 async def test_has_permission_returns_true_when_found(repo, session):
     session.execute = AsyncMock(return_value=_mock_scalar(MagicMock()))
 
-    result = await repo.has_permission(session, 1, "request_highscores")
+    result = await repo.has_permission(session, user_name="testuser", permission="request_highscores")
 
     assert result is True
 
@@ -111,7 +111,7 @@ async def test_has_permission_returns_true_when_found(repo, session):
 async def test_has_permission_returns_false_when_not_found(repo, session):
     session.execute = AsyncMock(return_value=_mock_scalar(None))
 
-    result = await repo.has_permission(session, 1, "nonexistent_perm")
+    result = await repo.has_permission(session, user_name="testuser", permission="nonexistent_perm")
 
     assert result is False
 
@@ -120,6 +120,6 @@ async def test_has_permission_returns_false_when_not_found(repo, session):
 async def test_has_permission_returns_false_when_user_not_exists(repo, session):
     session.execute = AsyncMock(return_value=_mock_scalar(None))
 
-    result = await repo.has_permission(session, 999, "request_highscores")
+    result = await repo.has_permission(session, user_name="ghost", permission="request_highscores")
 
     assert result is False
