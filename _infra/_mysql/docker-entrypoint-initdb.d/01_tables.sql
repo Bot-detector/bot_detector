@@ -401,3 +401,18 @@ CREATE TABLE `apiUsage` (
   CONSTRAINT `FK_apiUsage_apiUser`
     FOREIGN KEY (`user_id`) REFERENCES `apiUser` (`id`)
 );
+
+-- Seed: test API user (username: testuser, password/token: test-token-123)
+INSERT INTO apiUser (username, token, is_active) VALUES
+  ('testuser', 'test-token-123', 1);
+
+-- Seed: give testuser the discord_general permission (id=5)
+INSERT INTO apiUserPerms (user_id, permission_id) VALUES
+  (1, 5);
+
+-- Seed: sample feedback for smoke tests
+INSERT INTO PredictionsFeedback (voter_id, subject_id, prediction, confidence, vote, feedback_text, proposed_label)
+SELECT v.id, s.id, 'Real_Player', 0.85, 1, 'looks legit', 'Real_Player'
+FROM Players v, Players s
+WHERE v.name = 'extreme4all' AND s.name = 'ferrariic'
+LIMIT 1;

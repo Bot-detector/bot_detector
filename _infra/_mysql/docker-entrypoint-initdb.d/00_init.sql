@@ -5,3 +5,4 @@ CREATE USER `hiscore-worker`@`%` IDENTIFIED BY 'hiscore_worker_pw';
 CREATE USER `ml-worker`@`%` IDENTIFIED BY 'ml_worker_pw';
 CREATE USER `job-prune-hs`@`%` IDENTIFIED BY 'job_prune_hs_pw';
 CREATE USER `job-hs-migration`@`%` IDENTIFIED BY 'job_hs_migration_pw';
+CREATE USER `api-public`@`%` IDENTIFIED BY 'api_public_pw';
