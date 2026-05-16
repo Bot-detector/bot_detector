@@ -27,11 +27,13 @@ class PublicApiClient:
         base_url: str | None = None,
         limiter: RateLimiter | None = None,
         token: str | None = None,
+        api_user: str | None = None,
     ):
         self.session = session
         self.base_url = base_url or self.DEFAULT_BASE_URL
         self.limiter = limiter or RateLimiter()
         self.token = token
+        self.api_user = api_user
 
     @retry(max_attempts=3)
     async def get_report_score(self, names: list[str]) -> list[ReportScoreResponse]:
@@ -121,13 +123,13 @@ class PublicApiClient:
         self, player_name: str
     ) -> FeedbackExportResponse | None:
         await self.limiter.check()
-        headers: dict[str, str] = {}
-        if self.token:
-            headers["Authorization"] = f"Bearer {self.token}"
+        auth = None
+        if self.api_user and self.token:
+            auth = aiohttp.BasicAuth(self.api_user, self.token)
         async with self.session.get(
             self.base_url + "/v2/feedback/export",
             params={"player_name": player_name},
-            headers=headers,
+            auth=auth,
         ) as res:
             if res.status == 204:
                 return None

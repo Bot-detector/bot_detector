@@ -23,10 +23,12 @@ class BotDependencies:
         if self.session is None:
             self.session = session or aiohttp.ClientSession()
 
-    def init_public_api(self):
+    def init_public_api(self, token: str | None = None, api_user: str | None = None):
         assert self.session is not None
         if self.public_api is None:
-            self.public_api = PublicApiClient(session=self.session)
+            self.public_api = PublicApiClient(
+                session=self.session, token=token, api_user=api_user
+            )
 
     def init_legacy_api(self, token: str, base_url: str | None = None):
         assert self.session is not None
@@ -54,7 +56,7 @@ class BotDependencies:
 
     def init(self, settings: Settings, session: Optional[aiohttp.ClientSession] = None):
         self.init_session(session)
-        self.init_public_api()
+        self.init_public_api(token=settings.API_TOKEN, api_user=settings.API_USER)
         if settings.API_TOKEN:
             self.init_legacy_api(
                 token=settings.API_TOKEN,
