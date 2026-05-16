@@ -123,13 +123,10 @@ class PublicApiClient:
         self, player_name: str
     ) -> FeedbackExportResponse | None:
         await self.limiter.check()
-        auth = None
-        if self.api_user and self.token:
-            auth = aiohttp.BasicAuth(self.api_user, self.token)
         async with self.session.get(
             self.base_url + "/v2/feedback/export",
             params={"player_name": player_name},
-            auth=auth,
+            auth=aiohttp.BasicAuth(self.api_user or "", self.token or ""),
         ) as res:
             if res.status == 204:
                 return None

@@ -62,7 +62,7 @@ class feedbackListCommands(commands.Cog):
         normalized = to_jagex_name(player_name)
 
         assert self.deps.legacy_api is not None
-        linked_accounts = await self.deps.legacy_api.get_discord_links(
+        linked_accounts: list[dict] = await self.deps.legacy_api.get_discord_links(
             discord_id=str(ctx.author.id)
         )
 
