@@ -45,10 +45,7 @@ async def post_feedback(
     return Ok(detail=detail)
 
 
-@router.get(
-    "/feedback/export",
-    response_model=FeedbackExportResponse,
-)
+@router.get("/feedback/export", response_model=FeedbackExportResponse)
 async def get_feedback_export(
     player_name: Annotated[str, Field(..., min_length=1, max_length=13)] = Query(
         ...,
