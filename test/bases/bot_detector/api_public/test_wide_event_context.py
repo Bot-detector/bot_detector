@@ -33,9 +33,7 @@ def _make_detection(**overrides) -> Detection:
 
 @pytest.mark.asyncio
 async def test_report_service_parse_data_uses_fn_key_on_data_size_error():
-    with patch(
-        "bot_detector.api_public.src.app.report.wide_event"
-    ) as mock_we:
+    with patch("bot_detector.api_public.src.app.report.wide_event") as mock_we:
         service = ReportService()
         detections = [_make_detection() for _ in range(5001)]
         await service.parse_data(detections)
@@ -46,9 +44,7 @@ async def test_report_service_parse_data_uses_fn_key_on_data_size_error():
 
 @pytest.mark.asyncio
 async def test_report_service_parse_data_uses_fn_key_on_time_error():
-    with patch(
-        "bot_detector.api_public.src.app.report.wide_event"
-    ) as mock_we:
+    with patch("bot_detector.api_public.src.app.report.wide_event") as mock_we:
         service = ReportService()
         detections = [_make_detection(ts=int(time.time()) - 30000)]
         await service.parse_data(detections)
@@ -59,9 +55,7 @@ async def test_report_service_parse_data_uses_fn_key_on_time_error():
 
 @pytest.mark.asyncio
 async def test_report_service_parse_data_uses_fn_key_on_reporter_error():
-    with patch(
-        "bot_detector.api_public.src.app.report.wide_event"
-    ) as mock_we:
+    with patch("bot_detector.api_public.src.app.report.wide_event") as mock_we:
         service = ReportService()
         detections = [
             _make_detection(reporter="reporter_a"),
@@ -75,9 +69,7 @@ async def test_report_service_parse_data_uses_fn_key_on_reporter_error():
 
 @pytest.mark.asyncio
 async def test_report_service_filter_valid_time_uses_fn_key():
-    with patch(
-        "bot_detector.api_public.src.app.report.wide_event"
-    ) as mock_we:
+    with patch("bot_detector.api_public.src.app.report.wide_event") as mock_we:
         service = ReportService()
         detections = [_make_detection()]
         service._filter_valid_time(detections)
@@ -89,9 +81,7 @@ async def test_report_service_filter_valid_time_uses_fn_key():
 
 @pytest.mark.asyncio
 async def test_report_service_check_unique_reporter_uses_fn_key():
-    with patch(
-        "bot_detector.api_public.src.app.report.wide_event"
-    ) as mock_we:
+    with patch("bot_detector.api_public.src.app.report.wide_event") as mock_we:
         service = ReportService()
         detections = [_make_detection()]
         service._check_unique_reporter(detections)
@@ -102,9 +92,7 @@ async def test_report_service_check_unique_reporter_uses_fn_key():
 
 @pytest.mark.asyncio
 async def test_report_service_send_to_queue_uses_fn_key():
-    with patch(
-        "bot_detector.api_public.src.app.report.wide_event"
-    ) as mock_we:
+    with patch("bot_detector.api_public.src.app.report.wide_event") as mock_we:
         service = ReportService()
         parsed = MagicMock()
         parsed.model_dump.return_value = {
@@ -131,19 +119,13 @@ async def test_report_service_send_to_queue_uses_fn_key():
 @pytest.mark.asyncio
 async def test_player_get_players_kc_adds_entry_and_success_context():
     with (
-        patch(
-            "bot_detector.api_public.src.api.v2.player.wide_event"
-        ) as mock_we,
-        patch(
-            "bot_detector.api_public.src.api.v2.player.PlayerRepo"
-        ) as mock_repo_cls,
+        patch("bot_detector.api_public.src.api.v2.player.wide_event") as mock_we,
+        patch("bot_detector.api_public.src.api.v2.player.PlayerRepo") as mock_repo_cls,
         patch(
             "bot_detector.api_public.src.api.v2.player.to_jagex_name",
             side_effect=lambda n: AsyncMock(_return_value=n)() if False else n,
         ),
-        patch(
-            "bot_detector.api_public.src.api.v2.player.asyncio"
-        ) as mock_asyncio,
+        patch("bot_detector.api_public.src.api.v2.player.asyncio") as mock_asyncio,
     ):
         mock_asyncio.gather = AsyncMock(return_value=["player1"])
         mock_repo = MagicMock()
@@ -158,10 +140,11 @@ async def test_player_get_players_kc_adds_entry_and_success_context():
         )
 
         calls = [c[0][0] for c in mock_we.add_context.call_args_list]
-        assert any("get_players_kc" in c and "names" in c["get_players_kc"] for c in calls)
         assert any(
-            "get_players_kc" in c
-            and c["get_players_kc"].get("status") == "success"
+            "get_players_kc" in c and "names" in c["get_players_kc"] for c in calls
+        )
+        assert any(
+            "get_players_kc" in c and c["get_players_kc"].get("status") == "success"
             for c in calls
         )
 
@@ -169,15 +152,9 @@ async def test_player_get_players_kc_adds_entry_and_success_context():
 @pytest.mark.asyncio
 async def test_player_get_feedback_score_adds_entry_and_success_context():
     with (
-        patch(
-            "bot_detector.api_public.src.api.v2.player.wide_event"
-        ) as mock_we,
-        patch(
-            "bot_detector.api_public.src.api.v2.player.PlayerRepo"
-        ) as mock_repo_cls,
-        patch(
-            "bot_detector.api_public.src.api.v2.player.asyncio"
-        ) as mock_asyncio,
+        patch("bot_detector.api_public.src.api.v2.player.wide_event") as mock_we,
+        patch("bot_detector.api_public.src.api.v2.player.PlayerRepo") as mock_repo_cls,
+        patch("bot_detector.api_public.src.api.v2.player.asyncio") as mock_asyncio,
     ):
         mock_asyncio.gather = AsyncMock(return_value=["player1"])
         mock_repo = MagicMock()
@@ -192,7 +169,10 @@ async def test_player_get_feedback_score_adds_entry_and_success_context():
         )
 
         calls = [c[0][0] for c in mock_we.add_context.call_args_list]
-        assert any("get_feedback_score" in c and "names" in c["get_feedback_score"] for c in calls)
+        assert any(
+            "get_feedback_score" in c and "names" in c["get_feedback_score"]
+            for c in calls
+        )
         assert any(
             "get_feedback_score" in c
             and c["get_feedback_score"].get("status") == "success"
@@ -203,15 +183,9 @@ async def test_player_get_feedback_score_adds_entry_and_success_context():
 @pytest.mark.asyncio
 async def test_player_get_prediction_adds_entry_context():
     with (
-        patch(
-            "bot_detector.api_public.src.api.v2.player.wide_event"
-        ) as mock_we,
-        patch(
-            "bot_detector.api_public.src.api.v2.player.PlayerRepo"
-        ) as mock_repo_cls,
-        patch(
-            "bot_detector.api_public.src.api.v2.player.asyncio"
-        ) as mock_asyncio,
+        patch("bot_detector.api_public.src.api.v2.player.wide_event") as mock_we,
+        patch("bot_detector.api_public.src.api.v2.player.PlayerRepo") as mock_repo_cls,
+        patch("bot_detector.api_public.src.api.v2.player.asyncio") as mock_asyncio,
     ):
         mock_asyncio.gather = AsyncMock(return_value=["player1"])
         mock_repo = MagicMock()
@@ -243,15 +217,9 @@ async def test_player_get_prediction_adds_entry_context():
 @pytest.mark.asyncio
 async def test_player_get_prediction_adds_error_context_on_not_found():
     with (
-        patch(
-            "bot_detector.api_public.src.api.v2.player.wide_event"
-        ) as mock_we,
-        patch(
-            "bot_detector.api_public.src.api.v2.player.PlayerRepo"
-        ) as mock_repo_cls,
-        patch(
-            "bot_detector.api_public.src.api.v2.player.asyncio"
-        ) as mock_asyncio,
+        patch("bot_detector.api_public.src.api.v2.player.wide_event") as mock_we,
+        patch("bot_detector.api_public.src.api.v2.player.PlayerRepo") as mock_repo_cls,
+        patch("bot_detector.api_public.src.api.v2.player.asyncio") as mock_asyncio,
     ):
         mock_asyncio.gather = AsyncMock(return_value=["player1"])
         mock_repo = MagicMock()
@@ -279,12 +247,8 @@ async def test_player_get_prediction_adds_error_context_on_not_found():
 @pytest.mark.asyncio
 async def test_labels_get_labels_adds_entry_and_success_context():
     with (
-        patch(
-            "bot_detector.api_public.src.api.v2.labels.wide_event"
-        ) as mock_we,
-        patch(
-            "bot_detector.api_public.src.api.v2.labels.LabelRepo"
-        ) as mock_repo_cls,
+        patch("bot_detector.api_public.src.api.v2.labels.wide_event") as mock_we,
+        patch("bot_detector.api_public.src.api.v2.labels.LabelRepo") as mock_repo_cls,
     ):
         mock_label = MagicMock()
         mock_label.__dict__ = {"label": "Bot", "id": 1}
@@ -316,12 +280,8 @@ async def test_labels_get_labels_adds_entry_and_success_context():
 @pytest.mark.asyncio
 async def test_labels_get_label_by_id_adds_entry_and_success_context():
     with (
-        patch(
-            "bot_detector.api_public.src.api.v2.labels.wide_event"
-        ) as mock_we,
-        patch(
-            "bot_detector.api_public.src.api.v2.labels.LabelRepo"
-        ) as mock_repo_cls,
+        patch("bot_detector.api_public.src.api.v2.labels.wide_event") as mock_we,
+        patch("bot_detector.api_public.src.api.v2.labels.LabelRepo") as mock_repo_cls,
     ):
         mock_label = MagicMock()
         mock_label.__dict__ = {"label": "Bot", "id": 1}
@@ -346,8 +306,7 @@ async def test_labels_get_label_by_id_adds_entry_and_success_context():
             for c in calls
         )
         assert any(
-            "get_label_by_id" in c
-            and c["get_label_by_id"].get("status") == "success"
+            "get_label_by_id" in c and c["get_label_by_id"].get("status") == "success"
             for c in calls
         )
 
@@ -355,12 +314,8 @@ async def test_labels_get_label_by_id_adds_entry_and_success_context():
 @pytest.mark.asyncio
 async def test_labels_get_label_by_id_not_found_context():
     with (
-        patch(
-            "bot_detector.api_public.src.api.v2.labels.wide_event"
-        ) as mock_we,
-        patch(
-            "bot_detector.api_public.src.api.v2.labels.LabelRepo"
-        ) as mock_repo_cls,
+        patch("bot_detector.api_public.src.api.v2.labels.wide_event") as mock_we,
+        patch("bot_detector.api_public.src.api.v2.labels.LabelRepo") as mock_repo_cls,
     ):
         mock_repo = MagicMock()
         mock_repo.get_label_by_id = AsyncMock(return_value=None)
@@ -381,9 +336,7 @@ async def test_labels_get_label_by_id_not_found_context():
 
 
 def test_user_read_current_user_adds_called_context():
-    with patch(
-        "bot_detector.api_public.src.api.v2.user.wide_event"
-    ) as mock_we:
+    with patch("bot_detector.api_public.src.api.v2.user.wide_event") as mock_we:
         mock_user = MagicMock()
         mock_user.username = "testuser"
         mock_user.token = "testtoken"
@@ -400,15 +353,11 @@ def test_user_read_current_user_adds_called_context():
 @pytest.mark.asyncio
 async def test_report_post_reports_uses_fn_key():
     with (
-        patch(
-            "bot_detector.api_public.src.api.v2.report.wide_event"
-        ) as mock_we,
+        patch("bot_detector.api_public.src.api.v2.report.wide_event") as mock_we,
         patch(
             "bot_detector.api_public.src.api.v2.report.ReportService"
         ) as mock_svc_cls,
-        patch(
-            "bot_detector.api_public.src.api.v2.report.PlayerRepo"
-        ) as mock_repo_cls,
+        patch("bot_detector.api_public.src.api.v2.report.PlayerRepo") as mock_repo_cls,
         patch(
             "bot_detector.api_public.src.api.v2.report._get_or_insert_cached",
             new_callable=AsyncMock,
