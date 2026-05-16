@@ -16,8 +16,6 @@ from discord.ext.commands import Context
 
 logger = logging.getLogger(__name__)
 
-_24H = 86400.0
-
 
 def _safe_slug(name: str) -> str:
     slug = re.sub(r"[^a-z0-9]", "", name.lower())[:12]
@@ -53,7 +51,10 @@ class feedbackListCommands(commands.Cog):
         self.deps = deps
         self._rate_limits: dict[int, float] = {}
 
-    @commands.hybrid_command()
+    @commands.hybrid_command(
+        "feedback_list",
+        description="Export your feedback records as CSV files.",
+    )
     @commands.has_any_role(VERIFIED_PLAYER_ROLE)
     async def feedback_list(self, ctx: Context, *, player_name: str) -> None:
         await ctx.defer()
@@ -87,9 +88,8 @@ class feedbackListCommands(commands.Cog):
         if response is None:
             await ctx.reply("You have no feedback records.")
             return
-
         banned_items, not_banned_items, flagged_real_items = _split_feedback(
-            response.feedback
+            feedback=[r for r in response.feedback if isinstance(r, FeedbackExportItem)]
         )
 
         epoch = int(now)

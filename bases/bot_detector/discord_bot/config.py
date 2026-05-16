@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     DISCORD_TOKEN: str = Field(default=...)
     COMMAND_PREFIX: str = Field(default="!")
     API_TOKEN: Optional[str] = Field(default=None)
-    API_USER: Optional[str] = Field(default=None)
+    API_USER: Optional[str] = Field(default="Discord_bot")
     DATABASE_URL: Optional[str] = Field(default=None)
     API_URL: Optional[str] = Field(default=None)
     WEBHOOK: Optional[str] = Field(default=None)
