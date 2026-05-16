@@ -25,19 +25,19 @@ async def post_feedback(
     feedback: FeedbackInput,
     session=Depends(get_session),
 ):
-    _feedback = FeedbackRepo(session)
+    _fn = post_feedback.__name__
+    wide_event.add_context({_fn: {"feedback": feedback.model_dump()}})
+    feedback_repo = FeedbackRepo(session)
 
     feedback.player_name = await to_jagex_name(feedback.player_name)
+    feedback_model = feedback.model_dump()
 
-    wide_event.add_context({"feedback": feedback.model_dump()})
+    success, detail = await feedback_repo.insert_feedback(feedback_data=feedback_model)
 
-    success, detail = await _feedback.insert_feedback(
-        feedback_data=feedback.model_dump()
-    )
     if not success:
-        wide_event.add_context({"feedback": {"status": "error", "detail": detail}})
+        wide_event.add_context({_fn: {"error": {"status": "error", "detail": detail}}})
         raise HTTPException(status_code=422, detail=detail)
-    wide_event.add_context({"feedback": {"status": "success"}})
+    wide_event.add_context({_fn: {"status": "success"}})
     return Ok(detail=detail)
 
 
@@ -47,12 +47,15 @@ async def get_feedback_export(
     _=Depends(auth.has_permission("discord_general")),
     session=Depends(get_session),
 ):
+    _fn = get_feedback_export.__name__
+    wide_event.add_context({_fn: {"player_name": player_name}})
     player_name = await to_jagex_name(player_name)
 
     player_repo = PlayerRepo(session)
     player = await player_repo.get(player_name=player_name)
 
     if player is None:
+        wide_event.add_context({_fn: {"error": "Player not found"}})
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Player not found",
