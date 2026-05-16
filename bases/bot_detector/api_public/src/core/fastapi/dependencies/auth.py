@@ -65,7 +65,7 @@ def require_permission(permission: str, route: str):
         session: AsyncSession = Depends(get_session),
     ) -> AuthenticatedUser:
         has_perm = await _api_user_repo.has_permission(
-            session, user.username, user.token, permission
+            session, permission, user.token, user_name=user.username
         )
         if not has_perm:
             raise HTTPException(

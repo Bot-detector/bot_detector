@@ -19,9 +19,10 @@ class ApiUserInterface(ABC):
     async def has_permission(
         self,
         async_session: AsyncSession,
-        user_name: str,
-        token: str,
         permission: str,
+        token: str,
+        user_name: str | None = None,
+        user_id: int | None = None,
     ) -> bool:
         pass
 
