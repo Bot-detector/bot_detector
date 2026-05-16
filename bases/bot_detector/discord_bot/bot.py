@@ -67,7 +67,7 @@ async def on_ready():
 @bot.event
 async def on_connect():
     logger.info("Bot connected successfully.")
-    logger.info(f"{Settings.COMMAND_PREFIX=}")
+    logger.info(f"{Settings().COMMAND_PREFIX=}")
 
 
 @bot.event
