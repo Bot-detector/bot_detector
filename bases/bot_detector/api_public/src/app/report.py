@@ -18,18 +18,14 @@ logger = logging.getLogger(__name__)
 class CustomError(Exception): ...
 
 
-class Report:
-    def __init__(self) -> None:
-        pass
-
+class ReportService:
     def _check_data_size(self, data: list[Detection]) -> list[Detection] | None:
         return None if len(data) > 5000 else data
 
     def _filter_valid_time(self, data: list[Detection]) -> list[Detection]:
         current_time = int(time.time())
-        min_ts = current_time - 25200  # 7 hours ago
-        max_ts = current_time + 3600  # 1 hour in the future
-        # [d for d in data if min_ts < d.ts < max_ts]
+        min_ts = current_time - 25200
+        max_ts = current_time + 3600
         output = []
 
         stale_report_count = 0
@@ -58,9 +54,6 @@ class Report:
         return None if len(reporters) > 1 else data
 
     async def parse_data(self, data: list[Detection]) -> tuple[list[Detection], None]:
-        """
-        Parse and validate a list of detection data.
-        """
         data = self._check_data_size(data)
         if not data:
             error = "invalid data size"
@@ -101,9 +94,6 @@ class Report:
         data: list[ParsedDetection],
         producer: QueueProducer[ReportsToInsertStruct],
     ) -> list[Exception]:
-        tasks = []
-
-        # Transform data to ReportsToInsertStruct
         reports, error = self._transform_detection(data)
 
         tasks = [producer.put([report]) for report in reports]

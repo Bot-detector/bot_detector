@@ -37,4 +37,15 @@ GRANT SELECT ON playerdata.scraper_player_activity TO `job-hs-migration`@`%`;
 GRANT SELECT ON playerdata.player_activity TO `job-hs-migration`@`%`;
 GRANT SELECT ON playerdata.activity TO `job-hs-migration`@`%`;
 
+/*api-public*/
+GRANT SELECT, INSERT ON playerdata.Players TO `api-public`@`%`;
+GRANT SELECT ON playerdata.Labels TO `api-public`@`%`;
+GRANT SELECT, INSERT ON playerdata.PredictionsFeedback TO `api-public`@`%`;
+GRANT SELECT ON playerdata.prediction_latest TO `api-public`@`%`;
+GRANT SELECT ON playerdata.report_sighting TO `api-public`@`%`;
+GRANT SELECT, INSERT, UPDATE ON playerdata.apiUser TO `api-public`@`%`;
+GRANT SELECT ON playerdata.apiPermissions TO `api-public`@`%`;
+GRANT SELECT ON playerdata.apiUserPerms TO `api-public`@`%`;
+GRANT SELECT, INSERT ON playerdata.apiUsage TO `api-public`@`%`;
+
 FLUSH PRIVILEGES;

@@ -28,10 +28,13 @@ class ApiUserRepo(ApiUserInterface):
     async def has_permission(
         self,
         async_session: AsyncSession,
-        user_name: str,
-        token: str,
         permission: str,
+        token: str,
+        user_name: str | None = None,
+        user_id: int | None = None,
     ) -> bool:
+        if not user_name and user_id is None:
+            raise ValueError("user_name or user_id is required")
         api_user = ApiUserTableStruct
         api_user_perms = ApiUserPermTableStruct
         api_permissions = ApiPermissionTableStruct
@@ -39,13 +42,31 @@ class ApiUserRepo(ApiUserInterface):
             select(api_user_perms)
             .join(api_user, api_user_perms.user_id == api_user.id)
             .join(api_permissions, api_user_perms.permission_id == api_permissions.id)
-            .where(api_user.username == user_name)
             .where(api_user.token == token)
             .where(api_permissions.permission == permission)
-            .limit(1)
         )
+        if user_name is not None:
+            query = query.where(api_user.username == user_name)
+        if user_id is not None:
+            query = query.where(api_user.id == user_id)
+        query = query.limit(1)
 
-        async with async_session.begin():
-            result = await async_session.execute(query)
-            row = result.scalar_one_or_none()
+        result = await async_session.execute(query)
+        row = result.scalar_one_or_none()
         return row is not None
+
+    async def get_user(
+        self,
+        async_session: AsyncSession,
+        user_name: str,
+        is_active: bool | None = None,
+    ) -> ApiUserTableStruct | None:
+        if not user_name:
+            raise ValueError("user_name is required")
+        query = select(ApiUserTableStruct).where(
+            ApiUserTableStruct.username == user_name,
+        )
+        if is_active is not None:
+            query = query.where(ApiUserTableStruct.is_active == is_active)
+        result = await async_session.execute(query)
+        return result.scalar_one_or_none()

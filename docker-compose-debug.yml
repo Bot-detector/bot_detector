@@ -134,9 +134,10 @@ services:
       dockerfile: Dockerfile
       target: dev
     # command: ["uv", "run", "bases/bot_detector/hiscore_scraper/core.py"]
-    # command: uv run uvicorn bases.bot_detector.api_public.src.core.server:app --host 0.0.0.0 --reload --port 5000
+    command: uv run uvicorn bases.bot_detector.api_public.src.core.server:app --host 0.0.0.0 --reload --port 5000
     # command: uv run uvicorn bases.bot_detector.website.core.server:app --host 0.0.0.0 --reload --port 5000
     # command: uv run uvicorn bases.bot_detector.api_ml.core.server:app --host 0.0.0.0 --reload --port 5000
+    # command: ["sleep", "infinity"]
     ports:
       - 5000 # api endpoint
       - 8000 # metrics endpoint
@@ -144,7 +145,7 @@ services:
       - ./bases:/app/bases
       - ./components:/app/components
       - ./projects:/app/projects
-    command: ["sleep", "infinity"]
+    
     # network_mode: host # needed if we do any portforwarding from the cluster
     networks:
       - botdetector-network

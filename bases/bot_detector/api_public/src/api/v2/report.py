@@ -1,5 +1,4 @@
-from bot_detector.api_public.src.app.repositories.player import Player
-from bot_detector.api_public.src.app.repositories.report import Report
+from bot_detector.api_public.src.app.report import ReportService
 from bot_detector.api_public.src.app.views.response.ok import Ok
 from bot_detector.api_public.src.core._cache import SimpleALRUCache
 from bot_detector.api_public.src.core.fastapi.dependencies.queue import (
@@ -7,6 +6,7 @@ from bot_detector.api_public.src.core.fastapi.dependencies.queue import (
 )
 from bot_detector.api_public.src.core.fastapi.dependencies import wide_event
 from bot_detector.api_public.src.core.fastapi.dependencies.session import get_session
+from bot_detector.database.api_public import PlayerRepo
 from bot_detector.event_queue.core import QueueProducer
 from bot_detector.event_queue.structs import ReportsToInsertStruct
 from bot_detector.structs import Detection, ParsedDetection
@@ -19,6 +19,19 @@ router = APIRouter(tags=["Report"])
 player_cache = SimpleALRUCache(max_size=100_000)
 
 
+async def _get_or_insert_cached(
+    repo: PlayerRepo, cache: SimpleALRUCache, player_name: str
+):
+    sanitized = PlayerRepo.sanitize_name(player_name)
+    player = await cache.get(key=sanitized)
+    if player:
+        return player
+    player = await repo.get_or_insert(player_name=player_name)
+    if player:
+        await cache.put(key=sanitized, value=player)
+    return player
+
+
 @router.post("/report", status_code=status.HTTP_201_CREATED, response_model=Ok)
 async def post_reports(
     detections: list[Detection],
@@ -28,8 +41,8 @@ async def post_reports(
     ),
 ):
     global player_cache
-    report_repo = Report()
-    player_repo = Player(session=session, cache=player_cache)
+    report_service = ReportService()
+    player_repo = PlayerRepo(session=session)
 
     wide_event.add_context(
         {
@@ -39,7 +52,7 @@ async def post_reports(
             }
         }
     )
-    data, error = await report_repo.parse_data(detections)
+    data, error = await report_service.parse_data(detections)
     if error:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=error)
 
@@ -52,23 +65,21 @@ async def post_reports(
         }
     )
 
-    # get unique list of names
     player_names = list(set([d.reported for d in data] + [d.reporter for d in data]))
-    players = [await player_repo.get_or_insert(player_name=p) for p in player_names]
+    players = [
+        await _get_or_insert_cached(player_repo, player_cache, p) for p in player_names
+    ]
     players = {p.name: p.id for p in players if p}
 
     _data = []
     for d in data:
         _d = d.model_dump()
-        # get reported_id from name
-        reported = player_repo.sanitize_name(_d.pop("reported"))
+        reported = PlayerRepo.sanitize_name(_d.pop("reported"))
         reported_id = players.get(reported)
 
-        # get reporter_id from name
-        reporter = player_repo.sanitize_name(_d.pop("reporter"))
+        reporter = PlayerRepo.sanitize_name(_d.pop("reporter"))
         reporter_id = players.get(reporter)
 
-        # some validation
         if reporter_id is None or reported_id is None:
             wide_event.add_context(
                 {
@@ -89,8 +100,7 @@ async def post_reports(
 
         _data.append(ParsedDetection(**_d))
 
-    # print(_data)
-    produce_errors = await report_repo.send_to_queue(
+    produce_errors = await report_service.send_to_queue(
         data=_data,
         producer=report_producer,
     )

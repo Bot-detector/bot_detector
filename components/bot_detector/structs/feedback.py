@@ -6,3 +6,9 @@ class FeedbackExportItem(BaseModel):
     is_banned: bool
     vote: int
     prediction: str
+
+
+class FeedbackExportResponse(BaseModel):
+    player_name: str
+    total_feedback: int
+    feedback: list[FeedbackExportItem]

@@ -23,30 +23,21 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 
         wide_event.add_context(
             {
-                "http_method": request.method,
-                "http_path": request.url.path,
-                # "user_agent": request.headers.get("user-agent"),
-                "http_query_params": query_params,
+                "http": {
+                    "method": request.method,
+                    "path": request.url.path,
+                    "query_params": query_params,
+                }
             }
         )
         try:
             response = await call_next(request)
-            wide_event.add_context(
-                {
-                    "http_status": response.status_code,
-                }
-            )
+            wide_event.add_context({"http": {"status": response.status_code}})
             return response
         except Exception as e:
             error_occurred = True
-            wide_event.add_context(
-                {
-                    "error": True,
-                    "error_type": type(e).__name__,
-                    "error_message": str(e),
-                    "http_status": 500,
-                }
-            )
+            wide_event.add_context({"error": {"type": type(e).__name__, "msg": str(e)}})
+            wide_event.add_context({"http": {"status": 500}})
             raise e
         finally:
             duration = (time.time() - start_time) * 1000

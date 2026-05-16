@@ -1,5 +1,5 @@
 from ._metadata import MetaData
-from .feedback import FeedbackExportItem
+from .feedback import FeedbackExportItem, FeedbackExportResponse
 from .hiscore import (
     HighscoreBaseStruct,
     HighscoreDataBaseStruct,
@@ -21,6 +21,7 @@ from .reports import Detection, Equipment, ParsedDetection
 __all__ = [
     "MetaData",
     "FeedbackExportItem",
+    "FeedbackExportResponse",
     "HighscoreBaseStruct",
     "HighscoreDataLatestStruct",
     "HighscoreDataBaseStruct",
