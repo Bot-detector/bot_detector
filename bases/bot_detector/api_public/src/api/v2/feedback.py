@@ -1,8 +1,6 @@
 import logging
 from typing import Annotated
 
-from bot_detector.api_public.src.app.repositories.feedback import Feedback
-from bot_detector.api_public.src.app.repositories.player import Player as repoPlayer
 from bot_detector.api_public.src.app.views.input.feedback import FeedbackInput
 from bot_detector.api_public.src.app.views.response.ok import Ok
 from bot_detector.api_public.src.core.fastapi.dependencies import wide_event
@@ -14,6 +12,7 @@ from bot_detector.api_public.src.core.fastapi.dependencies.session import get_se
 from bot_detector.api_public.src.core.fastapi.dependencies.to_jagex_name import (
     to_jagex_name,
 )
+from bot_detector.database.api_public import FeedbackRepo, PlayerRepo
 from bot_detector.database.feedback import FeedbackExportRepo
 from bot_detector.structs import FeedbackExportResponse
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -30,15 +29,19 @@ async def post_feedback(
     feedback: FeedbackInput,
     session=Depends(get_session),
 ):
-    _feedback = Feedback(session)
+    _feedback = FeedbackRepo(session)
 
     feedback.player_name = await to_jagex_name(feedback.player_name)
 
     wide_event.add_context({"feedback": feedback.model_dump()})
 
-    success, detail = await _feedback.insert_feedback(feedback=feedback)
+    success, detail = await _feedback.insert_feedback(
+        feedback_data=feedback.model_dump()
+    )
     if not success:
+        wide_event.add_context({"feedback": {"status": "error", "detail": detail}})
         raise HTTPException(status_code=422, detail=detail)
+    wide_event.add_context({"feedback": {"status": "success"}})
     return Ok(detail=detail)
 
 
@@ -58,7 +61,7 @@ async def get_feedback_export(
 ):
     player_name = await to_jagex_name(player_name)
 
-    player_repo = repoPlayer(session)
+    player_repo = PlayerRepo(session)
     player = await player_repo.get(player_name=player_name)
 
     if player is None:
