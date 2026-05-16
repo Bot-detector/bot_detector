@@ -3,11 +3,7 @@ from typing import Annotated
 
 from bot_detector.api_public.src.app.views.input.feedback import FeedbackInput
 from bot_detector.api_public.src.app.views.response.ok import Ok
-from bot_detector.api_public.src.core.fastapi.dependencies import wide_event
-from bot_detector.api_public.src.core.fastapi.dependencies.auth import (
-    AuthenticatedUser,
-    require_permission,
-)
+from bot_detector.api_public.src.core.fastapi.dependencies import auth, wide_event
 from bot_detector.api_public.src.core.fastapi.dependencies.session import get_session
 from bot_detector.api_public.src.core.fastapi.dependencies.to_jagex_name import (
     to_jagex_name,
@@ -15,7 +11,7 @@ from bot_detector.api_public.src.core.fastapi.dependencies.to_jagex_name import 
 from bot_detector.database.api_public import FeedbackRepo, PlayerRepo
 from bot_detector.database.feedback import FeedbackExportRepo
 from bot_detector.structs import FeedbackExportResponse
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic.fields import Field
 
 router = APIRouter(tags=["Feedback"])
@@ -45,15 +41,10 @@ async def post_feedback(
     return Ok(detail=detail)
 
 
-@router.get("/feedback/export", response_model=FeedbackExportResponse)
+@router.get("/feedback/export", response_model=FeedbackExportResponse, tags=["Private"])
 async def get_feedback_export(
-    player_name: Annotated[str, Field(..., min_length=1, max_length=13)] = Query(
-        ...,
-        description="Normalized OSRS username of the voter",
-    ),
-    user: AuthenticatedUser = Depends(
-        require_permission("discord_general", "feedback_export")
-    ),
+    player_name: Annotated[str, Field(..., min_length=1, max_length=13)],
+    _=Depends(auth.has_permission("discord_general")),
     session=Depends(get_session),
 ):
     player_name = await to_jagex_name(player_name)
