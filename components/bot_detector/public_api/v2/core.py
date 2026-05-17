@@ -137,4 +137,4 @@ class PublicApiClient:
                 return None
             res.raise_for_status()
             data = orjson.loads(await res.read())
-            return FeedbackExportResponse(**data)
+        return FeedbackExportResponse(**data)

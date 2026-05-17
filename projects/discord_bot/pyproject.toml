@@ -17,6 +17,7 @@ dependencies = [
     "pydantic==2.10.4",
     "asyncmy==0.2.11",
     "orjson>=3.11.8",
+    "aiofiles>=25.1.0",
 ]
 
 [project.scripts]

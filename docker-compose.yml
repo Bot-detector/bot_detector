@@ -376,11 +376,11 @@ services:
       - DATABASE_URL=mysql+asyncmy://discord-bot:discord_bot_pw@mysql:3306/playerdata
     networks:
       - botdetector-network
-    depends_on:
-      mysql_setup:
-        condition: service_completed_successfully
-      kafka_setup:
-        condition: service_completed_successfully
+    # depends_on:
+    #   mysql_setup:
+    #     condition: service_completed_successfully
+    #   kafka_setup:
+    #     condition: service_completed_successfully
 
 networks:
   botdetector-network:
