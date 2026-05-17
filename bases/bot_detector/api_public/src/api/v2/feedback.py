@@ -1,4 +1,3 @@
-import logging
 from typing import Annotated
 
 from bot_detector.api_public.src.app.views.input.feedback import FeedbackInput
@@ -15,7 +14,6 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic.fields import Field
 
 router = APIRouter(tags=["Feedback"])
-logger = logging.getLogger(__name__)
 
 _feedback_export_repo = FeedbackExportRepo()
 

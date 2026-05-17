@@ -40,13 +40,14 @@ async def post_reports(
         get_reports_to_insert_producer
     ),
 ):
+    _fn = post_reports.__name__
     global player_cache
     report_service = ReportService()
     player_repo = PlayerRepo(session=session)
 
     wide_event.add_context(
         {
-            "report": {
+            _fn: {
                 "reports_received": len(detections),
                 "sample_report": detections[0].model_dump() if detections else None,
             }
@@ -58,7 +59,7 @@ async def post_reports(
 
     wide_event.add_context(
         {
-            "report": {
+            _fn: {
                 "valid_reports_received": len(data),
                 "reporter": data[0].reporter,
             }
@@ -83,11 +84,13 @@ async def post_reports(
         if reporter_id is None or reported_id is None:
             wide_event.add_context(
                 {
-                    "report": {
-                        "status": "error",
-                        "detail": "invalid_reporter_or_reported, could not find player id",
-                        "reported": reported,
-                        "reporter": reporter,
+                    _fn: {
+                        "error": {
+                            "status": "error",
+                            "detail": "invalid_reporter_or_reported, could not find player id",
+                            "reported": reported,
+                            "reporter": reporter,
+                        }
                     }
                 }
             )
@@ -107,10 +110,12 @@ async def post_reports(
     if produce_errors:
         wide_event.add_context(
             {
-                "report": {
-                    "status": "error",
-                    "detail": str(produce_errors[0]),
-                    "produce_errors": len(produce_errors),
+                _fn: {
+                    "error": {
+                        "status": "error",
+                        "detail": str(produce_errors[0]),
+                        "produce_errors": len(produce_errors),
+                    }
                 }
             }
         )
