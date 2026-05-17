@@ -44,6 +44,7 @@ async def post_feedback(
 @router.get("/feedback/export", response_model=FeedbackExportResponse, tags=["Private"])
 async def get_feedback_export(
     player_name: Annotated[str, Field(..., min_length=1, max_length=13)],
+    earliest_ts: Annotated[int | None, Field(default=None, ge=0)],
     _=Depends(auth.has_permission("discord_general")),
     session=Depends(get_session),
 ):
@@ -64,6 +65,7 @@ async def get_feedback_export(
     feedback_items = await _feedback_export_repo.get_feedback_export(
         async_session=session,
         voter_player_id=player.id,
+        earliest_ts=earliest_ts,
     )
 
     if not feedback_items:

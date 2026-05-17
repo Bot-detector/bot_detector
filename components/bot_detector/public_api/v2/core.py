@@ -120,14 +120,17 @@ class PublicApiClient:
 
     @retry(max_attempts=3)
     async def get_feedback_export(
-        self, player_name: str
+        self,
+        player_name: str,
+        earliest_ts: int | None = None,
     ) -> FeedbackExportResponse | None:
         await self.limiter.check()
-        async with self.session.get(
-            self.base_url + "/v2/feedback/export",
-            params={"player_name": player_name},
-            auth=aiohttp.BasicAuth(self.api_user or "", self.token or ""),
-        ) as res:
+        url = f"{self.base_url}/v2/feedback/export"
+        auth = aiohttp.BasicAuth(self.api_user or "", self.token or "")
+        params = {"player_name": player_name, "earliest_ts": earliest_ts}
+        params = {k: v for k, v in params.items() if v is not None}
+
+        async with self.session.get(url=url, params=params, auth=auth) as res:
             if res.status == 204:
                 return None
             if res.status == 404:

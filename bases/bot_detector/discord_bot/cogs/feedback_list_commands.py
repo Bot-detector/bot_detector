@@ -11,7 +11,11 @@ from pathlib import Path
 import aiofiles
 import discord
 from bot_detector.discord_bot.dependencies import BotDependencies
-from bot_detector.discord_bot.utils import VERIFIED_PLAYER_ROLE
+from bot_detector.discord_bot.utils import (
+    DEV_CHANNEL_TESTER_ROLE,
+    PATREON_ROLE,
+    VERIFIED_PLAYER_ROLE,
+)
 from bot_detector.discord_bot.utils.string_processing import to_jagex_name
 from bot_detector.public_api.v2.structs import (
     FeedbackExportItem,
@@ -21,6 +25,8 @@ from discord.ext import commands
 from discord.ext.commands import Context
 
 logger = logging.getLogger(__name__)
+
+MONTH_SECONDS = 30 * 24 * 60 * 60
 
 
 def _safe_slug(name: str) -> str:
@@ -41,15 +47,6 @@ def _split_feedback(
     flagged_real = [
         i for i in feedback if i.vote == 1 and i.prediction == "Real_Player"
     ]
-    logger.info(
-        {
-            "action": "split_feedback",
-            "total": len(feedback),
-            "banned": len(banned),
-            "not_banned": len(not_banned),
-            "flagged_real": len(flagged_real),
-        }
-    )
     return banned, not_banned, flagged_real
 
 
@@ -65,6 +62,16 @@ async def write_csv(path: str, rows: list[dict]):
 
     async with aiofiles.open(path, "w") as f:
         await f.write(output.getvalue())
+
+
+async def create_file(
+    content: list[dict],
+    filename: str,
+    tmp_dir: str,
+) -> discord.File:
+    path = Path(tmp_dir) / filename
+    await write_csv(path=str(path), rows=content)
+    return discord.File(path, filename=filename)
 
 
 async def create_files(
@@ -83,9 +90,8 @@ async def create_files(
     ]
     for suffix, content in file_tuples:
         filename = f"{epoch}_{slug}_{suffix}.csv"
-        path = Path(tmp_dir) / filename
-        await write_csv(path=str(path), rows=content)
-        files_to_send.append(discord.File(path, filename=filename))
+        path = await create_file(content=content, filename=filename, tmp_dir=tmp_dir)
+        files_to_send.append(path)
     return files_to_send
 
 
@@ -96,12 +102,6 @@ class feedbackListCommands(commands.Cog):
         self._rate_limits: dict[int, float] = {}
 
     async def get_discord_links(self, discord_id: str) -> list:
-        logger.info(
-            {
-                "action": "get_discord_links",
-                "discord_id": discord_id,
-            }
-        )
         assert self.deps.legacy_api is not None
         accounts = await self.deps.legacy_api.get_discord_links(discord_id=discord_id)
         accounts: list[dict]
@@ -111,34 +111,20 @@ class feedbackListCommands(commands.Cog):
             for acc in (accounts or [])
             if acc.get("Verified_status") == 1
         ]
-        logger.info(
-            {
-                "action": "get_discord_links_result",
-                "discord_id": discord_id,
-                "verified_names": verified_names,
-            }
-        )
         return verified_names
 
-    async def get_feedback_records(self, name: str) -> FeedbackExportResponse | None:
-        logger.info(
-            {
-                "action": "get_feedback_records",
-                "player_name": name,
-            }
-        )
+    async def get_feedback_records(
+        self, name: str, earliest_ts: int
+    ) -> FeedbackExportResponse | None:
         assert self.deps.public_api is not None
-        response = await self.deps.public_api.get_feedback_export(name)
-        if response is None:
-            logger.warning(f"Failed to fetch feedback for {name}")
-            return None
-        logger.info(
-            {
-                "action": "get_feedback_records_result",
-                "player_name": name,
-                "record_count": len(response.feedback),
-            }
+        response = await self.deps.public_api.get_feedback_export(
+            player_name=name,
+            earliest_ts=earliest_ts,
         )
+
+        if response is None:
+            return None
+
         assert isinstance(response, FeedbackExportResponse)
         return response
 
@@ -146,15 +132,14 @@ class feedbackListCommands(commands.Cog):
         "feedback_list",
         description="Export your feedback records as CSV files.",
     )
-    @commands.has_any_role(VERIFIED_PLAYER_ROLE)
+    @commands.has_any_role(VERIFIED_PLAYER_ROLE, DEV_CHANNEL_TESTER_ROLE)
     async def feedback_list(self, ctx: Context, *, player_name: str) -> None:
-        logger.info(
-            {
-                "action": "feedback_list_command",
-                "user_id": ctx.author.id,
-                "player_name": player_name,
-            }
-        )
+        _log = {"user_id": ctx.author.id, "player_name": player_name}
+        logger.info(_log)
+        if ctx.command is None:
+            await ctx.reply("Please use the slash command `/feedback_list`.")
+            return
+
         await ctx.defer()
 
         normalized = to_jagex_name(player_name)
@@ -171,46 +156,63 @@ class feedbackListCommands(commands.Cog):
             await ctx.reply("You've already used this command today.")
             return
 
-        feedback = await self.get_feedback_records(normalized)
+        assert isinstance(ctx.author, discord.Member)
+        is_patreon = PATREON_ROLE in ctx.author.roles
+        if is_patreon:
+            earliest_ts = int(now - 12 * MONTH_SECONDS)
+        else:
+            earliest_ts = int(now - 3 * MONTH_SECONDS)
+
+        logger.info(_log | {"earliest_ts": earliest_ts})
+        feedback = await self.get_feedback_records(
+            name=normalized, earliest_ts=earliest_ts
+        )
 
         if not feedback:
+            logger.info(_log | {"detail": "no feedback records"})
             await ctx.reply("You have no feedback records.")
             return
 
-        logger.info(
-            {
-                "action": "feedback_list_command_result",
-                "user_id": ctx.author.id,
-                "player_name": player_name,
-                "feedback_count": len(feedback.feedback),
-            }
-        )
-        banned, not_banned, real = _split_feedback(feedback=feedback.feedback)
+        _log = _log | {"feedback_count": len(feedback.feedback)}
+        logger.info(_log)
 
-        slug = _safe_slug(normalized)
+        banned, not_banned, real = _split_feedback(feedback=feedback.feedback)
+        _log = _log | {
+            "banned": len(banned),
+            "not_banned": len(not_banned),
+            "real": len(real),
+        }
+        logger.info(_log)
+
         tmp_dir = tempfile.mkdtemp()
 
         try:
-            files = await create_files(
-                banned=[i.model_dump() for i in banned],
-                not_banned=[i.model_dump() for i in not_banned],
-                flagged_real=[i.model_dump() for i in real],
-                slug=slug,
+            epoch = int(time.time())
+            slug = _safe_slug(normalized)
+            file = await create_file(
+                content=[i.model_dump() for i in feedback.feedback],
+                filename=f"{epoch}_{slug}_feedback.csv",
                 tmp_dir=tmp_dir,
             )
 
             embed = discord.Embed(title="Feedback Export", color=discord.Color.blue())
             embed.add_field(name="Player", value=normalized, inline=True)
             embed.add_field(
-                name="Total Feedback",
-                value=str(len(feedback.feedback)),
-                inline=True,
+                name="Data",
+                value=(
+                    f"- Total Feedback: {len(feedback.feedback)}\n"
+                    f"- Banned: {len(banned)}\n"
+                    f"- Not Banned: {len(not_banned)}\n"
+                    f"- Flagged Real: {len(real)}"
+                ),
+                inline=False,
             )
-            embed.add_field(name="Banned", value=str(len(banned)), inline=True)
-            embed.add_field(name="Not Banned", value=str(len(not_banned)), inline=True)
-            embed.add_field(name="Flagged Real", value=str(len(real)), inline=True)
-
-            await ctx.reply(embed=embed, files=files)
+            # date YYYY-MM-DD HH:MM:SS
+            t = time.ctime(earliest_ts)
+            m = f" earliest:\n{t}"
+            embed.set_footer(text="Patreon:" if is_patreon else "Non-Patreon:" + m)
+            await ctx.reply(files=[file], ephemeral=True)
+            await ctx.reply(embed=embed)
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
