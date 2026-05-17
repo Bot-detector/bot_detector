@@ -9,12 +9,16 @@ os.environ.setdefault("DISCORD_TOKEN", "test-token")
 os.environ.setdefault("OSRS_ITEMS_USER_AGENT", "test-agent")
 
 from bot_detector.discord_bot.cogs.feedback_list_commands import (
-    _build_csv,
     _safe_slug,
     _split_feedback,
+    create_file,
     feedbackListCommands,
+    write_csv,
 )
-from bot_detector.structs.feedback import FeedbackExportItem, FeedbackExportResponse
+from bot_detector.public_api.v2.structs import (
+    FeedbackExportItem,
+    FeedbackExportResponse,
+)
 
 
 def _make_cog() -> feedbackListCommands:
@@ -30,6 +34,7 @@ def _make_ctx(*, reply_raises: Exception | None = None) -> AsyncMock:
     ctx = AsyncMock()
     ctx.author.name = "test_user"
     ctx.author.id = 12345
+    ctx.command = MagicMock()
     if reply_raises:
         ctx.reply.side_effect = reply_raises
     return ctx
@@ -63,17 +68,12 @@ def _make_response(
     )
 
 
-def _read_file_content(discord_file) -> str:
-    discord_file.fp.seek(0)
-    return discord_file.fp.read().decode()
-
-
 def _linked_account(name: str, verified: bool = True) -> dict:
     return {"name": name, "Verified_status": 1 if verified else 0}
 
 
 @pytest.mark.asyncio
-async def test_success_sends_three_csvs_and_embed():
+async def test_success_sends_file_and_embed():
     cog = _make_cog()
     ctx = _make_ctx()
 
@@ -89,30 +89,35 @@ async def test_success_sends_three_csvs_and_embed():
         return_value=_make_response(items)
     )
 
-    with patch(
-        "bot_detector.discord_bot.cogs.feedback_list_commands.time"
-    ) as mock_time:
+    with (
+        patch("bot_detector.discord_bot.cogs.feedback_list_commands.time") as mock_time,
+        patch(
+            "bot_detector.discord_bot.cogs.feedback_list_commands.is_supporter",
+            return_value=False,
+        ),
+    ):
         mock_time.time.return_value = 1715788800.0
+        mock_time.ctime.return_value = "Tue May 14 00:00:00 2026"
         await _invoke(cog, ctx, "Zezima")
 
-    ctx.reply.assert_awaited_once()
-    call_kwargs = ctx.reply.call_args.kwargs
-    embed = call_kwargs["embed"]
-    files = call_kwargs["files"]
+    assert ctx.reply.await_count == 2
 
+    file_call = ctx.reply.call_args_list[0]
+    assert "file" in file_call.kwargs
+    assert file_call.kwargs.get("ephemeral") is True
+    assert "feedback.csv" in file_call.kwargs["file"].filename
+
+    embed_call = ctx.reply.call_args_list[1]
+    embed = embed_call.kwargs["embed"]
     assert embed.title == "Feedback Export"
-    assert len(files) == 3
-
-    filenames = [f.filename for f in files]
-    assert "1715788800_zezima_banned.csv" in filenames
-    assert "1715788800_zezima_not_banned.csv" in filenames
-    assert "1715788800_zezima_flagged_real_player.csv" in filenames
 
     fields = {f.name: f.value for f in embed.fields}
-    assert fields["Total Feedback"] == "3"
-    assert fields["Banned"] == "1"
-    assert fields["Not Banned"] == "2"
-    assert fields["Flagged Real Player"] == "1"
+    assert "Player" in fields
+    assert fields["Player"] == "zezima"
+    assert "Total Feedback: 3" in fields["Data"]
+    assert "Banned: 1" in fields["Data"]
+    assert "Not Banned: 2" in fields["Data"]
+    assert "Flagged Real: 1" in fields["Data"]
 
 
 @pytest.mark.asyncio
@@ -194,16 +199,18 @@ async def test_rate_limit_expiry():
         return_value=_make_response(items)
     )
 
-    with patch(
-        "bot_detector.discord_bot.cogs.feedback_list_commands.time"
-    ) as mock_time:
+    with (
+        patch("bot_detector.discord_bot.cogs.feedback_list_commands.time") as mock_time,
+        patch(
+            "bot_detector.discord_bot.cogs.feedback_list_commands.is_supporter",
+            return_value=False,
+        ),
+    ):
         mock_time.time.return_value = 1715788800.0 + 86500.0
+        mock_time.ctime.return_value = "Tue May 14 00:00:00 2026"
         await _invoke(cog, ctx, "Zezima")
 
-    ctx.reply.assert_awaited_once()
-    call_kwargs = ctx.reply.call_args.kwargs
-    assert "embed" in call_kwargs
-    assert "files" in call_kwargs
+    assert ctx.reply.await_count == 2
 
 
 @pytest.mark.asyncio
@@ -237,13 +244,20 @@ async def test_name_normalization():
         return_value=_make_response([_make_item("x")])
     )
 
-    with patch(
-        "bot_detector.discord_bot.cogs.feedback_list_commands.time"
-    ) as mock_time:
+    with (
+        patch("bot_detector.discord_bot.cogs.feedback_list_commands.time") as mock_time,
+        patch(
+            "bot_detector.discord_bot.cogs.feedback_list_commands.is_supporter",
+            return_value=False,
+        ),
+    ):
         mock_time.time.return_value = 1715788800.0
+        mock_time.ctime.return_value = "Tue May 14 00:00:00 2026"
         await _invoke(cog, ctx, "Zezi-ma_")
 
-    cog.deps.public_api.get_feedback_export.assert_awaited_once_with("zezi ma")
+    cog.deps.public_api.get_feedback_export.assert_awaited_once()
+    call_kwargs = cog.deps.public_api.get_feedback_export.call_args.kwargs
+    assert call_kwargs["player_name"] == "zezi ma"
 
 
 @pytest.mark.asyncio
@@ -272,6 +286,10 @@ async def test_file_cleanup_even_if_reply_raises():
             side_effect=tracking_mkdtemp,
         ),
         patch("bot_detector.discord_bot.cogs.feedback_list_commands.time") as mock_time,
+        patch(
+            "bot_detector.discord_bot.cogs.feedback_list_commands.is_supporter",
+            return_value=False,
+        ),
         pytest.raises(RuntimeError),
     ):
         mock_time.time.return_value = 1715788800.0
@@ -282,7 +300,7 @@ async def test_file_cleanup_even_if_reply_raises():
 
 
 @pytest.mark.asyncio
-async def test_csv_content_correctness():
+async def test_split_feedback_correctness():
     items = [
         _make_item("bot1", is_banned=True, vote=-1, prediction="Bot"),
         _make_item("legit1", is_banned=False, vote=0, prediction="Bot"),
@@ -292,19 +310,12 @@ async def test_csv_content_correctness():
 
     banned, not_banned, flagged_real = _split_feedback(items)
 
-    csv_banned = _build_csv(banned)
-    csv_not_banned = _build_csv(not_banned)
-    csv_flagged = _build_csv(flagged_real)
-
-    assert csv_banned == "player_name,banned\nbot1,yes\nbanned_real,yes"
-    assert csv_not_banned == "player_name,banned\nlegit1,no\nreal1,no"
-    assert csv_flagged == "player_name,banned\nreal1,no\nbanned_real,yes"
-
-
-@pytest.mark.asyncio
-async def test_csv_header_always_present():
-    csv = _build_csv([])
-    assert csv == "player_name,banned"
+    assert len(banned) == 2
+    assert all(i.is_banned for i in banned)
+    assert len(not_banned) == 2
+    assert all(not i.is_banned for i in not_banned)
+    assert len(flagged_real) == 2
+    assert all(i.vote == 1 and i.prediction == "Real_Player" for i in flagged_real)
 
 
 @pytest.mark.asyncio
@@ -322,7 +333,7 @@ async def test_safe_filenames_empty_slug_fallback():
 
 
 @pytest.mark.asyncio
-async def test_embed_field_values_match_split():
+async def test_embed_data_field_values():
     cog = _make_cog()
     ctx = _make_ctx()
 
@@ -339,18 +350,24 @@ async def test_embed_field_values_match_split():
         return_value=_make_response(items)
     )
 
-    with patch(
-        "bot_detector.discord_bot.cogs.feedback_list_commands.time"
-    ) as mock_time:
+    with (
+        patch("bot_detector.discord_bot.cogs.feedback_list_commands.time") as mock_time,
+        patch(
+            "bot_detector.discord_bot.cogs.feedback_list_commands.is_supporter",
+            return_value=False,
+        ),
+    ):
         mock_time.time.return_value = 1715788800.0
+        mock_time.ctime.return_value = "Tue May 14 00:00:00 2026"
         await _invoke(cog, ctx, "Zezima")
 
-    embed = ctx.reply.call_args.kwargs["embed"]
+    embed_call = ctx.reply.call_args_list[1]
+    embed = embed_call.kwargs["embed"]
     fields = {f.name: f.value for f in embed.fields}
-    assert fields["Total Feedback"] == "4"
-    assert fields["Banned"] == "2"
-    assert fields["Not Banned"] == "2"
-    assert fields["Flagged Real Player"] == "1"
+    assert "Total Feedback: 4" in fields["Data"]
+    assert "Banned: 2" in fields["Data"]
+    assert "Not Banned: 2" in fields["Data"]
+    assert "Flagged Real: 1" in fields["Data"]
 
 
 @pytest.mark.asyncio
@@ -366,10 +383,105 @@ async def test_rate_limit_updated_after_success():
         return_value=_make_response([_make_item("x")])
     )
 
-    with patch(
-        "bot_detector.discord_bot.cogs.feedback_list_commands.time"
-    ) as mock_time:
+    with (
+        patch("bot_detector.discord_bot.cogs.feedback_list_commands.time") as mock_time,
+        patch(
+            "bot_detector.discord_bot.cogs.feedback_list_commands.is_supporter",
+            return_value=False,
+        ),
+    ):
         mock_time.time.return_value = 1715788800.0
+        mock_time.ctime.return_value = "Tue May 14 00:00:00 2026"
         await _invoke(cog, ctx, "Zezima")
 
     assert cog._rate_limits[55555] == 1715788800.0
+
+
+@pytest.mark.asyncio
+async def test_write_csv_creates_valid_csv(tmp_path):
+    rows = [
+        {"subject_name": "bot1", "is_banned": True},
+        {"subject_name": "legit1", "is_banned": False},
+    ]
+    path = str(tmp_path / "test.csv")
+    await write_csv(path, rows)
+
+    import csv as csv_mod
+
+    with open(path) as f:
+        reader = csv_mod.DictReader(f)
+        result = list(reader)
+
+    assert len(result) == 2
+    assert result[0]["subject_name"] == "bot1"
+    assert result[1]["subject_name"] == "legit1"
+
+
+@pytest.mark.asyncio
+async def test_write_csv_empty_rows_no_file(tmp_path):
+    path = str(tmp_path / "empty.csv")
+    await write_csv(path, [])
+    assert not Path(path).exists()
+
+
+@pytest.mark.asyncio
+async def test_create_file_returns_discord_file(tmp_path):
+    rows = [{"a": "1", "b": "2"}]
+    result = await create_file(rows, "test.csv", str(tmp_path))
+    assert result.filename == "test.csv"
+
+
+@pytest.mark.asyncio
+async def test_supporter_gets_12_month_range():
+    cog = _make_cog()
+    ctx = _make_ctx()
+
+    cog.deps.legacy_api.get_discord_links = AsyncMock(
+        return_value=[_linked_account("Zezima")]
+    )
+    cog.deps.public_api.get_feedback_export = AsyncMock(
+        return_value=_make_response([_make_item("x")])
+    )
+
+    with (
+        patch("bot_detector.discord_bot.cogs.feedback_list_commands.time") as mock_time,
+        patch(
+            "bot_detector.discord_bot.cogs.feedback_list_commands.is_supporter",
+            return_value=True,
+        ),
+    ):
+        mock_time.time.return_value = 1715788800.0
+        mock_time.ctime.return_value = "Tue May 14 00:00:00 2026"
+        await _invoke(cog, ctx, "Zezima")
+
+    call_kwargs = cog.deps.public_api.get_feedback_export.call_args.kwargs
+    expected_ts = int(1715788800.0 - 12 * 30 * 24 * 60 * 60)
+    assert call_kwargs["earliest_ts"] == expected_ts
+
+
+@pytest.mark.asyncio
+async def test_non_supporter_gets_3_month_range():
+    cog = _make_cog()
+    ctx = _make_ctx()
+
+    cog.deps.legacy_api.get_discord_links = AsyncMock(
+        return_value=[_linked_account("Zezima")]
+    )
+    cog.deps.public_api.get_feedback_export = AsyncMock(
+        return_value=_make_response([_make_item("x")])
+    )
+
+    with (
+        patch("bot_detector.discord_bot.cogs.feedback_list_commands.time") as mock_time,
+        patch(
+            "bot_detector.discord_bot.cogs.feedback_list_commands.is_supporter",
+            return_value=False,
+        ),
+    ):
+        mock_time.time.return_value = 1715788800.0
+        mock_time.ctime.return_value = "Tue May 14 00:00:00 2026"
+        await _invoke(cog, ctx, "Zezima")
+
+    call_kwargs = cog.deps.public_api.get_feedback_export.call_args.kwargs
+    expected_ts = int(1715788800.0 - 3 * 30 * 24 * 60 * 60)
+    assert call_kwargs["earliest_ts"] == expected_ts
