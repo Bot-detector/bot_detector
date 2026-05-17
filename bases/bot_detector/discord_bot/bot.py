@@ -54,6 +54,7 @@ async def setup_hook():
     await bot.add_cog(cogs.projectStatsCommands(bot, deps=DEPS))
     await bot.add_cog(cogs.playerStatsCommands(bot, deps=DEPS))
     await bot.add_cog(cogs.mapCommands(bot, deps=DEPS))
+    await bot.add_cog(cogs.feedbackListCommands(bot, deps=DEPS))
 
 
 # default events
@@ -66,7 +67,7 @@ async def on_ready():
 @bot.event
 async def on_connect():
     logger.info("Bot connected successfully.")
-    logger.info(f"{Settings.COMMAND_PREFIX=}")
+    logger.info(f"{Settings().COMMAND_PREFIX=}")
 
 
 @bot.event

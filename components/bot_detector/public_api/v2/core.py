@@ -27,11 +27,13 @@ class PublicApiClient:
         base_url: str | None = None,
         limiter: RateLimiter | None = None,
         token: str | None = None,
+        api_user: str | None = None,
     ):
         self.session = session
         self.base_url = base_url or self.DEFAULT_BASE_URL
         self.limiter = limiter or RateLimiter()
         self.token = token
+        self.api_user = api_user
 
     @retry(max_attempts=3)
     async def get_report_score(self, names: list[str]) -> list[ReportScoreResponse]:
@@ -118,17 +120,17 @@ class PublicApiClient:
 
     @retry(max_attempts=3)
     async def get_feedback_export(
-        self, player_name: str
+        self,
+        player_name: str,
+        earliest_ts: int | None = None,
     ) -> FeedbackExportResponse | None:
         await self.limiter.check()
-        headers: dict[str, str] = {}
-        if self.token:
-            headers["Authorization"] = f"Bearer {self.token}"
-        async with self.session.get(
-            self.base_url + "/v2/feedback/export",
-            params={"player_name": player_name},
-            headers=headers,
-        ) as res:
+        url = f"{self.base_url}/v2/feedback/export"
+        auth = aiohttp.BasicAuth(self.api_user or "", self.token or "")
+        params = {"player_name": player_name, "earliest_ts": earliest_ts}
+        params = {k: v for k, v in params.items() if v is not None}
+
+        async with self.session.get(url=url, params=params, auth=auth) as res:
             if res.status == 204:
                 return None
             if res.status == 404:
@@ -138,4 +140,4 @@ class PublicApiClient:
                 return None
             res.raise_for_status()
             data = orjson.loads(await res.read())
-            return FeedbackExportResponse(**data)
+        return FeedbackExportResponse(**data)

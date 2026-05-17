@@ -1,13 +1,12 @@
 import logging
 
 import sqlalchemy as sqla
+from bot_detector.database.feedback.structs import PredictionFeedbackTableStruct
 from bot_detector.database.player.structs import PlayersTableStruct
 from bot_detector.structs import FeedbackExportItem
 from sqlalchemy import case
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
-
-from bot_detector.database.feedback.structs import PredictionFeedbackTableStruct
 
 logger = logging.getLogger(__name__)
 
@@ -18,11 +17,10 @@ class FeedbackExportRepo:
         async_session: AsyncSession,
         voter_player_id: int | None = None,
         voter_player_name: str | None = None,
+        earliest_ts: int | None = None,
     ) -> list[FeedbackExportItem]:
         if voter_player_id is None and voter_player_name is None:
-            raise ValueError(
-                "Either voter_player_id or voter_player_name must be provided"
-            )
+            raise ValueError("voter_player_id or voter_player_name must be provided")
 
         feedback = aliased(PredictionFeedbackTableStruct, name="feedback")
         voter = aliased(PlayersTableStruct, name="voter")
@@ -60,6 +58,8 @@ class FeedbackExportRepo:
             sql = sql.where(voter.id == voter_player_id)
         if voter_player_name is not None:
             sql = sql.where(voter.name == voter_player_name)
+        if earliest_ts is not None:
+            sql = sql.where(sqla.func.unix_timestamp(feedback.ts) >= earliest_ts)
 
         result = await async_session.execute(sql)
         rows = result.mappings().all()

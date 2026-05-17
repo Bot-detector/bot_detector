@@ -23,10 +23,12 @@ class BotDependencies:
         if self.session is None:
             self.session = session or aiohttp.ClientSession()
 
-    def init_public_api(self):
+    def init_public_api(self, token: str | None = None, api_user: str | None = None):
         assert self.session is not None
         if self.public_api is None:
-            self.public_api = PublicApiClient(session=self.session)
+            self.public_api = PublicApiClient(
+                session=self.session, token=token, api_user=api_user
+            )
 
     def init_legacy_api(self, token: str, base_url: str | None = None):
         assert self.session is not None
@@ -53,15 +55,21 @@ class BotDependencies:
             self.async_engine = async_engine
 
     def init(self, settings: Settings, session: Optional[aiohttp.ClientSession] = None):
+        if settings.API_TOKEN is None:
+            raise ValueError("API_TOKEN must be set in settings")
+        if settings.API_USER is None:
+            raise ValueError("API_USER must be set in settings")
+        if settings.API_URL is None:
+            raise ValueError("API_URL must be set in settings")
+        if settings.OSRS_ITEMS_USER_AGENT is None:
+            raise ValueError("OSRS_ITEMS_USER_AGENT must be set in settings")
+        if settings.DATABASE_URL is None:
+            raise ValueError("DATABASE_URL must be set in settings")
+
         self.init_session(session)
-        self.init_public_api()
-        if settings.API_TOKEN:
-            self.init_legacy_api(
-                token=settings.API_TOKEN,
-                base_url=settings.API_URL,
-            )
+        self.init_public_api(token=settings.API_TOKEN, api_user=settings.API_USER)
+        self.init_legacy_api(token=settings.API_TOKEN, base_url=settings.API_URL)
         self.init_osrs_items(user_agent=settings.OSRS_ITEMS_USER_AGENT)
-        assert isinstance(settings.DATABASE_URL, str)
         self.init_session_factory(sql_uri=settings.DATABASE_URL)
 
     def get_session(self) -> aiohttp.ClientSession:

@@ -17,6 +17,7 @@ dependencies = [
     "pydantic==2.10.4",
     "asyncmy==0.2.11",
     "orjson>=3.11.8",
+    "aiofiles>=25.1.0",
 ]
 
 [project.scripts]
@@ -31,3 +32,4 @@ discord_bot = "bot_detector.discord_bot.core:run"
 "../../components/bot_detector/osrs_items" = "bot_detector/osrs_items"
 "../../components/bot_detector/logfmt" = "bot_detector/logfmt"
 "../../components/bot_detector/rate_limiter" = "bot_detector/rate_limiter"
+"../../components/bot_detector/structs" = "bot_detector/structs"

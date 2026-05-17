@@ -1,5 +1,6 @@
 from bot_detector.discord_bot.cogs.bot_detective_commands import botDetectiveCommands
 from bot_detector.discord_bot.cogs.error_handler import errorHandler
+from bot_detector.discord_bot.cogs.feedback_list_commands import feedbackListCommands
 from bot_detector.discord_bot.cogs.fun_commands import funCommands
 from bot_detector.discord_bot.cogs.map_commands import mapCommands
 from bot_detector.discord_bot.cogs.mod_commands import modCommands
@@ -16,4 +17,5 @@ __all__ = [
     "mapCommands",
     "playerStatsCommands",
     "rsnLinkingCommands",
+    "feedbackListCommands",
 ]

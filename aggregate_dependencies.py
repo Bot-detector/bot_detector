@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
+import tomllib
 from pathlib import Path
 
 import tomli_w
-import tomllib
 
 ROOT = Path(__file__).resolve().parent
 PROJECTS_DIR = ROOT / "projects"
