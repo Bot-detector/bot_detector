@@ -1,5 +1,6 @@
 from bot_detector.discord_bot.utils.checks import (
     ALLOWED_CHANNELS,
+    BOOSTER_ROLE,
     COMMUNITY_MANAGER,
     CREATOR_COMMANDS_CHANNEL,
     DETECTIVE_COMMANDS_CHANNEL,
@@ -13,9 +14,11 @@ from bot_detector.discord_bot.utils.checks import (
     PATREON_COMMANDS_CHANNEL,
     PATREON_ROLE,
     PREVILEGED_ROLES,
+    SUPPORTER_ROLE,
     VERIFICATION_STAFF,
     VERIFIED_PLAYER_ROLE,
     is_allowed_channel,
+    is_supporter,
 )
 from bot_detector.discord_bot.utils.string_processing import (
     get_random_id,
@@ -46,4 +49,7 @@ __all__ = [
     "get_random_id",
     "plus_minus",
     "to_jagex_name",
+    "is_supporter",
+    "BOOSTER_ROLE",
+    "SUPPORTER_ROLE",
 ]

@@ -13,8 +13,8 @@ import discord
 from bot_detector.discord_bot.dependencies import BotDependencies
 from bot_detector.discord_bot.utils import (
     DEV_CHANNEL_TESTER_ROLE,
-    PATREON_ROLE,
     VERIFIED_PLAYER_ROLE,
+    is_supporter,
 )
 from bot_detector.discord_bot.utils.string_processing import to_jagex_name
 from bot_detector.public_api.v2.structs import (
@@ -156,9 +156,7 @@ class feedbackListCommands(commands.Cog):
             await ctx.reply("You've already used this command today.")
             return
 
-        assert isinstance(ctx.author, discord.Member)
-        is_patreon = PATREON_ROLE in ctx.author.roles
-        if is_patreon:
+        if is_supporter(ctx):
             earliest_ts = int(now - 12 * MONTH_SECONDS)
         else:
             earliest_ts = int(now - 3 * MONTH_SECONDS)
@@ -210,8 +208,9 @@ class feedbackListCommands(commands.Cog):
             # date YYYY-MM-DD HH:MM:SS
             t = time.ctime(earliest_ts)
             m = f" earliest:\n{t}"
-            embed.set_footer(text="Patreon:" if is_patreon else "Non-Patreon:" + m)
-            await ctx.reply(files=[file], ephemeral=True)
+            txt = "Patreon:" if is_supporter(ctx) else "Non-Patreon:" + m
+            embed.set_footer(text=txt)
+            await ctx.reply(file=file, ephemeral=True)
             await ctx.reply(embed=embed)
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)

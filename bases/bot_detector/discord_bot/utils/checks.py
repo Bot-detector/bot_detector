@@ -12,6 +12,7 @@ COMMUNITY_MANAGER = 1239098305619820554
 HEAD_DETECTIVE_ROLE = 855341635079503872
 DETECTIVE_ROLE = 830507560783183888
 PATREON_ROLE = 830782790786220104
+BOOSTER_ROLE = 837324705472053299
 VERIFIED_PLAYER_ROLE = 831196988976529438
 
 DETECTIVE_COMMANDS_CHANNEL = 890723372307198003
@@ -42,6 +43,17 @@ PREVILEGED_ROLES = (
     DISCORD_STAFF,
     VERIFICATION_STAFF,
 )
+SUPPORTER_ROLE = (
+    PATREON_ROLE,
+    BOOSTER_ROLE,
+)
+
+
+def is_supporter(ctx: Context):
+    for role in SUPPORTER_ROLE:
+        if isinstance(ctx.author, discord.Member) and ctx.author.get_role(role):
+            return True
+    return False
 
 
 async def is_allowed_channel(ctx: Context):
