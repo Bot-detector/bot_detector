@@ -5,6 +5,7 @@ from bot_detector.api_public.src import api
 from bot_detector.api_public.src.core.fastapi.middleware import (
     LoggingMiddleware,
     PrometheusMiddleware,
+    SecurityMiddleware,
 )
 from bot_detector.event_queue.adapters.kafka import (
     KafkaConfig,
@@ -27,22 +28,25 @@ def init_routers(_app: FastAPI) -> None:
 
 
 def make_middleware() -> list[Middleware]:
+    cors_config = {
+        "allow_origins": [
+            "http://osrsbotdetector.com",
+            "https://osrsbotdetector.com",
+            "http://localhost",
+            "http://localhost:8080",
+        ],
+        "allow_credentials": True,
+        "allow_methods": ["*"],
+        "allow_headers": ["*"],
+    }
+
     middleware = [
-        Middleware(
-            CORSMiddleware,
-            allow_origins=[
-                "http://osrsbotdetector.com",
-                "https://osrsbotdetector.com",
-                "http://localhost",
-                "http://localhost:8080",
-            ],
-            allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
-        ),
+        Middleware(SecurityMiddleware),
+        Middleware(CORSMiddleware, **cors_config),
         Middleware(LoggingMiddleware),
         Middleware(PrometheusMiddleware),
     ]
+
     return middleware
 
 
