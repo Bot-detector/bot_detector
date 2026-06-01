@@ -163,3 +163,88 @@ async def test_work_commits_only_after_successful_requeue(
         )
 
     assert player_nf_queue.commit.await_count == expected_commit_calls
+
+
+@pytest.mark.asyncio
+async def test_work_uses_backoff_sleep_on_error(
+    monkeypatch: pytest.MonkeyPatch,
+    player_struct: PlayerStruct,
+):
+    player_message = NotFoundStruct(
+        metadata=MetaData(version=1, source="test"),
+        player_data=player_struct,
+    )
+    player_nf_queue = AsyncMock()
+    player_nf_queue.get_one = AsyncMock(return_value=player_message)
+    player_nf_queue.put = AsyncMock(return_value=None)
+    player_nf_queue.commit = AsyncMock(return_value=None)
+    player_sc_producer = AsyncMock()
+
+    monkeypatch.setattr(core, "ClientSession", _DummySession)
+    monkeypatch.setattr(
+        core,
+        "get_proxy",
+        AsyncMock(side_effect=["http://user@proxy", asyncio.CancelledError()]),
+    )
+    monkeypatch.setattr(
+        core,
+        "scrape_player",
+        AsyncMock(return_value=(None, None, "temporary failure")),
+    )
+
+    sleep_mock = AsyncMock(return_value=None)
+    monkeypatch.setattr(core.asyncio, "sleep", sleep_mock)
+
+    with pytest.raises(asyncio.CancelledError):
+        await core.work(
+            worker_id=1,
+            proxy_manager=AsyncMock(),
+            rate_limiter=AsyncMock(),
+            player_nf_queue=player_nf_queue,
+            player_sc_producer=player_sc_producer,
+        )
+
+    sleep_call_arg = sleep_mock.call_args[0][0]
+    assert sleep_call_arg >= 1.0
+
+
+@pytest.mark.asyncio
+async def test_work_resets_backoff_on_success(
+    monkeypatch: pytest.MonkeyPatch,
+    player_struct: PlayerStruct,
+):
+    player_message = NotFoundStruct(
+        metadata=MetaData(version=1, source="test"),
+        player_data=player_struct,
+    )
+    player_nf_queue = AsyncMock()
+    player_nf_queue.get_one = AsyncMock(return_value=player_message)
+    player_nf_queue.commit = AsyncMock(return_value=None)
+    player_sc_producer = AsyncMock()
+    player_sc_producer.put = AsyncMock(return_value=None)
+
+    monkeypatch.setattr(core, "ClientSession", _DummySession)
+    monkeypatch.setattr(
+        core,
+        "get_proxy",
+        AsyncMock(side_effect=["http://user@proxy", asyncio.CancelledError()]),
+    )
+    monkeypatch.setattr(
+        core,
+        "scrape_player",
+        AsyncMock(return_value=(RuneMetricsResponse(), 0.1, None)),
+    )
+
+    sleep_mock = AsyncMock(return_value=None)
+    monkeypatch.setattr(core.asyncio, "sleep", sleep_mock)
+
+    with pytest.raises(asyncio.CancelledError):
+        await core.work(
+            worker_id=1,
+            proxy_manager=AsyncMock(),
+            rate_limiter=AsyncMock(),
+            player_nf_queue=player_nf_queue,
+            player_sc_producer=player_sc_producer,
+        )
+
+    player_sc_producer.put.assert_awaited_once()

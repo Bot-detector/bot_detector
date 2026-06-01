@@ -33,3 +33,4 @@ packages = ["bot_detector"]
 "../../components/bot_detector/logfmt" = "bot_detector/logfmt"
 "../../components/bot_detector/osrs_hs_api" = "bot_detector/osrs_hs_api"
 "../../components/bot_detector/rate_limiter" = "bot_detector/rate_limiter"
+"../../components/bot_detector/retry_tracker" = "bot_detector/retry_tracker"
