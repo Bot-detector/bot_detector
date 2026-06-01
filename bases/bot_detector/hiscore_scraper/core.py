@@ -23,6 +23,7 @@ from bot_detector.osrs_hs_api.structs import PlayerStats
 from bot_detector.proxy_manager import ProxyManager
 from bot_detector.proxy_manager import Settings as ProxySettings
 from bot_detector.rate_limiter import RateLimiter
+from bot_detector.retry_tracker import RetryTracker
 from bot_detector.structs import (
     HighscoreBaseStruct,
     MetaData,
@@ -40,7 +41,6 @@ from .metrics import (
     success_counter,
     total_counter,
 )
-from .retry_tracker import RetryTracker
 
 logger = logging.getLogger(__name__)
 

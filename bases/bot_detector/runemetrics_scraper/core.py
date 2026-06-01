@@ -16,6 +16,7 @@ from bot_detector.event_queue.factory import QueueFactory
 from bot_detector.event_queue.structs import NotFoundStruct, ScrapedStruct
 from bot_detector.proxy_manager import ProxyManager
 from bot_detector.proxy_manager import Settings as ProxySettings
+from bot_detector.retry_tracker import RetryTracker
 from bot_detector.runemetrics_api import RuneMetrics, RuneMetricsResponse
 from bot_detector.runemetrics_api.exceptions import UnexpectedRedirection
 from bot_detector.structs import MetaData, PlayerStruct
@@ -69,6 +70,24 @@ player_update_errors = Counter(
     "player_update_errors_total",
     "Count of errors during player update by error type",
     ["error_type"],
+)
+
+retry_counter = Counter(
+    name="rune_metrics_retry_count",
+    documentation="Cumulative count of retry attempts",
+    labelnames=["proxy"],
+)
+retry_histogram = Histogram(
+    name="rune_metrics_retry_consecutive_failures",
+    documentation="Distribution of consecutive failure counts",
+    labelnames=["proxy"],
+    buckets=(1, 2, 3, 5, 10, 15, 20, 30, 50),
+)
+retry_delay_histogram = Histogram(
+    name="rune_metrics_retry_backoff_seconds",
+    documentation="Distribution of backoff delays applied",
+    labelnames=["proxy"],
+    buckets=(10, 20, 40, 80, 120, 160, 200, 250, 300),
 )
 
 
@@ -148,6 +167,24 @@ async def update_player(
     return player_data
 
 
+async def handle_retry(
+    retry_tracker: RetryTracker,
+    worker_id: int,
+    proxy: str,
+):
+    _proxy = proxy.split("@")[1]
+    retry_tracker.record_attempt(worker_id, success=False)
+    delay = retry_tracker.get_backoff_delay(worker_id)
+    retry_count = retry_tracker.get_retry_count(worker_id)
+
+    retry_counter.labels(proxy=_proxy).inc()
+    retry_histogram.labels(proxy=_proxy).observe(retry_count)
+    retry_delay_histogram.labels(proxy=_proxy).observe(delay)
+
+    logger.warning(f"[{worker_id}]: backing off {delay:.2f}s")
+    await asyncio.sleep(delay)
+
+
 async def work(
     worker_id: int,
     proxy_manager: ProxyManager,
@@ -155,6 +192,7 @@ async def work(
     player_nf_queue: Queue[NotFoundStruct],
     player_sc_producer: QueueProducer[ScrapedStruct],
 ):
+    retry_tracker = RetryTracker(base_delay=10.0, max_delay=300.0, decay_window=300.0)
     async with ClientSession() as session:
         while True:
             # get proxy
@@ -215,7 +253,7 @@ async def work(
                         logger.error(
                             f"[{worker_id}]: Failed to commit requeued player offset: {commit_error}"
                         )
-                await asyncio.sleep(10)
+                await handle_retry(retry_tracker, worker_id, proxy)
                 continue
 
             # update player data
@@ -248,6 +286,7 @@ async def work(
 
             # push data to kafka
             success_counter.labels(proxy=_proxy).inc()
+            retry_tracker.record_attempt(worker_id, success=True)
             produce_error = await player_sc_producer.put([scraped_data])
             if produce_error:
                 logger.error(

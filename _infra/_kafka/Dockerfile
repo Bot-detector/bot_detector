@@ -5,7 +5,8 @@ WORKDIR /app
 
 COPY _kafka/pyproject.toml /app
 COPY _kafka/uv.lock /app
-RUN uv sync --frozen
+RUN --mount=type=cache,id=uv_cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev
 
 COPY _kafka/src /app/src
 COPY _shared /app/_shared
