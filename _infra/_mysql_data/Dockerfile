@@ -5,7 +5,8 @@ WORKDIR /app
 
 COPY _mysql_data/pyproject.toml /app
 COPY _mysql_data/uv.lock /app
-RUN uv sync
+RUN --mount=type=cache,id=uv_cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev
 
 COPY _mysql_data/src /app/src
 COPY _shared /app/_shared
