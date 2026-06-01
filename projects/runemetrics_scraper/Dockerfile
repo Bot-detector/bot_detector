@@ -77,6 +77,8 @@ COPY --from=builder \
 
 ENV PATH="/project/projects/runemetrics_scraper/.venv/bin:$PATH"
 
+EXPOSE 8000
+
 USER appuser
 
 CMD ["runemetrics_scraper"]

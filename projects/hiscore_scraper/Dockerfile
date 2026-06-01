@@ -76,6 +76,8 @@ COPY --from=builder \
 
 ENV PATH="/project/projects/hiscore_scraper/.venv/bin:$PATH"
 
+EXPOSE 8000
+
 USER appuser
 
 CMD ["hiscore_scraper"]
