@@ -142,6 +142,7 @@ LOOKUP: dict[str, str] = {
     "cs_all": "clue_scrolls_all",
     "tombs_of_amascut_expert": "tombs_of_amascut_expert_mode",
     "theatre_of_blood_hard": "theatre_of_blood_hard_mode",
+    "league": "league_points",
 }
 
 
