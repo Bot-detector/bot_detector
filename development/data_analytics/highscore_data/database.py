@@ -1,4 +1,3 @@
-import time
 from functools import wraps
 
 import polars as pl
@@ -35,6 +34,7 @@ def _retry(func):
 def read_sql(query: str, params: dict) -> pl.DataFrame:
     with engine.connect() as connection:
         connection.execute(text("SET SESSION wait_timeout = 30;"))
+        connection.execute(text("SET time_zone = '+00:00';"))
         return pl.read_database(
             connection=connection,
             query=query,

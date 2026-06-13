@@ -1,7 +1,8 @@
+import copy
 import json
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 
 import database as db
 import polars as pl
@@ -79,6 +80,10 @@ def save(ctx: Context, _min: int, _max: int) -> Context:
     return context
 
 
+def int_to_dt(x: int) -> datetime:
+    return datetime.fromtimestamp(x, tz=timezone.utc)
+
+
 def main():
     start_ts = read_state(path=STATE_PATH)
     context = get_context(start_ts=start_ts)
@@ -87,6 +92,7 @@ def main():
         ########################################
         # get batch
         ########################################
+        print(f"searching with: {start_ts} == {int_to_dt(start_ts)}")
         df = db.get_full_data(
             start_ts=start_ts,
             batch_size=BATCH_SIZE,
@@ -96,7 +102,15 @@ def main():
             break
         min_ts: datetime = df.select(pl.min("scrape_ts")).item()
         max_ts: datetime = df.select(pl.max("scrape_ts")).item()
-        start_ts = int(max_ts.timestamp())
+        print(f"    Received: {min_ts}, {max_ts}")
+        print(f"    Received: {min_ts.timestamp()}, {max_ts.timestamp()}")
+
+        if start_ts == max_ts.timestamp():
+            raise Exception("start_ts should be equal to min_ts not max_ts")
+
+        _new_start_ts = int(max_ts.timestamp())
+        print(f"    Setting start_ts={_new_start_ts} == {int_to_dt(_new_start_ts)}")
+        start_ts = copy.copy(_new_start_ts)
         ########################################
         # expand skills and activities from json
         ########################################
