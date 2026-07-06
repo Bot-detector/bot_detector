@@ -182,15 +182,15 @@ class ReportRepo(ReportInterface):
                 SELECT
                     1
                 FROM report_gear rg
-                WHERE tr.equip_head_id = rg.equip_head_id
-                AND tr.equip_amulet_id = rg.equip_amulet_id
-                AND tr.equip_torso_id = rg.equip_torso_id
-                AND tr.equip_legs_id = rg.equip_legs_id
-                AND tr.equip_boots_id = rg.equip_boots_id
-                AND tr.equip_cape_id = rg.equip_cape_id
-                AND tr.equip_hands_id = rg.equip_hands_id
-                AND tr.equip_weapon_id = rg.equip_weapon_id
-                AND tr.equip_shield_id = rg.equip_shield_id
+                WHERE tr.equip_head_id <=> rg.equip_head_id
+                AND tr.equip_amulet_id <=> rg.equip_amulet_id
+                AND tr.equip_torso_id <=> rg.equip_torso_id
+                AND tr.equip_legs_id <=> rg.equip_legs_id
+                AND tr.equip_boots_id <=> rg.equip_boots_id
+                AND tr.equip_cape_id <=> rg.equip_cape_id
+                AND tr.equip_hands_id <=> rg.equip_hands_id
+                AND tr.equip_weapon_id <=> rg.equip_weapon_id
+                AND tr.equip_shield_id <=> rg.equip_shield_id
             );
         """
         )
@@ -243,15 +243,15 @@ class ReportRepo(ReportInterface):
                     AND rl.y_coord = tr.y_coord
                     AND rl.z_coord = tr.z_coord
                 LEFT JOIN report_gear rg
-                    ON rg.equip_head_id = tr.equip_head_id
-                    AND rg.equip_amulet_id = tr.equip_amulet_id
-                    AND rg.equip_torso_id = tr.equip_torso_id
-                    AND rg.equip_legs_id = tr.equip_legs_id
-                    AND rg.equip_boots_id = tr.equip_boots_id
-                    AND rg.equip_cape_id = tr.equip_cape_id
-                    AND rg.equip_hands_id = tr.equip_hands_id
-                    AND rg.equip_weapon_id = tr.equip_weapon_id
-                    AND rg.equip_shield_id = tr.equip_shield_id
+                    ON rg.equip_head_id <=> tr.equip_head_id
+                    AND rg.equip_amulet_id <=> tr.equip_amulet_id
+                    AND rg.equip_torso_id <=> tr.equip_torso_id
+                    AND rg.equip_legs_id <=> tr.equip_legs_id
+                    AND rg.equip_boots_id <=> tr.equip_boots_id
+                    AND rg.equip_cape_id <=> tr.equip_cape_id
+                    AND rg.equip_hands_id <=> tr.equip_hands_id
+                    AND rg.equip_weapon_id <=> tr.equip_weapon_id
+                    AND rg.equip_shield_id <=> tr.equip_shield_id
                 WHERE NOT EXISTS (
                     SELECT 1 FROM report rp
                     WHERE 1
