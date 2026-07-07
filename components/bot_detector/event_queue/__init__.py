@@ -5,6 +5,7 @@ from .structs import (
     DataToPredictStruct,
     HighScoreStruct,
     NotFoundStruct,
+    PlayerBannedStruct,
     ReportsToInsertStruct,
     ScrapedStruct,
     ToScrapeStruct,
@@ -21,4 +22,5 @@ __all__ = [
     "ReportsToInsertStruct",
     "HighScoreStruct",
     "DataToPredictStruct",
+    "PlayerBannedStruct",
 ]

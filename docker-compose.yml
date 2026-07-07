@@ -297,6 +297,23 @@ services:
       mysql_setup:
         condition: service_completed_successfully
 
+  worker_ban_migration:
+    container_name: worker_ban_migration
+    image: bd/worker_ban_migration:prd
+    build:
+      context: ./
+      dockerfile: ./projects/worker_ban_migration/Dockerfile
+      target: prod
+    networks:
+      - botdetector-network
+    env_file:
+      - .env
+    depends_on:
+      kafka_setup:
+        condition: service_completed_successfully
+      mysql_setup:
+        condition: service_completed_successfully
+
   api_public:
     container_name: api_public
     image: bd/api_public:prd

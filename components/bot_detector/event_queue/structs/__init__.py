@@ -1,4 +1,5 @@
 from .data_to_predict import DataToPredictStruct, HighScoreStruct
+from .players_banned import PlayerBannedStruct
 from .players_not_found import NotFoundStruct
 from .players_scraped import ScrapedStruct
 from .players_to_scrape import ToScrapeStruct
@@ -11,4 +12,5 @@ __all__ = [
     "ReportsToInsertStruct",
     "HighScoreStruct",
     "DataToPredictStruct",
+    "PlayerBannedStruct",
 ]
