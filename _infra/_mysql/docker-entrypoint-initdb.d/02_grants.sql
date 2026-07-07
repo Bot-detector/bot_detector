@@ -48,4 +48,8 @@ GRANT SELECT ON playerdata.apiPermissions TO `api-public`@`%`;
 GRANT SELECT ON playerdata.apiUserPerms TO `api-public`@`%`;
 GRANT SELECT, INSERT ON playerdata.apiUsage TO `api-public`@`%`;
 
+/*job-prune-reports*/
+GRANT CREATE TEMPORARY TABLES ON *.* TO `job-prune-reports`@`%`;
+GRANT SELECT, DELETE ON playerdata.report TO `job-prune-reports`@`%`;
+
 FLUSH PRIVILEGES;
