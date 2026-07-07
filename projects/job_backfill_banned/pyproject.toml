@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling", "hatch-polylith-bricks"]
+build-backend = "hatchling.build"
+
+[project]
+name = "job_backfill_banned"
+version = "0.1.0"
+
+requires-python = ">=3.10"
+
+dependencies = [
+    "asyncmy==0.2.11",
+    "cryptography==46.0.3",
+    "pydantic-settings==2.7.0",
+    "sqlalchemy==2.0.44",
+]
+
+[project.scripts]
+job_backfill_banned = "bot_detector.job_backfill_banned.core:run"
+
+# This section is needed for building
+[tool.hatch.build.targets.wheel]
+packages = ["bot_detector"]
+
+[tool.hatch.build.hooks.polylith-bricks]
+
+[tool.polylith.bricks]
+"../../bases/bot_detector/job_backfill_banned" = "bot_detector/job_backfill_banned"
+"../../components/bot_detector/database" = "bot_detector/database"
+"../../components/bot_detector/logfmt" = "bot_detector/logfmt"
