@@ -112,6 +112,7 @@ async def test_work_commits_offset_after_successful_handle(
             rate_limiter=AsyncMock(),
             player_nf_queue=player_nf_queue,
             player_sc_producer=player_sc_producer,
+            player_banned_producer=AsyncMock(),
         )
 
     player_nf_queue.commit.assert_awaited_once()
@@ -161,6 +162,7 @@ async def test_work_commits_only_after_successful_requeue(
             rate_limiter=AsyncMock(),
             player_nf_queue=player_nf_queue,
             player_sc_producer=player_sc_producer,
+            player_banned_producer=AsyncMock(),
         )
 
     assert player_nf_queue.commit.await_count == expected_commit_calls
@@ -252,6 +254,7 @@ async def test_work_backoff_increases_across_consecutive_errors(
             rate_limiter=AsyncMock(),
             player_nf_queue=player_nf_queue,
             player_sc_producer=player_sc_producer,
+            player_banned_producer=AsyncMock(),
         )
 
     delays = [c[0][0] for c in sleep_mock.call_args_list]
@@ -319,6 +322,7 @@ async def test_work_backoff_resets_after_success(
             rate_limiter=AsyncMock(),
             player_nf_queue=player_nf_queue,
             player_sc_producer=player_sc_producer,
+            player_banned_producer=AsyncMock(),
         )
 
     delays = [c[0][0] for c in sleep_mock.call_args_list]
@@ -375,7 +379,79 @@ async def test_work_validation_error_requeues_without_backoff(
             rate_limiter=AsyncMock(),
             player_nf_queue=player_nf_queue,
             player_sc_producer=player_sc_producer,
+            player_banned_producer=AsyncMock(),
         )
 
     player_nf_queue.put.assert_awaited_once()
     sleep_mock.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "old_label,scrape_error,should_emit",
+    [
+        (1, "NOT_A_MEMBER", True),
+        (0, "NOT_A_MEMBER", True),
+        (2, "NOT_A_MEMBER", False),
+        (0, None, False),
+        (0, "NO_PROFILE", False),
+        (1, None, False),
+    ],
+)
+async def test_work_emits_banned_event_only_on_transition_into_banned(
+    monkeypatch: pytest.MonkeyPatch,
+    player_struct: PlayerStruct,
+    old_label: int,
+    scrape_error: str | None,
+    should_emit: bool,
+):
+    player = player_struct.model_copy(update={"label_jagex": old_label})
+    player_message = NotFoundStruct(
+        metadata=MetaData(version=1, source="test"),
+        player_data=player,
+    )
+    player_nf_queue = AsyncMock()
+    player_nf_queue.get_one = AsyncMock(return_value=player_message)
+    player_nf_queue.commit = AsyncMock(return_value=None)
+    player_sc_producer = AsyncMock()
+    player_sc_producer.put = AsyncMock(return_value=None)
+    player_banned_producer = AsyncMock()
+    player_banned_producer.put = AsyncMock(return_value=None)
+
+    runemetrics_response = RuneMetricsResponse()
+    if scrape_error is not None:
+        runemetrics_response.error = RuneMetricsError(
+            error=scrape_error,
+            loggedIn=False,
+        )
+
+    monkeypatch.setattr(core, "ClientSession", _DummySession)
+    monkeypatch.setattr(
+        core,
+        "get_proxy",
+        AsyncMock(side_effect=["http://user@proxy", asyncio.CancelledError()]),
+    )
+    monkeypatch.setattr(
+        core,
+        "scrape_player",
+        AsyncMock(return_value=(runemetrics_response, 0.1, None)),
+    )
+    monkeypatch.setattr(core.asyncio, "sleep", AsyncMock(return_value=None))
+
+    with pytest.raises(asyncio.CancelledError):
+        await core.work(
+            worker_id=1,
+            proxy_manager=AsyncMock(),
+            rate_limiter=AsyncMock(),
+            player_nf_queue=player_nf_queue,
+            player_sc_producer=player_sc_producer,
+            player_banned_producer=player_banned_producer,
+        )
+
+    if should_emit:
+        player_banned_producer.put.assert_awaited_once()
+        event = player_banned_producer.put.call_args.args[0][0]
+        assert event.player_id == player.id
+        assert event.name == player.name
+    else:
+        player_banned_producer.put.assert_not_awaited()

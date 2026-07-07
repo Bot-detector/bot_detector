@@ -13,7 +13,11 @@ from bot_detector.event_queue.adapters.kafka import (
 )
 from bot_detector.event_queue.core import Queue, QueueProducer
 from bot_detector.event_queue.factory import QueueFactory
-from bot_detector.event_queue.structs import NotFoundStruct, ScrapedStruct
+from bot_detector.event_queue.structs import (
+    NotFoundStruct,
+    PlayerBannedStruct,
+    ScrapedStruct,
+)
 from bot_detector.proxy_manager import ProxyManager
 from bot_detector.proxy_manager import Settings as ProxySettings
 from bot_detector.retry_tracker import RetryTracker
@@ -191,6 +195,7 @@ async def work(
     rate_limiter: RateLimiter,
     player_nf_queue: Queue[NotFoundStruct],
     player_sc_producer: QueueProducer[ScrapedStruct],
+    player_banned_producer: QueueProducer[PlayerBannedStruct],
 ):
     retry_tracker = RetryTracker(base_delay=10.0, max_delay=300.0, decay_window=300.0)
     async with ClientSession() as session:
@@ -257,10 +262,25 @@ async def work(
                 continue
 
             # update player data
+            old_label = player_data.label_jagex
             player_data = await update_player(
                 player_data=player_data,
                 runemetrics_response=runemetrics_response,
             )
+
+            # emit a ban event only on the transition into label_jagex = 2
+            if old_label != 2 and player_data.label_jagex == 2:
+                banned_event = PlayerBannedStruct(
+                    metadata=MetaData(version=1, source="runemetrics_scraper"),
+                    player_id=player_data.id,
+                    name=player_data.name,
+                )
+                produce_error = await player_banned_producer.put([banned_event])
+                if produce_error:
+                    logger.error(
+                        f"[{worker_id}]: Failed to produce banned player: {produce_error}"
+                    )
+
             # create hiscore data
             try:
                 scraped_data = ScrapedStruct(
@@ -338,15 +358,30 @@ async def main():
             ),
         ),
     )
-    for queue in (player_nf_queue, player_sc_producer):
+    player_banned_producer = QueueFactory.create_queue(
+        model=PlayerBannedStruct,
+        queue_type="producer",
+        backend_type="kafka",
+        config=KafkaConfig(
+            topic="players.banned",
+            bootstrap_servers=b_server,
+            producer=True,
+            producer_config=KafkaProducerConfig(
+                partition_key_fn=lambda message: str(message.player_id % 10)
+            ),
+        ),
+    )
+    for queue in (player_nf_queue, player_sc_producer, player_banned_producer):
         if isinstance(queue, Exception):
             raise queue
 
     assert isinstance(player_nf_queue, Queue)
     assert isinstance(player_sc_producer, QueueProducer)
+    assert isinstance(player_banned_producer, QueueProducer)
 
     await player_nf_queue.start()
     await player_sc_producer.start()
+    await player_banned_producer.start()
 
     # start workers
     workers = [
@@ -360,6 +395,7 @@ async def main():
                 ),
                 player_nf_queue=player_nf_queue,
                 player_sc_producer=player_sc_producer,
+                player_banned_producer=player_banned_producer,
             )
         )
         for worker_id in range(len(proxies))
