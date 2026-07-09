@@ -2,6 +2,7 @@ import asyncio
 import logging
 
 import discord
+from aiohttp import ClientResponse
 from bot_detector.discord_bot import bot
 from bot_detector.discord_bot.config import Settings
 
@@ -25,7 +26,9 @@ async def run_async():
                     "error": e,
                 }
             )
-            if e.response.status_code == 429:
+            if not isinstance(e.response, ClientResponse):
+                break
+            if e.response.status == 429:
                 headers = dict(e.response.headers)
                 sleep_time = headers.get("Retry-After", 60)
                 sleep_time = (
