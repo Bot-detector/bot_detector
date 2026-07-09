@@ -180,3 +180,9 @@ The model must explicitly mention the user when any of the following occur:
 > Please confirm whether I should proceed or propose an alternative.”
 
 This rule exists to prevent silent failure, architectural drift, and incorrect assumptions.
+
+# Design for testing
+- Dependency injection
+- Pure functions
+- Seperation of concerns
+- loose coupling
