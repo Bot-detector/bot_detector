@@ -52,4 +52,12 @@ GRANT SELECT, INSERT ON playerdata.apiUsage TO `api-public`@`%`;
 GRANT CREATE TEMPORARY TABLES ON *.* TO `job-prune-reports`@`%`;
 GRANT SELECT, DELETE ON playerdata.report TO `job-prune-reports`@`%`;
 
+/*ban-migration*/
+GRANT SELECT ON playerdata.report TO `ban-migration`@`%`;
+GRANT SELECT ON playerdata.report_sighting TO `ban-migration`@`%`;
+GRANT SELECT ON playerdata.report_gear TO `ban-migration`@`%`;
+GRANT SELECT ON playerdata.report_location TO `ban-migration`@`%`;
+GRANT SELECT ON playerdata.Players TO `ban-migration`@`%`;
+GRANT INSERT ON playerdata.report_archive TO `ban-migration`@`%`;
+
 FLUSH PRIVILEGES;

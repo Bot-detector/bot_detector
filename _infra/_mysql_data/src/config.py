@@ -10,6 +10,9 @@ class MySQLSeederConfig(BaseSettings):
     SEED_PLAYERS: int = 100
     SEED_REPORTS: int = 0
     SEED_PREDICTIONS: int = 0
+    SEED_BANNED: int = 0
+    SEED_AGED_REPORTS: int = 0
+    SEED_RETENTION_DAYS: int = 90
 
     SKIP_IF_EXISTING: bool = True
     SKIP_THRESHOLD: int = 100

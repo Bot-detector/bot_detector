@@ -22,6 +22,11 @@ TOPICS = [
         replication_factor=1,
     ),
     NewTopic(
+        name="players.banned",
+        num_partitions=4,
+        replication_factor=1,
+    ),
+    NewTopic(
         name="reports.to_insert",
         num_partitions=4,
         replication_factor=1,

@@ -9,6 +9,7 @@ class KafkaSeederConfig(BaseSettings):
     SEED_PLAYERS: int = 100
     SEED_SCRAPES_PER_PLAYER: int = 30
     SEED_REPORTS: int = 100_000
+    SEED_BANNED: int = 0
 
     RESET_TOPICS: bool = False
     RANDOM_SEED: int = 42

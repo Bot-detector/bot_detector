@@ -250,6 +250,33 @@ CREATE TABLE report (
   )
 );
 
+CREATE TABLE report_archive (
+  /* denormalized sighting */
+  reported_id INT UNSIGNED NOT NULL,
+  /* denormalized report row */
+  world_number SMALLINT UNSIGNED DEFAULT NULL,
+  on_members_world TINYINT DEFAULT NULL,
+  on_pvp_world TINYINT DEFAULT NULL,
+  reported_at TIMESTAMP NOT NULL,
+  /* denormalized location */
+  region_id MEDIUMINT UNSIGNED NOT NULL,
+  x_coord MEDIUMINT UNSIGNED NOT NULL,
+  y_coord MEDIUMINT UNSIGNED NOT NULL,
+  z_coord MEDIUMINT UNSIGNED NOT NULL,
+  /* denormalized gear */
+  equip_head_id SMALLINT UNSIGNED DEFAULT NULL,
+  equip_amulet_id SMALLINT UNSIGNED DEFAULT NULL,
+  equip_torso_id SMALLINT UNSIGNED DEFAULT NULL,
+  equip_legs_id SMALLINT UNSIGNED DEFAULT NULL,
+  equip_boots_id SMALLINT UNSIGNED DEFAULT NULL,
+  equip_cape_id SMALLINT UNSIGNED DEFAULT NULL,
+  equip_hands_id SMALLINT UNSIGNED DEFAULT NULL,
+  equip_weapon_id SMALLINT UNSIGNED DEFAULT NULL,
+  equip_shield_id SMALLINT UNSIGNED DEFAULT NULL,
+  PRIMARY KEY (reported_id, reported_at),
+  KEY idx_region_id (region_id)
+);
+
 CREATE TABLE `Labels` (
   `id` int NOT NULL AUTO_INCREMENT,
   `label` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,

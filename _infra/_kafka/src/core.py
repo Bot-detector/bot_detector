@@ -7,6 +7,7 @@ from kafka import KafkaProducer
 sys.path.insert(0, "/app/_shared")
 
 from config import KafkaSeederConfig, load_names
+from seeders.players_banned import create_players_banned
 from seeders.players_scraped import create_players_scraped
 from seeders.players_to_scrape import create_players_to_scrape
 from seeders.reports_to_insert import create_reports_to_insert
@@ -89,6 +90,27 @@ def seed_reports_to_insert(
     print("Done seeding reports.to_insert")
 
 
+def seed_players_banned(
+    producer: KafkaProducer,
+    names: list[str],
+    count: int,
+):
+    print(f"Seeding {count} banned players to players.banned...")
+
+    players = []
+    for to_scrape in create_players_to_scrape(names=names, count=count):
+        players.append(to_scrape.player_data)
+
+    for banned in create_players_banned(players, count):
+        producer.send(
+            topic="players.banned",
+            value=banned.model_dump(mode="json"),
+        )
+        print(f"  -> {banned.name} (id={banned.player_id})")
+    producer.flush()
+    print("Done seeding players.banned")
+
+
 def main():
     random.seed(config.RANDOM_SEED)
 
@@ -120,6 +142,13 @@ def main():
             names=names,
             player_count=config.SEED_PLAYERS,
             reports_per_player=config.SEED_REPORTS,
+        )
+
+    if config.SEED_BANNED > 0:
+        seed_players_banned(
+            producer=producer,
+            names=names,
+            count=config.SEED_BANNED,
         )
 
 

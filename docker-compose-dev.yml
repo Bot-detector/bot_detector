@@ -45,6 +45,7 @@ services:
       - SEED_PLAYERS=100
       - SEED_SCRAPES_PER_PLAYER=10
       - SEED_REPORTS=1000
+      - SEED_BANNED=10
       - RESET_TOPICS=true
       - RANDOM_SEED=42
     networks:
@@ -100,6 +101,9 @@ services:
       - SEED_PLAYERS=100
       - SEED_REPORTS=100
       - SEED_PREDICTIONS=100
+      - SEED_BANNED=10
+      - SEED_AGED_REPORTS=20
+      - SEED_RETENTION_DAYS=90
       - SKIP_IF_EXISTING=true
       - SKIP_THRESHOLD=100
       - RANDOM_SEED=42
@@ -299,6 +303,25 @@ services:
     env_file:
       - .env
     depends_on:
+      mysql_setup:
+        condition: service_completed_successfully
+
+  worker_ban_migration:
+    container_name: worker_ban_migration
+    image: bd/worker_ban_migration:dev
+    build:
+      context: ./
+      dockerfile: ./projects/worker_ban_migration/Dockerfile
+      target: dev
+    networks:
+      - botdetector-network
+    env_file:
+      - .env
+    environment:
+      - MAX_BATCH_SIZE=10
+    depends_on:
+      kafka_setup:
+        condition: service_completed_successfully
       mysql_setup:
         condition: service_completed_successfully
 
