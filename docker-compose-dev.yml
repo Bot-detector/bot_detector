@@ -284,6 +284,24 @@ services:
       mysql_setup:
         condition: service_completed_successfully
 
+  job_prune_reports:
+    container_name: job_prune_reports
+    image: bd/job_prune_reports:dev
+    build:
+      context: ./
+      dockerfile: ./projects/job_prune_reports/Dockerfile
+      target: dev
+    networks:
+      - botdetector-network
+    environment:
+      - REPORT_RETENTION_DAYS=90
+      - DATABASE_URL=mysql+asyncmy://job-prune-reports:job_prune_reports_pw@mysql:3306/playerdata
+    env_file:
+      - .env
+    depends_on:
+      mysql_setup:
+        condition: service_completed_successfully
+
   api_public:
     container_name: api_public
     image: bd/api_public:dev
