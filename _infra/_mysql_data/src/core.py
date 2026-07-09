@@ -2,6 +2,7 @@ import asyncio
 import json
 import random
 import sys
+from datetime import datetime, timedelta
 
 import sqlalchemy
 from database.database import Session, wait_for_db
@@ -12,6 +13,7 @@ from config import MySQLSeederConfig, load_names
 from seeders.players import create_players
 from seeders.predictions import create_predictions
 from seeders.reports import (
+    Report,
     create_report_gear,
     create_report_locations,
     create_report_sightings,
@@ -146,6 +148,109 @@ async def insert_reports(player_ids: list[int], count: int) -> None:
     print(f"Seeded {count} reports")
 
 
+async def insert_aged_reports(
+    player_ids: list[int], retention_days: int, count: int
+) -> None:
+    """Seed report rows that straddle the prune retention cutoff.
+
+    Roughly half are inserted with reported_at older than the cutoff (so the
+    prune job has rows to delete) and half younger (retained).
+    """
+    sighting_ids: list[int] = []
+    gear_ids: list[int] = []
+    location_ids: list[int] = []
+
+    sighting_sql = sqlalchemy.text("""
+    INSERT IGNORE INTO report_sighting (reporting_id, reported_id, manual_detect)
+    VALUES (:reporting_id, :reported_id, :manual_detect)
+    """)
+    gear_sql = sqlalchemy.text("""
+    INSERT IGNORE INTO report_gear (
+        equip_head_id, equip_amulet_id, equip_torso_id, equip_legs_id,
+        equip_boots_id, equip_cape_id, equip_hands_id, equip_weapon_id, equip_shield_id
+    ) VALUES (
+        :equip_head_id, :equip_amulet_id, :equip_torso_id, :equip_legs_id,
+        :equip_boots_id, :equip_cape_id, :equip_hands_id, :equip_weapon_id, :equip_shield_id
+    )
+    """)
+    location_sql = sqlalchemy.text("""
+    INSERT IGNORE INTO report_location (region_id, x_coord, y_coord, z_coord)
+    VALUES (:region_id, :x_coord, :y_coord, :z_coord)
+    """)
+    report_sql = sqlalchemy.text("""
+    INSERT INTO report (report_sighting_id, report_location_id, report_gear_id,
+        reported_at, on_members_world, on_pvp_world, world_number, region_id)
+    VALUES (:report_sighting_id, :report_location_id, :report_gear_id,
+        :reported_at, :on_members_world, :on_pvp_world, :world_number, :region_id)
+    """)
+
+    for sighting in create_report_sightings(player_ids=player_ids, count=count):
+        async with Session.begin() as session:
+            result = await session.execute(
+                sighting_sql, sighting.model_dump(mode="json")
+            )
+            sighting_ids.append(result.lastrowid)
+
+    for gear in create_report_gear(count=count):
+        async with Session.begin() as session:
+            result = await session.execute(gear_sql, gear.model_dump(mode="json"))
+            gear_ids.append(result.lastrowid)
+
+    for location in create_report_locations(count=count):
+        async with Session.begin() as session:
+            result = await session.execute(
+                location_sql, location.model_dump(mode="json")
+            )
+            location_ids.append(result.lastrowid)
+
+    cutoff = datetime.now() - timedelta(days=retention_days)
+    old_count = count // 2
+
+    for i in range(count):
+        if i < old_count:
+            reported_at = cutoff - timedelta(days=random.randint(1, 30))
+        else:
+            reported_at = cutoff + timedelta(days=random.randint(1, 30))
+
+        sighting_id = (
+            sighting_ids[i] if i < len(sighting_ids) else random.choice(sighting_ids)
+        )
+        gear_id = gear_ids[i] if i < len(gear_ids) else random.choice(gear_ids)
+        location_id = (
+            location_ids[i] if i < len(location_ids) else random.choice(location_ids)
+        )
+
+        report = Report(
+            report_sighting_id=sighting_id,
+            report_location_id=location_id,
+            report_gear_id=gear_id,
+            reported_at=reported_at,
+            on_members_world=random.choice([0, 1]),
+            on_pvp_world=random.choice([0, 0, 0, 1]),
+            world_number=random.randint(300, 500),
+            region_id=random.randint(1, 15000),
+        )
+        async with Session.begin() as session:
+            await session.execute(report_sql, report.model_dump(mode="json"))
+
+    print(
+        f"Seeded {count} aged reports "
+        f"({old_count} older than {retention_days}d retention cutoff)"
+    )
+
+
+async def mark_banned_players(player_ids: list[int], count: int) -> None:
+    sql = sqlalchemy.text("""
+    UPDATE Players SET label_jagex = 2, confirmed_ban = 1
+    WHERE id = :id
+    """)
+    banned_ids = random.sample(player_ids, min(count, len(player_ids)))
+    for pid in banned_ids:
+        async with Session.begin() as session:
+            await session.execute(sql, {"id": pid})
+    print(f"Marked {len(banned_ids)} players as banned (label_jagex=2)")
+
+
 async def main():
     await wait_for_db()
     random.seed(config.RANDOM_SEED)
@@ -170,6 +275,16 @@ async def main():
 
     if config.SEED_REPORTS > 0:
         await insert_reports(player_ids=player_ids, count=config.SEED_REPORTS)
+
+    if config.SEED_AGED_REPORTS > 0:
+        await insert_aged_reports(
+            player_ids=player_ids,
+            retention_days=config.SEED_RETENTION_DAYS,
+            count=config.SEED_AGED_REPORTS,
+        )
+
+    if config.SEED_BANNED > 0:
+        await mark_banned_players(player_ids=player_ids, count=config.SEED_BANNED)
 
 
 if __name__ == "__main__":

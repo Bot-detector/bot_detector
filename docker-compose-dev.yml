@@ -45,6 +45,7 @@ services:
       - SEED_PLAYERS=100
       - SEED_SCRAPES_PER_PLAYER=10
       - SEED_REPORTS=1000
+      - SEED_BANNED=10
       - RESET_TOPICS=true
       - RANDOM_SEED=42
     networks:
@@ -100,6 +101,9 @@ services:
       - SEED_PLAYERS=100
       - SEED_REPORTS=100
       - SEED_PREDICTIONS=100
+      - SEED_BANNED=10
+      - SEED_AGED_REPORTS=20
+      - SEED_RETENTION_DAYS=90
       - SKIP_IF_EXISTING=true
       - SKIP_THRESHOLD=100
       - RANDOM_SEED=42
