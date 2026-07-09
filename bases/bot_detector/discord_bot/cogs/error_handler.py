@@ -1,8 +1,8 @@
 import logging
-import sys
 import traceback
 
 import aiohttp
+import discord
 from bot_detector.discord_bot.config import Settings
 from bot_detector.discord_bot.dependencies import BotDependencies
 from discord import Webhook
@@ -48,26 +48,51 @@ class errorHandler(commands.Cog):
             await ctx.reply(
                 "You can only message in the allowed channels, in the bot detector guild."
             )
-        else:
-            traceback.print_exception(
-                type(error), error, error.__traceback__, file=sys.stderr
+        elif isinstance(error, discord.HTTPException):
+            headers = dict(error.response.headers)
+            logger.error(
+                {
+                    "error": str(error),
+                    "status": error.response.status,
+                    "discord_code": error.code,
+                    "headers": headers,
+                }
             )
-
-            logger.error({"error": error})
+            if error.response.status == 429:
+                retry = headers.get("Retry-After")
+                wait = f" (try again in {retry}s)" if retry else ""
+                await self._safe_respond(
+                    ctx,
+                    f"The bot is being rate limited by Discord.{wait}"
+                    " Please try again shortly.",
+                )
+            else:
+                await self._safe_respond(ctx, "An error occured.")
+                await self._send_error_webhook(ctx, error)
+        else:
+            logger.error({"error": error}, exc_info=error)
             await self._safe_respond(ctx, "An error occured.")
+            await self._send_error_webhook(ctx, error)
 
-            webhook = Settings().WEBHOOK
-            if webhook:
-                async with aiohttp.ClientSession() as session:
-                    webhook = Webhook.from_url(webhook, session=session)
-                    error_message = (
-                        f"`{ctx.author}` running `{ctx.command}` caused `{error.__class__.__name__}`\n"
-                        f"Message Link: {ctx.message.jump_url}\n"
-                        f"```{''.join(error)}```"
-                    )
-                    error_message = "".join(error_message)
-
-                    await webhook.send(error_message, username="bd-error")
+    async def _send_error_webhook(self, ctx: Context, error: Exception) -> None:
+        webhook_url = Settings().WEBHOOK
+        if not webhook_url:
+            return
+        tb = "".join(
+            traceback.format_exception(type(error), error, error.__traceback__)
+        )
+        error_message = (
+            f"`{ctx.author}` running `{ctx.command}` caused"
+            f" `{error.__class__.__name__}`\n"
+            f"Message Link: {ctx.message.jump_url}\n"
+            f"```\n{tb}\n```"
+        )
+        try:
+            async with aiohttp.ClientSession() as session:
+                webhook = Webhook.from_url(webhook_url, session=session)
+                await webhook.send(error_message, username="bd-error")
+        except Exception as e:
+            logger.error({"msg": "Failed to send error webhook", "error": str(e)})
 
     async def _safe_respond(self, ctx: Context, message: str):
         try:
