@@ -14,11 +14,31 @@ def run():
 
 async def run_async():
     settings = Settings()
-    try:
-        await bot.bot.start(token=settings.DISCORD_TOKEN)
-    except discord.HTTPException as e:
-        logger.error(f"Discord HTTP Exception: {e.response.headers} {e}")
-        raise e
+    while True:
+        try:
+            await bot.bot.start(token=settings.DISCORD_TOKEN)
+        except discord.HTTPException as e:
+            logger.error(
+                {
+                    "msg": "Discord HTTP Exception:",
+                    "headers": e.response.headers,
+                    "error": e,
+                }
+            )
+            if e.response.status_code == 429:
+                headers = dict(e.response.headers)
+                sleep_time = headers.get("Retry-After", 60)
+                sleep_time = (
+                    sleep_time
+                    if isinstance(sleep_time, (int, float))
+                    else float(sleep_time)
+                )
+                logger.error(
+                    f"Discord API rate limit exceeded. Retrying in {sleep_time} seconds..."
+                )
+                await asyncio.sleep(sleep_time)
+            raise e
+        break
 
 
 if __name__ == "__main__":
