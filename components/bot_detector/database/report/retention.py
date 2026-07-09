@@ -30,9 +30,7 @@ async def prune_reports(
         Total number of report rows deleted.
     """
     cutoff = datetime.now() - timedelta(days=older_than_days)
-    sql = sqla.text(
-        "DELETE FROM report WHERE reported_at < :cutoff LIMIT :batch_size"
-    )
+    sql = sqla.text("DELETE FROM report WHERE reported_at < :cutoff LIMIT :batch_size")
 
     total_deleted = 0
     while True:

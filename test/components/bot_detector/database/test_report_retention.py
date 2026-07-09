@@ -8,9 +8,7 @@ from bot_detector.database.report import prune_reports
 def _make_session_factory(rowcounts: list[int]):
     """Build a session factory mock whose execute() returns rowcounts in order."""
     session = AsyncMock()
-    session.execute = AsyncMock(
-        side_effect=[MagicMock(rowcount=c) for c in rowcounts]
-    )
+    session.execute = AsyncMock(side_effect=[MagicMock(rowcount=c) for c in rowcounts])
 
     begin_cm = AsyncMock()
     begin_cm.__aenter__ = AsyncMock(return_value=None)
