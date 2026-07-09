@@ -22,8 +22,8 @@ async def run_async():
             logger.error(
                 {
                     "msg": "Discord HTTP Exception:",
-                    "headers": e.response.headers,
-                    "error": e,
+                    "headers": dict(e.response.headers),
+                    "error": str(e),
                 }
             )
             if not isinstance(e.response, ClientResponse):

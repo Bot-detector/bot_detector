@@ -9,16 +9,6 @@ class Settings(BaseSettings):
     DEBUG: bool = False
 
 
-def can_convert_to_json(s: str) -> dict | None:
-    try:
-        if not (s.startswith("{") and s.endswith("}")):
-            return None
-        result = ast.literal_eval(s)
-        return result if isinstance(result, dict) else None
-    except Exception:
-        return None
-
-
 # Configure JSON logging
 class JsonFormatter(logging.Formatter):
     def format(self, record):
@@ -29,17 +19,15 @@ class JsonFormatter(logging.Formatter):
             "func": record.funcName,
             "line": record.lineno,
         }
-
-        msg = record.getMessage()
-        if msg_dict := can_convert_to_json(msg):
-            log_record.update({f"msg.{k}": v for k, v in msg_dict.items()})
+        if isinstance(record.msg, dict):
+            log_record.update({f"msg.{k}": v for k, v in record.msg.items()})
         else:
-            log_record["msg"] = msg
+            log_record["msg"] = record.getMessage()
 
         if record.exc_info:
             log_record["exception"] = self.formatException(record.exc_info)
 
-        return json.dumps(log_record)
+        return json.dumps(log_record, default=str)
 
 
 class IgnoreSQLWarnings(logging.Filter):
