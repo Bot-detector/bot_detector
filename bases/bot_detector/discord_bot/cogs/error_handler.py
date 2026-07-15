@@ -61,15 +61,28 @@ class errorHandler(commands.Cog):
                 f" Please try again in {error.retry_after:.0f}s.",
             )
         elif isinstance(error, discord.HTTPException):
-            logger.error(
-                {
-                    "error": str(error),
-                    "status": error.response.status,
-                    "discord_code": error.code,
-                }
-            )
-            await self._safe_respond(ctx, "An error occured.")
-            await self._send_error_webhook(ctx, error)
+            if error.status == 429:
+                logger.warning(
+                    {
+                        "msg": "Discord global rate limit exceeded",
+                        "status": error.status,
+                    }
+                )
+                await self._safe_respond(
+                    ctx,
+                    "The bot is being rate limited by Discord."
+                    " Please try again shortly.",
+                )
+            else:
+                logger.error(
+                    {
+                        "error": str(error),
+                        "status": error.status,
+                        "discord_code": error.code,
+                    }
+                )
+                await self._safe_respond(ctx, "An error occured.")
+                await self._send_error_webhook(ctx, error)
         else:
             logger.error({"error": error}, exc_info=error)
             await self._safe_respond(ctx, "An error occured.")

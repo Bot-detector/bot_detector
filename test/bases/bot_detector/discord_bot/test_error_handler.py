@@ -81,6 +81,24 @@ async def test_http_exception_triggers_webhook():
 
 
 @pytest.mark.asyncio
+async def test_global_429_does_not_trigger_webhook():
+    """Global rate limits come as HTTPException 429, not RateLimited."""
+    cog = _make_cog()
+    ctx = _make_ctx()
+
+    error = _make_http_exception(status=429)
+
+    with patch.object(
+        cog, "_send_error_webhook", new_callable=AsyncMock
+    ) as mock_webhook:
+        await cog.on_command_error(ctx, error)
+
+    mock_webhook.assert_not_awaited()
+    ctx.send.assert_awaited_once()
+    assert "rate limited" in ctx.send.call_args.args[0].lower()
+
+
+@pytest.mark.asyncio
 async def test_safe_respond_uses_interaction_followup():
     """When interaction is done, should use interaction.followup.send."""
     cog = _make_cog()
