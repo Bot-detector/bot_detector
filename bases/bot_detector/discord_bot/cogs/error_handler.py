@@ -48,27 +48,28 @@ class errorHandler(commands.Cog):
             await ctx.reply(
                 "You can only message in the allowed channels, in the bot detector guild."
             )
+        elif isinstance(error, discord.RateLimited):
+            logger.warning(
+                {
+                    "msg": "Discord rate limit exceeded",
+                    "retry_after": error.retry_after,
+                }
+            )
+            await self._safe_respond(
+                ctx,
+                f"The bot is being rate limited by Discord."
+                f" Please try again in {error.retry_after:.0f}s.",
+            )
         elif isinstance(error, discord.HTTPException):
-            headers = dict(error.response.headers)
             logger.error(
                 {
                     "error": str(error),
                     "status": error.response.status,
                     "discord_code": error.code,
-                    "headers": headers,
                 }
             )
-            if error.response.status == 429:
-                retry = headers.get("Retry-After")
-                wait = f" (try again in {retry}s)" if retry else ""
-                await self._safe_respond(
-                    ctx,
-                    f"The bot is being rate limited by Discord.{wait}"
-                    " Please try again shortly.",
-                )
-            else:
-                await self._safe_respond(ctx, "An error occured.")
-                await self._send_error_webhook(ctx, error)
+            await self._safe_respond(ctx, "An error occured.")
+            await self._send_error_webhook(ctx, error)
         else:
             logger.error({"error": error}, exc_info=error)
             await self._safe_respond(ctx, "An error occured.")
@@ -97,7 +98,7 @@ class errorHandler(commands.Cog):
     async def _safe_respond(self, ctx: Context, message: str):
         try:
             if ctx.interaction and ctx.interaction.response.is_done():
-                await ctx.followup.send(message, ephemeral=True)
+                await ctx.interaction.followup.send(message, ephemeral=True)
             else:
                 await ctx.send(message)
         except Exception:
