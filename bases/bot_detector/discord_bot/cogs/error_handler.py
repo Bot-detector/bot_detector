@@ -59,19 +59,12 @@ class errorHandler(commands.Cog):
                 }
             )
             if error.response.status == 429:
-                retry = headers.get("Retry-After")
-                wait = f" (try again in {retry}s)" if retry else ""
-                await self._safe_respond(
-                    ctx,
-                    f"The bot is being rate limited by Discord.{wait}"
-                    " Please try again shortly.",
-                )
+                await ctx.send("The bot is being rate limited by Discord")
             else:
-                await self._safe_respond(ctx, "An error occured.")
                 await self._send_error_webhook(ctx, error)
         else:
-            logger.error({"error": error}, exc_info=error)
-            await self._safe_respond(ctx, "An error occured.")
+            logger.error({"error": error})
+            await ctx.send("An unexpected error occurred.")
             await self._send_error_webhook(ctx, error)
 
     async def _send_error_webhook(self, ctx: Context, error: Exception) -> None:
@@ -93,12 +86,3 @@ class errorHandler(commands.Cog):
                 await webhook.send(error_message, username="bd-error")
         except Exception as e:
             logger.error({"msg": "Failed to send error webhook", "error": str(e)})
-
-    async def _safe_respond(self, ctx: Context, message: str):
-        try:
-            if ctx.interaction and ctx.interaction.response.is_done():
-                await ctx.followup.send(message, ephemeral=True)
-            else:
-                await ctx.send(message)
-        except Exception:
-            logger.warning("Failed to respond to expired interaction")

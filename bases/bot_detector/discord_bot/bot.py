@@ -29,6 +29,7 @@ bot = Bot(
         reactions=True,
         message_content=True,
     ),
+    max_ratelimit_timeout=60.0,
 )
 
 
