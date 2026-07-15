@@ -16,6 +16,7 @@ bot = Bot(
     command_prefix=Settings().COMMAND_PREFIX,
     description="busting bots",
     case_insensitive=True,
+    max_ratelimit_timeout=60.0,
     activity=Game("OSRS", type=discord.ActivityType.watching),
     allowed_mentions=AllowedMentions(
         everyone=False,
