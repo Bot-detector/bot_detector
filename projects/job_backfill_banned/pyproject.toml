@@ -12,7 +12,10 @@ dependencies = [
     "asyncmy==0.2.11",
     "cryptography==46.0.3",
     "pydantic-settings==2.7.0",
+    "pydantic==2.10.4",
     "sqlalchemy==2.0.44",
+    "orjson==3.11.5",
+    "aiokafka==0.12.0",
 ]
 
 [project.scripts]
@@ -27,4 +30,5 @@ packages = ["bot_detector"]
 [tool.polylith.bricks]
 "../../bases/bot_detector/job_backfill_banned" = "bot_detector/job_backfill_banned"
 "../../components/bot_detector/database" = "bot_detector/database"
+"../../components/bot_detector/event_queue" = "bot_detector/event_queue"
 "../../components/bot_detector/logfmt" = "bot_detector/logfmt"
