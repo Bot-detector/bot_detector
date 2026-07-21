@@ -54,7 +54,7 @@ class HiscoreWorker(Worker[ScrapedStruct]):
         self._highscore_repo = highscore_repo
         self._data_to_predict_producer = data_to_predict_producer
 
-    async def handle(self, batch: list[ScrapedStruct]) -> None:
+    async def handle(self, batch: list[ScrapedStruct]) -> list[ScrapedStruct]:
         """
         insert batch into DB, then produce to "players.to_predict" topic for records with highscore data.
         when there is an error the Worker logic will reinsert the batch into the queue.
@@ -72,3 +72,4 @@ class HiscoreWorker(Worker[ScrapedStruct]):
         to_predict_batch = [d for d in to_predict_batch if d is not None]
         await self._data_to_predict_producer.put(to_predict_batch)
         logger.info(f"[{self._id}] processed {len(to_predict_batch)} scrapes")
+        return []

@@ -7,6 +7,7 @@ from bot_detector.event_queue.adapters.kafka import KafkaConfig
 from bot_detector.event_queue.adapters.memory import InMemoryConfig
 from bot_detector.event_queue.core import Queue
 from bot_detector.event_queue.factory import QueueFactory
+from bot_detector.worker.errors import WorkerError
 from pydantic import BaseModel
 
 T = TypeVar("T", bound=BaseModel)
@@ -17,13 +18,32 @@ logger = logging.getLogger(__name__)
 class Worker(ABC, Generic[T]):
     """Abstract worker. Subclass and implement handle().
 
-    Receives batch of messages, does work (DB writes, Kafka produce, API calls).
-    Own your own errors — if handle() raises, runner requeues the batch.
+    Receives a batch of messages and does work (DB writes, Kafka produce, API calls).
+
+    Requeue contract — handle() may return either a list or a WorkerError:
+        - Return [] (or any empty list) to signal full success — the runner
+          commits the batch offsets.
+        - Return a non-empty subset to requeue only those messages — the runner
+          re-publishes them and then commits the original batch offsets.
+        - Return a WorkerError(ok_batch=..., error_batch=...) to signal a
+          failure with partial progress: the runner re-publishes error_batch
+          and commits the batch offsets; ok_batch is considered processed and
+          is not requeued. This is the errors-as-values equivalent of raising.
+        - Raise an exception to requeue the entire batch (with backoff). Use this
+          for all-or-nothing workers or when the batch cannot be partially
+          progressed.
+
+    Returned messages must be valid instances of T; the runner does not validate
+    them. Workers using partial requeue must be idempotent on re-delivery.
     """
 
     @abstractmethod
-    async def handle(self, batch: list[T]) -> None:
-        """Process a batch of messages. No return value."""
+    async def handle(self, batch: list[T]) -> list[T] | WorkerError[T]:
+        """Process a batch and return the messages to requeue (empty = success).
+
+        May instead return a WorkerError carrying ok_batch/error_batch to
+        signal that error_batch should be requeued while ok_batch is kept.
+        """
         ...
 
 
@@ -31,8 +51,8 @@ class WorkerRunner(Generic[T]):
     """Owns the queue, runs the consume loop for a Worker.
 
     Creates queue via QueueFactory.
-    Loop: get_many → handle → commit. Requeue on error.
-    Graceful shutdown on CancelledError.
+    Loop: get_many → handle → commit. Requeues the subset returned by handle
+    (or the whole batch if handle raises). Graceful shutdown on CancelledError.
     """
 
     def __init__(
@@ -94,7 +114,7 @@ class WorkerRunner(Generic[T]):
             logger.error(f"Failed to commit requeued batch: {commit_err}")
 
     async def _consume(self) -> None:
-        """Main loop: get_many → handle → commit. Requeue on error."""
+        """Main loop: get_many → handle → commit. Requeues what handle returns."""
         while not self._stop_event.is_set():
             batch: list[T] = []
             try:
@@ -110,11 +130,34 @@ class WorkerRunner(Generic[T]):
 
                 logger.info(f"Consumed {len(batch)} messages")
 
-                await self._worker.handle(batch)
-
-                commit_err = await self._queue.commit()
-                if isinstance(commit_err, Exception):
-                    logger.error(f"Failed to commit batch: {commit_err}")
+                result = await self._worker.handle(batch)
+                if isinstance(result, WorkerError):
+                    if result.error_batch:
+                        logger.error(
+                            f"Worker returned error: {result}. "
+                            f"ok={len(result.ok_batch)}, "
+                            f"requeuing={len(result.error_batch)} "
+                            f"of {len(batch)}"
+                        )
+                        await self._requeue(result.error_batch)
+                        await asyncio.sleep(1)
+                    else:
+                        logger.warning(
+                            f"Worker returned WorkerError with empty "
+                            f"error_batch, committing: {result}"
+                        )
+                        commit_err = await self._queue.commit()
+                        if isinstance(commit_err, Exception):
+                            logger.error(f"Failed to commit batch: {commit_err}")
+                elif result:
+                    logger.info(
+                        f"Requeuing {len(result)} of {len(batch)} messages"
+                    )
+                    await self._requeue(result)
+                else:
+                    commit_err = await self._queue.commit()
+                    if isinstance(commit_err, Exception):
+                        logger.error(f"Failed to commit batch: {commit_err}")
             except asyncio.CancelledError:
                 if batch:
                     await self._requeue(batch)
