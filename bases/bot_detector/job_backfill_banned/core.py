@@ -4,9 +4,16 @@ import logging
 import sqlalchemy as sqla
 from bot_detector.database import Settings as DBSettings
 from bot_detector.database import get_session_factory
-from bot_detector.database.report import migrate_banned_player_reports
-from bot_detector.event_queue.adapters.kafka import KafkaLagProbe, KafkaSettings
+from bot_detector.event_queue.adapters.kafka import (
+    KafkaConfig,
+    KafkaProducerConfig,
+    KafkaSettings,
+)
+from bot_detector.event_queue.core import QueueProducer
+from bot_detector.event_queue.factory import QueueFactory, create_lag_probe
 from bot_detector.event_queue.lag_probe import LagProbeProtocol
+from bot_detector.event_queue.structs import PlayerBannedStruct
+from bot_detector.structs._metadata import MetaData
 from pydantic_settings import BaseSettings
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -19,11 +26,11 @@ class Settings(BaseSettings):
     LAG_SLEEP_SECONDS: int = 10
 
 
-def _select_banned_player_ids() -> sqla.TextClause:
+def _select_banned_players() -> sqla.TextClause:
     """Page through Players flagged as Jagex-banned (label_jagex = 2)."""
     return sqla.text(
         """
-        SELECT id FROM Players
+        SELECT id, name FROM Players
         WHERE label_jagex = 2 AND id > :player_id
         ORDER BY id ASC
         LIMIT :limit
@@ -32,6 +39,7 @@ def _select_banned_player_ids() -> sqla.TextClause:
 
 
 async def backfill(
+    producer: QueueProducer[PlayerBannedStruct],
     session_factory: async_sessionmaker[AsyncSession],
     lag_probe: LagProbeProtocol,
     lag_topic: str,
@@ -40,33 +48,42 @@ async def backfill(
     max_lag: int = 100_000,
     lag_sleep_seconds: int = 10,
 ) -> int:
-    """Archive location history for every Jagex-banned player.
+    """Publish PlayerBanned events for every Jagex-banned player.
 
-    Paginates Players where label_jagex = 2 and runs the migration function per
-    player. Each player is migrated in its own transaction; a failure for one
-    player is logged and skipped so the backfill can complete. Idempotent:
-    INSERT IGNORE makes a re-run safe if the one-time execution is interrupted.
+    Paginates Players where label_jagex = 2 in pages of `batch_size` and
+    publishes one PlayerBannedStruct per player to the players.banned topic.
+    Each page is sent in a single producer.put() call. The ban_migration_worker
+    consumes these events and writes report_archive rows, so this backfill owns
+    no DB writes itself - it is purely a producer. Idempotent at the consumer
+    thanks to INSERT IGNORE: a re-run after partial completion only re-emits
+    the last page's worth of events before the in-memory cursor was lost.
 
     Before each page, checks consumer lag on the players.banned topic for the
     ban_migration_worker group. If lag >= max_lag the run sleeps and retries,
-    so the backfill cannot outrun the live worker and pile load onto
-    report_archive while it is catching up.
+    so the backfill cannot outrun the live worker and pile events onto the
+    topic while it is catching up.
 
     Args:
-        session_factory: SQLAlchemy async session factory.
+        producer: QueueProducer for PlayerBannedStruct on players.banned.
+        session_factory: SQLAlchemy async session factory (read-only pagination).
         lag_probe: Kafka lag probe used to throttle against the live worker.
         lag_topic: Topic whose lag gates the run (players.banned).
         lag_group_id: Consumer group whose lag gates the run.
-        batch_size: Number of player ids fetched per page.
+        batch_size: Rows fetched per page and events per producer.put() call.
         max_lag: Lag threshold above which the run throttles.
         lag_sleep_seconds: Sleep duration when throttled.
 
     Returns:
-        Number of banned players processed.
+        Number of ban events published.
+
+    Raises:
+        Exception: If producer.put() returns an error. The run is aborted so
+            the failure is surfaced; re-running is safe because the worker's
+            INSERT IGNORE makes re-delivered events idempotent.
     """
-    sql = _select_banned_player_ids()
+    sql = _select_banned_players()
     player_id = 0
-    processed = 0
+    published = 0
 
     while True:
         lag = await lag_probe.lag(topic=lag_topic, group_id=lag_group_id)
@@ -83,31 +100,36 @@ async def backfill(
                 sql,
                 params={"player_id": player_id, "limit": batch_size},
             )
-            ids = [row for row in result.scalars().all()]
+            rows = result.all()
 
-        if not ids:
+        if not rows:
             logger.info("backfill: no more banned players, exiting")
             break
 
-        for reported_id in ids:
-            try:
-                await migrate_banned_player_reports(
-                    session_factory=session_factory,
-                    reported_id=reported_id,
-                )
-                processed += 1
-            except Exception as e:
-                logger.error(
-                    f"backfill: failed to archive reported_id={reported_id}: {e}"
-                )
+        events = [
+            PlayerBannedStruct(
+                metadata=MetaData(version=1, source="job_backfill_banned"),
+                player_id=pid,
+                name=name,
+            )
+            for pid, name in rows
+        ]
 
-        player_id = ids[-1]
+        err = await producer.put(events)
+        if err:
+            logger.error(
+                f"backfill: producer error for player_id={events[0].player_id}: {err}"
+            )
+            raise err
+
+        published += len(events)
+        player_id = events[-1].player_id
         logger.info(
-            f"backfill: processed up to player_id={player_id} ({processed} total)"
+            f"backfill: published up to player_id={player_id} ({published} total)"
         )
 
-    logger.info(f"backfill: finished, {processed} banned players processed")
-    return processed
+    logger.info(f"backfill: finished, {published} ban events published")
+    return published
 
 
 async def main():
@@ -118,13 +140,35 @@ async def main():
     lag_topic = "players.banned"
     lag_group_id = "ban_migration_worker"
 
-    lag_probe = KafkaLagProbe(bootstrap_servers)
+    lag_probe = create_lag_probe(
+        backend_type="kafka",
+        bootstrap_servers=bootstrap_servers,
+    )
     if isinstance(lag_probe, Exception):
         raise lag_probe
 
+    producer = QueueFactory.create_queue(
+        model=PlayerBannedStruct,
+        queue_type="producer",
+        backend_type="kafka",
+        config=KafkaConfig(
+            topic=lag_topic,
+            bootstrap_servers=bootstrap_servers,
+            producer=True,
+            producer_config=KafkaProducerConfig(
+                partition_key_fn=lambda message: str(message.player_id % 10),
+            ),
+        ),
+    )
+    if isinstance(producer, Exception):
+        raise producer
+    assert isinstance(producer, QueueProducer)
+
     await lag_probe.start()
+    await producer.start()
     try:
         await backfill(
+            producer=producer,
             session_factory=session_factory,
             lag_probe=lag_probe,
             lag_topic=lag_topic,
@@ -134,8 +178,9 @@ async def main():
             lag_sleep_seconds=settings.LAG_SLEEP_SECONDS,
         )
     finally:
-        await async_engine.dispose()
+        await producer.stop()
         await lag_probe.stop()
+        await async_engine.dispose()
 
 
 async def run_async():
