@@ -31,4 +31,5 @@ packages = ["bot_detector"]
 "../../bases/bot_detector/job_backfill_banned" = "bot_detector/job_backfill_banned"
 "../../components/bot_detector/database" = "bot_detector/database"
 "../../components/bot_detector/event_queue" = "bot_detector/event_queue"
+"../../components/bot_detector/structs" = "bot_detector/structs"
 "../../components/bot_detector/logfmt" = "bot_detector/logfmt"
