@@ -68,9 +68,7 @@ class _ScriptedLagProbe(LagProbeProtocol):
 async def test_backfill_paginates_and_produces_each_player(monkeypatch):
     monkeypatch.setattr(core.asyncio, "sleep", AsyncMock(return_value=None))
 
-    factory = _make_session_factory(
-        [[(1, "alice"), (2, "bob"), (3, "carol")], []]
-    )
+    factory = _make_session_factory([[(1, "alice"), (2, "bob"), (3, "carol")], []])
     produced: list = []
     producer = _make_producer(produced=produced)
 

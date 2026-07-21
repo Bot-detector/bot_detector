@@ -125,8 +125,7 @@ async def backfill(
         published += len(events)
         player_id = events[-1].player_id
         logger.info(
-            f"backfill: published up to player_id={player_id} "
-            f"({published} total)"
+            f"backfill: published up to player_id={player_id} ({published} total)"
         )
 
     logger.info(f"backfill: finished, {published} ban events published")
