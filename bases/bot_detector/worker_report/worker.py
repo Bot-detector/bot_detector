@@ -38,17 +38,20 @@ class ReportWorker(Worker[ReportsToInsertStruct]):
         self._session_factory = session_factory
         self._report_repo = report_repo
 
-    async def handle(self, batch: list[ReportsToInsertStruct]) -> None:
+    async def handle(
+        self, batch: list[ReportsToInsertStruct]
+    ) -> list[ReportsToInsertStruct]:
         logger.info(f"[{self._id}] consumed {len(batch)} reports")
         parsed = [
             r for r in (transform_report(record) for record in batch) if r is not None
         ]
         if not parsed:
             logger.info("No valid reports to process.")
-            return
+            return []
         await insert_batch(
             report_repo=self._report_repo,
             batch=parsed,
             session_factory=self._session_factory,
         )
         logger.info(f"[{self._id}] processed {len(parsed)} reports")
+        return []
