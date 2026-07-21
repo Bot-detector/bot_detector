@@ -150,9 +150,7 @@ class WorkerRunner(Generic[T]):
                         if isinstance(commit_err, Exception):
                             logger.error(f"Failed to commit batch: {commit_err}")
                 elif result:
-                    logger.info(
-                        f"Requeuing {len(result)} of {len(batch)} messages"
-                    )
+                    logger.info(f"Requeuing {len(result)} of {len(batch)} messages")
                     await self._requeue(result)
                 else:
                     commit_err = await self._queue.commit()
