@@ -4,6 +4,10 @@ from bot_detector.database.report import migrate_banned_player_reports
 from bot_detector.event_queue.structs import PlayerBannedStruct
 from bot_detector.worker.core import Worker
 from bot_detector.worker_ban_migration.adapter import transform_player_banned
+from bot_detector.worker_ban_migration.metrics import (
+    accounts_migrated_counter,
+    rows_migrated_counter,
+)
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 logger = logging.getLogger(__name__)
@@ -44,6 +48,8 @@ class BanMigrationWorker(Worker[PlayerBannedStruct]):
                 )
                 failed.append(record)
                 continue
+            accounts_migrated_counter.inc()
+            rows_migrated_counter.inc(inserted)
             logger.info(
                 f"[{self._id}] archived {inserted} rows for reported_id={reported_id}"
             )
