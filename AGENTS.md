@@ -11,8 +11,11 @@ The intent of this document is to guide **both humans and agents** to make corre
   - `cd projects/<project> && uv lock`
 - Type checking  
   - `uv run mypy`
-- Code formatting & linting  
-  - `uv run ruff`
+- Lint
+  - `uv run ruff check`
+- Format (CI enforces)
+  - `uv run ruff format --check .`
+  - fix: `uv run ruff format .`
 - Testing  
   - `uv run pytest`
 - Polylith commands (explicit permission required)  

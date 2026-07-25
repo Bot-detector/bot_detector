@@ -271,16 +271,16 @@ class ReportRepo(ReportInterface):
         sql_insert_temp_report = self._insert_temp_report()
         sql_insert_sighting = self._insert_sighting()
         # sql_insert_gear = self._insert_gear()
-        sql_insert_location = self._insert_location()
-        sql_insert_report = self._insert_report()
+        # sql_insert_location = self._insert_location()
+        # sql_insert_report = self._insert_report()
 
         await async_session.execute(sqla.text("DROP TABLE IF EXISTS temp_report;"))
         await async_session.execute(sql_create_temp_report)
         await async_session.execute(sql_insert_temp_report, params=_reports)
         await async_session.execute(sql_insert_sighting)
         # await async_session.execute(sql_insert_gear)
-        await async_session.execute(sql_insert_location)
-        await async_session.execute(sql_insert_report)
+        # await async_session.execute(sql_insert_location)
+        # await async_session.execute(sql_insert_report)
         await async_session.execute(sqla.text("DROP TABLE IF EXISTS temp_report;"))
 
     async def select(self, async_session: AsyncSession) -> None:
