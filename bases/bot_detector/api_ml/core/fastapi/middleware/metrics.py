@@ -1,7 +1,7 @@
+import time
+
 from fastapi import FastAPI, Request
 from prometheus_client import Counter, Histogram
-
-import time
 from starlette.middleware.base import BaseHTTPMiddleware
 
 # Create FastAPI app

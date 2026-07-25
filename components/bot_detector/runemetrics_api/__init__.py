@@ -6,8 +6,8 @@ from bot_detector.runemetrics_api.core import (
 )
 
 __all__ = [
-    "RuneMetricsPlayer",
-    "RuneMetricsError",
-    "RuneMetricsResponse",
     "RuneMetrics",
+    "RuneMetricsError",
+    "RuneMetricsPlayer",
+    "RuneMetricsResponse",
 ]

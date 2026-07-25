@@ -1,33 +1,32 @@
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, field_validator
 
 
 class PlayerCreate(BaseModel):
     name: str
-    possible_ban: Optional[bool] = 0
-    confirmed_ban: Optional[bool] = 0
-    confirmed_player: Optional[bool] = 0
-    label_id: Optional[int] = 0
-    label_jagex: Optional[int] = 0
-    ironman: Optional[int] = None
-    hardcore_ironman: Optional[int] = None
-    ultimate_ironman: Optional[int] = None
-    normalized_name: Optional[str] = None
+    possible_ban: bool | None = 0
+    confirmed_ban: bool | None = 0
+    confirmed_player: bool | None = 0
+    label_id: int | None = 0
+    label_jagex: int | None = 0
+    ironman: int | None = None
+    hardcore_ironman: int | None = None
+    ultimate_ironman: int | None = None
+    normalized_name: str | None = None
 
 
 class PlayerUpdate(BaseModel):
-    name: Optional[str] = None
-    possible_ban: Optional[bool] = None
-    confirmed_ban: Optional[bool] = None
-    confirmed_player: Optional[bool] = None
-    label_id: Optional[int] = None
-    label_jagex: Optional[int] = None
-    ironman: Optional[int] = None
-    hardcore_ironman: Optional[int] = None
-    ultimate_ironman: Optional[int] = None
-    normalized_name: Optional[str] = None
+    name: str | None = None
+    possible_ban: bool | None = None
+    confirmed_ban: bool | None = None
+    confirmed_player: bool | None = None
+    label_id: int | None = None
+    label_jagex: int | None = None
+    ironman: int | None = None
+    hardcore_ironman: int | None = None
+    ultimate_ironman: int | None = None
+    normalized_name: str | None = None
 
 
 class PlayerInDB(PlayerCreate):

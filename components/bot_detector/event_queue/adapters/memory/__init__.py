@@ -4,8 +4,8 @@ from .lag_adapter import MemoryLagProbe
 
 __all__ = [
     "InMemoryAdapter",
+    "InMemoryConfig",
     "InMemoryConsumerAdapter",
     "InMemoryProducerAdapter",
-    "InMemoryConfig",
     "MemoryLagProbe",
 ]

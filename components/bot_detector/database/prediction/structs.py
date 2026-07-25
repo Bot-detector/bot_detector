@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from bot_detector.database import Base
 from sqlalchemy import DECIMAL, JSON, DateTime, ForeignKey, Integer, String
@@ -16,7 +16,7 @@ class PredictionLatestStruct(Base):
     model_name: Mapped[str] = mapped_column(String(50), nullable=False)
     prediction: Mapped[str] = mapped_column(String(50), nullable=False)
     confidence: Mapped[float] = mapped_column(DECIMAL(5, 4), nullable=False)
-    predictions: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, default=None)
+    predictions: Mapped[dict[str, Any] | None] = mapped_column(JSON, default=None)
 
 
 class PredictionStruct(Base):
@@ -34,4 +34,4 @@ class PredictionStruct(Base):
     model_name: Mapped[str] = mapped_column(String(50), nullable=False)
     prediction: Mapped[str] = mapped_column(String(50), nullable=False)
     confidence: Mapped[float] = mapped_column(DECIMAL(5, 4), nullable=False)
-    predictions: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, default=None)
+    predictions: Mapped[dict[str, Any] | None] = mapped_column(JSON, default=None)

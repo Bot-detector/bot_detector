@@ -1,7 +1,6 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from bot_detector.database.api.repository import ApiUserRepo
 
 

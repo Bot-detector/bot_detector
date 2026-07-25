@@ -2,7 +2,6 @@ import asyncio
 import logging
 from typing import (
     Generic,
-    Optional,
     TypeVar,
 )
 
@@ -36,7 +35,7 @@ class Batcher(Generic[T]):
         elapsed_sec = asyncio.get_running_loop().time() - self._start_time
         return max(0.0, self.timeout_ms / 1000 - elapsed_sec)
 
-    def append(self, event: T, auto: bool = True) -> Optional[list[T]]:
+    def append(self, event: T, auto: bool = True) -> list[T] | None:
         """Append event to buffer and flush if needed."""
         self._buffer.append(event)
         if auto and self.check_flush():

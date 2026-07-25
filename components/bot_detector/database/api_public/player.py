@@ -1,10 +1,4 @@
 import sqlalchemy as sqla
-from fastapi.encoders import jsonable_encoder
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import aliased
-from sqlalchemy.sql.expression import Select
-
 from bot_detector.database.feedback.structs import (
     PredictionFeedbackTableStruct as PredictionFeedback,
 )
@@ -12,6 +6,11 @@ from bot_detector.database.player.structs import PlayersTableStruct as Player
 from bot_detector.database.prediction.structs import (
     PredictionLatestStruct as Prediction_v2,
 )
+from fastapi.encoders import jsonable_encoder
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
+from sqlalchemy.sql.expression import Select
 
 
 class PlayerRepo:

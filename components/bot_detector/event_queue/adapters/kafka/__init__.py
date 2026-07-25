@@ -9,7 +9,7 @@ __all__ = [
     "AIOKafkaProducerAdapter",
     "KafkaConfig",
     "KafkaConsumerConfig",
+    "KafkaLagProbe",
     "KafkaProducerConfig",
     "KafkaSettings",
-    "KafkaLagProbe",
 ]

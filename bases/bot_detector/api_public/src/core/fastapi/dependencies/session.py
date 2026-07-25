@@ -1,5 +1,6 @@
 import logging
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
+from typing import Any
 
 from bot_detector.api_public.src.core.config import DB_SEMAPHORE, SETTINGS
 from bot_detector.database import Settings as DBSettings
@@ -19,6 +20,5 @@ SessionFactory, _engine = get_session_factory(SETTINGS=_db_settings)
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, Any]:
-    async with DB_SEMAPHORE:
-        async with SessionFactory() as session:
-            yield session
+    async with DB_SEMAPHORE, SessionFactory() as session:
+        yield session

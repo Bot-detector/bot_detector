@@ -12,15 +12,15 @@ from .structs import (
 )
 
 __all__ = [
-    "QueueFactory",
-    "create_lag_probe",
+    "DataToPredictStruct",
+    "HighScoreStruct",
     "LagProbeProtocol",
+    "NotFoundStruct",
+    "PlayerBannedStruct",
+    "QueueFactory",
+    "ReportsToInsertStruct",
+    "ScrapedStruct",
     "Settings",
     "ToScrapeStruct",
-    "ScrapedStruct",
-    "NotFoundStruct",
-    "ReportsToInsertStruct",
-    "HighScoreStruct",
-    "DataToPredictStruct",
-    "PlayerBannedStruct",
+    "create_lag_probe",
 ]

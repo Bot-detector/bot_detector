@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Generic, Optional, Type, TypeVar
+from typing import Generic, TypeVar
 
 from bot_detector.event_queue.core.interface import (
     QueueBackendConsumerProtocol,
@@ -15,7 +15,7 @@ T = TypeVar("T", bound=BaseModel)
 
 
 class _InMemoryBase(Generic[T]):
-    def __init__(self, cls: Type[T], config: InMemoryConfig):
+    def __init__(self, cls: type[T], config: InMemoryConfig):
         self.cls = cls
         self._queue = asyncio.Queue(config.maxsize)
         self.logger = logging.getLogger(cls.__name__)
@@ -26,7 +26,7 @@ class _InMemoryBase(Generic[T]):
     async def stop(self) -> None:
         self.logger.info("[Memory] Queue cleared/stopped")
 
-    async def _validate(self, item) -> Optional[T]:
+    async def _validate(self, item) -> T | None:
         try:
             return self.cls.model_validate(item)
         except ValidationError as e:
@@ -38,7 +38,7 @@ class InMemoryConsumerAdapter(
     _InMemoryBase[T],
     QueueBackendConsumerProtocol[T],
 ):
-    async def get_one(self) -> Optional[T]:
+    async def get_one(self) -> T | None:
         try:
             item = self._queue.get_nowait()
             return await self._validate(item)
@@ -57,7 +57,7 @@ class InMemoryConsumerAdapter(
                 break
         return results
 
-    async def commit(self) -> Optional[Exception]:
+    async def commit(self) -> Exception | None:
         self._queue.task_done()
 
 
@@ -73,7 +73,7 @@ class InMemoryProducerAdapter(
 class InMemoryAdapter(QueueBackendProtocol[T]):
     def __init__(
         self,
-        cls: Type[T],
+        cls: type[T],
         config: InMemoryConfig = InMemoryConfig(),
     ):
         shared_queue = asyncio.Queue(config.maxsize)
@@ -95,11 +95,11 @@ class InMemoryAdapter(QueueBackendProtocol[T]):
     async def put(self, messages: list[T]) -> None:
         await self.producer.put(messages)
 
-    async def get_one(self) -> Optional[T]:
+    async def get_one(self) -> T | None:
         return await self.consumer.get_one()
 
     async def get_many(self, count: int) -> list[T]:
         return await self.consumer.get_many(count)
 
-    async def commit(self) -> Optional[Exception]:
+    async def commit(self) -> Exception | None:
         return await self.consumer.commit()

@@ -2,6 +2,7 @@ import asyncio
 import logging
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, time, timedelta
+from typing import Literal
 
 from bot_detector.database import Settings as DBSettings
 from bot_detector.database import get_session_factory
@@ -20,7 +21,6 @@ from bot_detector.structs import MetaData, PlayerStruct
 from bot_detector.wide_event import WideEventLogger
 from pydantic_settings import BaseSettings
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from typing_extensions import Literal
 
 logger = logging.getLogger(__name__)
 wide_event = WideEventLogger()

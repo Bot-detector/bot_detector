@@ -34,13 +34,12 @@ async def prune_reports(
 
     total_deleted = 0
     while True:
-        async with session_factory() as session:
-            async with session.begin():
-                result = await session.execute(
-                    sql,
-                    params={"cutoff": cutoff, "batch_size": batch_size},
-                )
-                deleted = cast(CursorResult, result).rowcount
+        async with session_factory() as session, session.begin():
+            result = await session.execute(
+                sql,
+                params={"cutoff": cutoff, "batch_size": batch_size},
+            )
+            deleted = cast(CursorResult, result).rowcount
 
         total_deleted += deleted
         logger.info(f"prune_reports: deleted {deleted} rows (total {total_deleted})")

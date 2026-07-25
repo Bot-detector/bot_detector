@@ -1,5 +1,4 @@
 import time
-from typing import Optional
 
 from aiohttp import ClientSession
 from bot_detector.rate_limiter import RateLimiter
@@ -11,14 +10,14 @@ from .structs import PlayerStats
 class HiscoreOldSchoolAPI:
     url = "https://secure.runescape.com/m=hiscore_oldschool/index_lite.json"
 
-    def __init__(self, rate_limiter: Optional[RateLimiter] = None) -> None:
+    def __init__(self, rate_limiter: RateLimiter | None = None) -> None:
         self.rate_limiter = rate_limiter if rate_limiter is not None else RateLimiter()
 
     async def _fetch(
         self,
         params: dict,
         session: ClientSession,
-        proxy: Optional[str] = None,
+        proxy: str | None = None,
     ) -> Result:
         await self.rate_limiter.check()
         try:
@@ -47,7 +46,7 @@ class HiscoreOldSchoolAPI:
             return Err(error=e)
 
     async def get(
-        self, player: str, session: ClientSession, proxy: Optional[str] = None
+        self, player: str, session: ClientSession, proxy: str | None = None
     ) -> Result:
         result = await self._fetch(
             params={"player": player}, session=session, proxy=proxy

@@ -2,7 +2,6 @@ import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from bot_detector.event_queue.structs import ReportsToInsertStruct
 from bot_detector.structs._metadata import MetaData
 from bot_detector.structs.reports import Equipment, ParsedDetection

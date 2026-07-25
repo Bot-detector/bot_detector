@@ -37,7 +37,6 @@ def _make_producer(produced: list | None = None):
     async def _put(events):
         if produced is not None:
             produced.extend(events)
-        return None
 
     producer.put = AsyncMock(side_effect=_put)
     return producer

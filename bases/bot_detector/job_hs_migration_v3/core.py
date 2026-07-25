@@ -36,24 +36,22 @@ class Settings(BaseSettings):
 async def get_latest_player_id(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> int:
-    async with session_factory() as session:
-        async with session.begin():
-            result = await session.execute(
-                sqla.text("SELECT player_id FROM migration_hs_v3;")
-            )
-            latest_player_id = result.scalar_one_or_none() or 0
-            return latest_player_id
+    async with session_factory() as session, session.begin():
+        result = await session.execute(
+            sqla.text("SELECT player_id FROM migration_hs_v3;")
+        )
+        latest_player_id = result.scalar_one_or_none() or 0
+        return latest_player_id
 
 
 async def update_latest_player_id(
     session_factory: async_sessionmaker[AsyncSession], player_id: int
 ):
-    async with session_factory() as session:
-        async with session.begin():
-            await session.execute(
-                sqla.text("UPDATE migration_hs_v3 SET player_id = :player_id;"),
-                params={"player_id": player_id},
-            )
+    async with session_factory() as session, session.begin():
+        await session.execute(
+            sqla.text("UPDATE migration_hs_v3 SET player_id = :player_id;"),
+            params={"player_id": player_id},
+        )
 
 
 def _records_to_migrate() -> TextClause:
@@ -103,12 +101,11 @@ async def get_hiscore_data(
 
     assert params.keys() == {"player_id", "limit"}
 
-    async with session_factory() as session:
-        async with session.begin():
-            result = await session.execute(_records_to_migrate(), params)
-            data = result.mappings().all()
-            # to list of dict
-            data = [dict(row) for row in data]
+    async with session_factory() as session, session.begin():
+        result = await session.execute(_records_to_migrate(), params)
+        data = result.mappings().all()
+        # to list of dict
+        data = [dict(row) for row in data]
 
     duration = time.time() - start_time
     logger.info(f"Result: {len(data)}, {params=}, time={duration:.2f}")

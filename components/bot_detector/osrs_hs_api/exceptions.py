@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Union
+from typing import Any
 
 from aiohttp.client_exceptions import ClientHttpProxyError
 from pydantic import ValidationError
@@ -29,10 +29,4 @@ class Ok(Result):
 
 @dataclass
 class Err(Result):
-    error: Union[
-        PlayerDoesNotExist,
-        UnexpectedRedirection,
-        ClientHttpProxyError,
-        ValidationError,
-        Exception,
-    ]
+    error: PlayerDoesNotExist | UnexpectedRedirection | ClientHttpProxyError | ValidationError | Exception

@@ -6,10 +6,10 @@ from .interface import (
 )
 
 __all__ = [
+    "Queue",
     "QueueBackendConsumerProtocol",
     "QueueBackendProducerProtocol",
     "QueueBackendProtocol",
-    "Queue",
     "QueueConsumer",
     "QueueProducer",
 ]

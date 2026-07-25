@@ -1,4 +1,3 @@
-from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -21,14 +20,14 @@ class FeedbackInput(BaseModel):
         examples=["real_player"],
         description="Prediction for the player",
     )
-    confidence: Optional[float] = Field(
+    confidence: float | None = Field(
         0, ge=0, le=1, description="Confidence level of the prediction"
     )
     subject_id: int = Field(..., examples=[1], description="ID of the subject")
-    feedback_text: Optional[str] = Field(
+    feedback_text: str | None = Field(
         None, examples=["Test feedback"], max_length=250, description="Feedback text"
     )
-    proposed_label: Optional[str] = Field(
+    proposed_label: str | None = Field(
         None,
         examples=["real_player"],
         description="Proposed label for the player",

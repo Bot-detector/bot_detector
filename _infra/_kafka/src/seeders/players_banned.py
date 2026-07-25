@@ -1,8 +1,7 @@
 import random
-from typing import Generator
+from collections.abc import Generator
 
 from pydantic import BaseModel
-
 from seeders.players_to_scrape import PlayerStruct
 
 

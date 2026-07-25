@@ -1,20 +1,19 @@
 import time
-from typing import Optional
 
 from pydantic import BaseModel
 from pydantic.fields import Field
 
 
 class Equipment(BaseModel):
-    equip_head_id: Optional[int] = Field(None, ge=0)
-    equip_amulet_id: Optional[int] = Field(None, ge=0)
-    equip_torso_id: Optional[int] = Field(None, ge=0)
-    equip_legs_id: Optional[int] = Field(None, ge=0)
-    equip_boots_id: Optional[int] = Field(None, ge=0)
-    equip_cape_id: Optional[int] = Field(None, ge=0)
-    equip_hands_id: Optional[int] = Field(None, ge=0)
-    equip_weapon_id: Optional[int] = Field(None, ge=0)
-    equip_shield_id: Optional[int] = Field(None, ge=0)
+    equip_head_id: int | None = Field(None, ge=0)
+    equip_amulet_id: int | None = Field(None, ge=0)
+    equip_torso_id: int | None = Field(None, ge=0)
+    equip_legs_id: int | None = Field(None, ge=0)
+    equip_boots_id: int | None = Field(None, ge=0)
+    equip_cape_id: int | None = Field(None, ge=0)
+    equip_hands_id: int | None = Field(None, ge=0)
+    equip_weapon_id: int | None = Field(None, ge=0)
+    equip_shield_id: int | None = Field(None, ge=0)
 
 
 class BaseDetection(BaseModel):

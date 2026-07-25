@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from inspect import cleandoc
 from typing import Any
 
@@ -209,7 +209,7 @@ class playerStatsCommands(Cog):
 
         exclude = ["id", "timestamp", "ts_date", "Player_id"]
         skills_lower = [s.lower() for s in SKILLS_LIST]
-        bosses = [k for k in player_hiscore.keys() if k not in skills_lower + exclude]
+        bosses = [k for k in player_hiscore if k not in skills_lower + exclude]
         embed = None
 
         for boss in bosses:
@@ -479,7 +479,7 @@ class playerStatsCommands(Cog):
         _breakdown_txt = "No breakdown available."
         _breakdown_txt = "\n".join(_breakdown) if _breakdown else _breakdown_txt
 
-        embed = Embed(color=color, timestamp=datetime.now(timezone.utc))
+        embed = Embed(color=color, timestamp=datetime.now(UTC))
         embed.add_field(
             name="Player Prediction",
             value=summary_text,

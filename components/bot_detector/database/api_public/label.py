@@ -1,9 +1,7 @@
-from sqlalchemy import select
+from bot_detector.database import Base
+from sqlalchemy import Column, Integer, Text, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.expression import Select
-
-from bot_detector.database import Base
-from sqlalchemy import Column, Integer, Text
 
 
 class Label(Base):

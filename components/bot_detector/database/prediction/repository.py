@@ -3,8 +3,6 @@ from dataclasses import asdict
 
 import sqlalchemy as sqla
 from bot_detector.database.player.structs import PlayersTableStruct
-from .interface import PredictionInterface, PredictionLatestInterface
-from .structs import PredictionLatestStruct, PredictionStruct
 from bot_detector.structs import (
     PredictionCreate,
     PredictionLatestRead,
@@ -12,6 +10,9 @@ from bot_detector.structs import (
 )
 from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from .interface import PredictionInterface, PredictionLatestInterface
+from .structs import PredictionLatestStruct, PredictionStruct
 
 logger = logging.getLogger(__name__)
 

@@ -1,9 +1,7 @@
-from typing import Any, Literal, Type, TypeVar
+from typing import Any, Literal, TypeVar
 
 from bot_detector.event_queue.adapters.kafka import KafkaLagProbe
 from bot_detector.event_queue.adapters.memory import MemoryLagProbe
-from bot_detector.event_queue.lag_probe import LagProbeProtocol
-
 from bot_detector.event_queue.core import (
     Queue,
     QueueBackendConsumerProtocol,
@@ -12,6 +10,7 @@ from bot_detector.event_queue.core import (
     QueueConsumer,
     QueueProducer,
 )
+from bot_detector.event_queue.lag_probe import LagProbeProtocol
 from pydantic import BaseModel
 
 T = TypeVar("T", bound=BaseModel)
@@ -21,7 +20,7 @@ class InvalidConfig(Exception): ...
 
 
 def create_adapter_memory(
-    model: Type[T],
+    model: type[T],
     config: Any,
     queue_type: Literal["queue", "producer", "consumer"],
 ) -> (
@@ -48,7 +47,7 @@ def create_adapter_memory(
 
 
 def create_adapter_kafka(
-    model: Type[T],
+    model: type[T],
     config: Any,
     queue_type: Literal["queue", "producer", "consumer"],
 ) -> (
@@ -92,7 +91,7 @@ def create_lag_probe(
 class QueueFactory:
     @staticmethod
     def create_queue(
-        model: Type[T],
+        model: type[T],
         queue_type: Literal["queue", "producer", "consumer"],
         backend_type: Literal["memory", "kafka"],
         config: Any,

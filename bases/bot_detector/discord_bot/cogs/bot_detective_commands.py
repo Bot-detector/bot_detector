@@ -5,7 +5,6 @@ import shutil
 import tempfile
 import time
 from pathlib import Path
-from typing import List
 
 import discord
 from bot_detector.discord_bot.dependencies import BotDependencies
@@ -33,7 +32,7 @@ class botDetectiveCommands(commands.Cog):
                 return None
             return await resp.text()
 
-    async def _parse_pastebin(self, data: str) -> List[str]:
+    async def _parse_pastebin(self, data: str) -> list[str]:
         user_names = [line for line in data.split("\r\n")]
         match = r"^[a-zA-Z0-9_\- ]{1,12}$"
         user_names = [name for name in user_names if re.match(match, name)]

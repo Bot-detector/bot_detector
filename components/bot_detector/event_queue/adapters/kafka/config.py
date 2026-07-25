@@ -1,4 +1,5 @@
-from typing import Any, Callable, Optional, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 from pydantic import BaseModel, model_validator
 
@@ -13,7 +14,7 @@ class KafkaConsumerConfig(BaseModel):
 
 
 class KafkaProducerConfig(BaseModel):
-    partition_key_fn: Optional[Callable[[Any], bytes | str]] = None
+    partition_key_fn: Callable[[Any], bytes | str] | None = None
     MAX_PRODUCE_RETRIES: int = 3
     MAX_PRODUCE_RETRY_BACKOFF: int = 60
 
@@ -23,8 +24,8 @@ class KafkaConfig(BaseModel):
     bootstrap_servers: str
     consumer: bool = False
     producer: bool = False
-    producer_config: Optional[KafkaProducerConfig] = None
-    consumer_config: Optional[KafkaConsumerConfig] = None
+    producer_config: KafkaProducerConfig | None = None
+    consumer_config: KafkaConsumerConfig | None = None
 
     @model_validator(mode="after")
     def check_config(self):

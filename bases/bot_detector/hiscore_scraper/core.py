@@ -63,10 +63,9 @@ async def produce_player_to_scrape(
         retries += 1
         logger.error(f"Failed to produce player to scrape (attempt {retries}): {error}")
         await asyncio.sleep(2**retries)  # Exponential backoff
-    else:
-        return Exception(
-            f"Failed to produce player to scrape after {MAX_RETRIES} attempts: {error}"
-        )
+    return Exception(
+        f"Failed to produce player to scrape after {MAX_RETRIES} attempts: {error}"
+    )
 
 
 async def produce_not_found(
@@ -87,10 +86,9 @@ async def produce_not_found(
         retries += 1
         logger.error(f"Failed to produce not found (attempt {retries}): {error}")
         await asyncio.sleep(2**retries)  # Exponential backoff
-    else:
-        return Exception(
-            f"Failed to produce not found after {MAX_RETRIES} attempts: {error}"
-        )
+    return Exception(
+        f"Failed to produce not found after {MAX_RETRIES} attempts: {error}"
+    )
 
 
 async def produce_player_scraped(
@@ -107,10 +105,9 @@ async def produce_player_scraped(
         retries += 1
         logger.error(f"Failed to produce scraped data (attempt {retries}): {error}")
         await asyncio.sleep(2**retries)  # Exponential backoff
-    else:
-        return Exception(
-            f"Failed to produce scraped data after {MAX_RETRIES} attempts: {error}"
-        )
+    return Exception(
+        f"Failed to produce scraped data after {MAX_RETRIES} attempts: {error}"
+    )
 
 
 async def scrape_player(

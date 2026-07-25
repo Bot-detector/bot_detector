@@ -2,4 +2,4 @@ from bot_detector import logfmt
 
 from . import config
 
-__all__ = ["logfmt", "config"]
+__all__ = ["config", "logfmt"]

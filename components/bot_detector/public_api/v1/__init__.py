@@ -9,10 +9,10 @@ from bot_detector.public_api.v1.structs import (
 )
 
 __all__ = [
-    "LegacyApiClient",
     "Bots",
     "DiscordVerifyInfo",
     "ExportInfo",
+    "LegacyApiClient",
     "PlayerName",
     "RegionID",
     "RegionName",

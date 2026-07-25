@@ -1,8 +1,7 @@
 import random
-from typing import Generator
+from collections.abc import Generator
 
 from pydantic import BaseModel
-
 
 PREDICTION_LABELS = [
     "Unknown",
