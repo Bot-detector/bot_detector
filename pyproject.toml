@@ -41,7 +41,7 @@ dev = [
     "kafka-python>=2.0.2",
     "polylith-cli>=1.24.0",
     "pytest>=8.3.4",
-    "ruff>=0.8.4",
+    "ruff==0.15.22",
     "pytest-asyncio>=0.25.0",
     "pytest-cov>=6.1.1",
     "mypy>=1.19.1",
