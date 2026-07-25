@@ -1,6 +1,6 @@
 import random
 import time
-from collections.abc import Generator
+from typing import Generator
 
 from pydantic import BaseModel, Field
 from seeders.players_to_scrape import PlayerStruct

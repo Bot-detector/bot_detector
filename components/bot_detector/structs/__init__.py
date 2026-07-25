@@ -17,22 +17,23 @@ from .prediction import (
 )
 from .reports import Detection, Equipment, ParsedDetection
 
+
 __all__ = [
-    "Detection",
-    "Equipment",
+    "MetaData",
     "FeedbackExportItem",
     "FeedbackExportResponse",
     "HighscoreBaseStruct",
+    "HighscoreDataLatestStruct",
     "HighscoreDataBaseStruct",
     "HighscoreDataDailyStruct",
-    "HighscoreDataLatestStruct",
-    "HighscoreDataMonthlyStruct",
     "HighscoreDataWeeklyStruct",
-    "MetaData",
-    "ParsedDetection",
+    "HighscoreDataMonthlyStruct",
     "PlayerStruct",
+    "Detection",
+    "ParsedDetection",
+    "Equipment",
+    "PredictionLatestRead",
     "PredictionBase",
     "PredictionCreate",
-    "PredictionLatestRead",
     "PredictionRead",
 ]

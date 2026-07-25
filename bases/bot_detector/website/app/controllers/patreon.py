@@ -1,3 +1,4 @@
+from typing import List
 
 import aiohttp
 from pydantic import BaseModel
@@ -11,7 +12,7 @@ class Campaign(BaseModel):
 
 
 class CampaignsResponse(BaseModel):
-    data: list[Campaign]
+    data: List[Campaign]
 
 
 class Member(BaseModel):
@@ -22,7 +23,7 @@ class Member(BaseModel):
 
 
 class MembersResponse(BaseModel):
-    data: list[Member]
+    data: List[Member]
 
 
 class Patreon:

@@ -65,28 +65,29 @@ async def prune(async_session: async_sessionmaker[AsyncSession]):
     player_id = 0
     while True:
         try:
-            async with async_session() as session, session.begin():
-                # Drop and create temp table each loop
-                await session.execute(sql_drop_tmp)
-                await session.execute(sql_create_tmp)
-                params = {"player_id": player_id, "limit": Settings().LIMIT}
-                await session.execute(sql_insert_tmp, params=params)
+            async with async_session() as session:
+                async with session.begin():
+                    # Drop and create temp table each loop
+                    await session.execute(sql_drop_tmp)
+                    await session.execute(sql_create_tmp)
+                    params = {"player_id": player_id, "limit": Settings().LIMIT}
+                    await session.execute(sql_insert_tmp, params=params)
 
-                result = await session.scalars(sql_select_tmp)
-                new_player_id = result.first()  # This returns an int or None
+                    result = await session.scalars(sql_select_tmp)
+                    new_player_id = result.first()  # This returns an int or None
 
-                if new_player_id is None:
-                    logger.info("No more players to process, break loop")
-                    break
+                    if new_player_id is None:
+                        logger.info("No more players to process, break loop")
+                        break
 
-                player_id = new_player_id
-                logger.info(f"Processed up to player_id: {player_id}")
+                    player_id = new_player_id
+                    logger.info(f"Processed up to player_id: {player_id}")
 
-                # Perform deletion after temp table is populated
-                await session.execute(sql_delete_hdd)
-                result = await session.scalars(sql_row_count)
-                rows_deleted = result.first()
-                logger.info(f"Deleted {rows_deleted} records")
+                    # Perform deletion after temp table is populated
+                    await session.execute(sql_delete_hdd)
+                    result = await session.scalars(sql_row_count)
+                    rows_deleted = result.first()
+                    logger.info(f"Deleted {rows_deleted} records")
 
         except Exception as e:
             logger.error(f"Error during prune loop: {e}")

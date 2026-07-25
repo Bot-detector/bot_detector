@@ -86,5 +86,5 @@ class MLApiClient:
             output = OutputData.model_validate(data)
         except ValidationError as e:
             logger.error(f"Validation error: {e}")
-            raise RuntimeError(f"Failed to parse prediction response: {e!s}")
+            raise RuntimeError(f"Failed to parse prediction response: {str(e)}")
         return output

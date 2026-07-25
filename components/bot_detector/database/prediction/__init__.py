@@ -5,8 +5,8 @@ from .structs import PredictionLatestStruct, PredictionStruct
 __all__ = [
     "PredictionInterface",
     "PredictionLatestInterface",
-    "PredictionLatestRepo",
-    "PredictionLatestStruct",
     "PredictionRepo",
+    "PredictionLatestRepo",
     "PredictionStruct",
+    "PredictionLatestStruct",
 ]

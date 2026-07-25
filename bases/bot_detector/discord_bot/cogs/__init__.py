@@ -9,13 +9,13 @@ from bot_detector.discord_bot.cogs.project_stats import projectStatsCommands
 from bot_detector.discord_bot.cogs.rsn_linking_commands import rsnLinkingCommands
 
 __all__ = [
-    "botDetectiveCommands",
     "errorHandler",
-    "feedbackListCommands",
     "funCommands",
-    "mapCommands",
     "modCommands",
-    "playerStatsCommands",
     "projectStatsCommands",
+    "botDetectiveCommands",
+    "mapCommands",
+    "playerStatsCommands",
     "rsnLinkingCommands",
+    "feedbackListCommands",
 ]

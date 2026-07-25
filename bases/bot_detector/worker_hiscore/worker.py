@@ -25,15 +25,16 @@ async def insert_batch(
     player_batch = [d.player_data for d in batch]
     highscore_batch = [d.highscore_data for d in batch if d.highscore_data is not None]
 
-    async with session_factory() as session, session.begin():
-        await player_repo.update_many_players(
-            async_session=session,
-            players_data=player_batch,
-        )
-        await highscore_repo.insert_highscore_many(
-            async_session=session,
-            highscore_data=highscore_batch,
-        )
+    async with session_factory() as session:
+        async with session.begin():
+            await player_repo.update_many_players(
+                async_session=session,
+                players_data=player_batch,
+            )
+            await highscore_repo.insert_highscore_many(
+                async_session=session,
+                highscore_data=highscore_batch,
+            )
             # session.begin() context manager will commit if no exceptions, rollback if exception occurs
     logger.debug(f"inserted: {len(batch)}")
 

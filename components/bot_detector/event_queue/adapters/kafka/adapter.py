@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Generic, TypeVar
+from typing import Generic, Optional, TypeVar
 
 import orjson
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer, ConsumerRecord
@@ -69,7 +69,7 @@ class AIOKafkaProducerAdapter(
         if self.producer:
             await self.producer.stop()
 
-    async def put(self, messages: list[T]) -> Exception | None:
+    async def put(self, messages: list[T]) -> Optional[Exception]:
         if self.producer is None:
             return ProducerNotStartedError(
                 "Producer is None, did you start the producer?"
@@ -139,7 +139,7 @@ class AIOKafkaConsumerAdapter(
         if self.consumer:
             await self.consumer.stop()
 
-    async def get_one(self) -> T | None | Exception:
+    async def get_one(self) -> Optional[T] | Exception:
         if self.consumer is None:
             return ConsumerNotStartedError(
                 "Consumer is None, did you start the consumer?"
@@ -192,7 +192,7 @@ class AIOKafkaConsumerAdapter(
                     batcher.append(_record, auto=False)
         return batcher.flush()
 
-    async def commit(self) -> Exception | None:
+    async def commit(self) -> Optional[Exception]:
         if self.consumer is None:
             return ConsumerNotStartedError(
                 "Consumer is None, did you start the consumer?"
@@ -223,14 +223,14 @@ class AIOKafkaAdapter(QueueBackendProtocol[T]):
         if self.producer:
             await self.producer.stop()
 
-    async def put(self, messages: list[T]) -> Exception | None:
+    async def put(self, messages: list[T]) -> Optional[Exception]:
         return await self.producer.put(messages)
 
-    async def get_one(self) -> T | None | Exception:
+    async def get_one(self) -> Optional[T] | Exception:
         return await self.consumer.get_one()
 
     async def get_many(self, count: int) -> list[T] | Exception:
         return await self.consumer.get_many(count)
 
-    async def commit(self) -> Exception | None:
+    async def commit(self) -> Optional[Exception]:
         return await self.consumer.commit()

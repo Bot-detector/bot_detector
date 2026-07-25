@@ -1,11 +1,13 @@
 import asyncio
-from datetime import datetime, timedelta
 
-import aiohttp
 import pytest
 import pytest_asyncio
+from datetime import datetime, timedelta
+import aiohttp
 from aioresponses import aioresponses
+
 from bot_detector.osrs_items.core import OsrsItemsClient
+
 
 TEST_USER_AGENT = "test-user-agent"
 

@@ -6,11 +6,11 @@ from .players_to_scrape import ToScrapeStruct
 from .reports_to_insert import ReportsToInsertStruct
 
 __all__ = [
-    "DataToPredictStruct",
-    "HighScoreStruct",
-    "NotFoundStruct",
-    "PlayerBannedStruct",
-    "ReportsToInsertStruct",
-    "ScrapedStruct",
     "ToScrapeStruct",
+    "ScrapedStruct",
+    "NotFoundStruct",
+    "ReportsToInsertStruct",
+    "HighScoreStruct",
+    "DataToPredictStruct",
+    "PlayerBannedStruct",
 ]

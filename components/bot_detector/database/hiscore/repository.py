@@ -1,12 +1,8 @@
+import orjson
 import logging
 
-import orjson
 import sqlalchemy as sqla
 import sqlalchemy.dialects.mysql as sqla_mysql
-from bot_detector.structs import HighscoreBaseStruct
-from sqlalchemy import TextClause, func
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from .interface import (
     HighscoreDataDailyInterface,
     HighscoreDataLatestInterface,
@@ -19,6 +15,9 @@ from .structs import (
     HighscoreDataMonthlyTableStruct,
     HighscoreDataWeeklyTableStruct,
 )
+from bot_detector.structs import HighscoreBaseStruct
+from sqlalchemy import TextClause, func
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 

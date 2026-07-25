@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Optional
 
 from pydantic import BaseModel
 
@@ -7,8 +8,8 @@ class HighscoreBaseStruct(BaseModel):
     player_id: int
     scrape_date: date
     time_to_live: date
-    skills: dict[str, int] | None = None
-    activities: dict[str, int] | None = None
+    skills: Optional[dict[str, int]] = None
+    activities: Optional[dict[str, int]] = None
 
 
 class HighscoreDataBaseStruct(HighscoreBaseStruct):

@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Optional
 
 from bot_detector.database import Base
 from sqlalchemy import (
@@ -27,8 +28,8 @@ class HighscoreDataDailyTableStruct(Base):
     scrape_week: Mapped[int] = mapped_column(
         Integer, Computed("WEEK(scrape_date, 3)"), nullable=False
     )
-    skills: Mapped[dict[str, int] | None] = mapped_column(JSON, nullable=True)
-    activities: Mapped[dict[str, int] | None] = mapped_column(JSON, nullable=True)
+    skills: Mapped[Optional[dict[str, int]]] = mapped_column(JSON, nullable=True)
+    activities: Mapped[Optional[dict[str, int]]] = mapped_column(JSON, nullable=True)
 
     __table_args__ = (PrimaryKeyConstraint("player_id", "scrape_date"),)
 
@@ -48,8 +49,8 @@ class HighscoreDataWeeklyTableStruct(Base):
     scrape_week: Mapped[int] = mapped_column(
         Integer, Computed("WEEK(scrape_date, 3)"), nullable=False
     )
-    skills: Mapped[dict[str, int] | None] = mapped_column(JSON, nullable=True)
-    activities: Mapped[dict[str, int] | None] = mapped_column(JSON, nullable=True)
+    skills: Mapped[Optional[dict[str, int]]] = mapped_column(JSON, nullable=True)
+    activities: Mapped[Optional[dict[str, int]]] = mapped_column(JSON, nullable=True)
 
     __table_args__ = (PrimaryKeyConstraint("player_id", "scrape_year", "scrape_week"),)
 
@@ -69,8 +70,8 @@ class HighscoreDataMonthlyTableStruct(Base):
     scrape_week: Mapped[int] = mapped_column(
         Integer, Computed("WEEK(scrape_date, 3)"), nullable=False
     )
-    skills: Mapped[dict[str, int] | None] = mapped_column(JSON, nullable=True)
-    activities: Mapped[dict[str, int] | None] = mapped_column(JSON, nullable=True)
+    skills: Mapped[Optional[dict[str, int]]] = mapped_column(JSON, nullable=True)
+    activities: Mapped[Optional[dict[str, int]]] = mapped_column(JSON, nullable=True)
 
     __table_args__ = (PrimaryKeyConstraint("player_id", "scrape_year", "scrape_month"),)
 
@@ -89,7 +90,7 @@ class HighscoreDataLatestTableStruct(Base):
     scrape_week: Mapped[int] = mapped_column(
         Integer, Computed("WEEK(scrape_date, 3)"), nullable=False
     )
-    skills: Mapped[dict[str, int] | None] = mapped_column(JSON, nullable=True)
-    activities: Mapped[dict[str, int] | None] = mapped_column(JSON, nullable=True)
+    skills: Mapped[Optional[dict[str, int]]] = mapped_column(JSON, nullable=True)
+    activities: Mapped[Optional[dict[str, int]]] = mapped_column(JSON, nullable=True)
 
     __table_args__ = (PrimaryKeyConstraint("player_id"),)

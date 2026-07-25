@@ -1,7 +1,7 @@
-import asyncio
 import os
-from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
+from datetime import datetime, timedelta
+import asyncio
 
 import pytest
 from bot_detector.event_queue.structs import NotFoundStruct

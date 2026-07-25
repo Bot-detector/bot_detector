@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
@@ -8,7 +8,7 @@ class PredictionBase(BaseModel):
     model_name: str = Field(..., max_length=50)
     prediction: str = Field(..., max_length=50)
     confidence: float
-    predictions: dict[str, Any] | None = None
+    predictions: Optional[dict[str, Any]] = None
 
 
 class PredictionCreate(PredictionBase):

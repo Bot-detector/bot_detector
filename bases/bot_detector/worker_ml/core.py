@@ -33,6 +33,7 @@ async def insert_prediction_results(
     async with session_factory() as session:
         await pred_repo.insert(session, predictions)
         await pred_latest_repo.insert(session, predictions)
+    return
 
 
 def transform_prediction(

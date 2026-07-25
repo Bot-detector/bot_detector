@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
 from bot_detector.database.api_public.feedback import FeedbackRepo
 from bot_detector.database.api_public.label import LabelRepo
 from bot_detector.database.api_public.player import PlayerRepo

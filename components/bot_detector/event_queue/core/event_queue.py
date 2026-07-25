@@ -1,4 +1,4 @@
-from typing import Generic, TypeVar
+from typing import Generic, Optional, TypeVar
 
 from pydantic import BaseModel
 
@@ -32,7 +32,7 @@ class QueueProducer(Generic[T]):
     async def stop(self):
         await self._backend.stop()
 
-    async def put(self, message: list[T]) -> Exception | None:
+    async def put(self, message: list[T]) -> Optional[Exception]:
         return await self._backend.put(message)
 
 
@@ -58,13 +58,13 @@ class QueueConsumer(Generic[T]):
     async def stop(self):
         await self._backend.stop()
 
-    async def get_one(self) -> T | None | Exception:
+    async def get_one(self) -> Optional[T] | Exception:
         return await self._backend.get_one()
 
     async def get_many(self, count: int) -> list[T] | Exception:
         return await self._backend.get_many(count)
 
-    async def commit(self) -> Exception | None:
+    async def commit(self) -> Optional[Exception]:
         return await self._backend.commit()
 
 

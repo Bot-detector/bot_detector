@@ -1,6 +1,6 @@
 import random
-from collections.abc import Generator
 from datetime import datetime
+from typing import Generator
 
 from pydantic import BaseModel
 

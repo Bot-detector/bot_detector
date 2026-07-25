@@ -22,6 +22,10 @@ from bot_detector.public_api.v2 import (
 )
 
 __all__ = [
+    "LegacyApiClient",
+    "PublicApiClient",
+    "RetryableError",
+    "retry",
     "Bots",
     "Detection",
     "DiscordVerifyInfo",
@@ -31,14 +35,10 @@ __all__ = [
     "FeedbackInput",
     "FeedbackScoreResponse",
     "LabelResponse",
-    "LegacyApiClient",
     "Ok",
     "PlayerName",
     "PredictionResponse",
-    "PublicApiClient",
     "RegionID",
     "RegionName",
     "ReportScoreResponse",
-    "RetryableError",
-    "retry",
 ]

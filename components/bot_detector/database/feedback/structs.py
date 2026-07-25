@@ -2,13 +2,13 @@ from datetime import datetime
 
 from bot_detector.database import Base
 from sqlalchemy import (
-    TIMESTAMP,
     Float,
     ForeignKey,
     Integer,
     SmallInteger,
     String,
     Text,
+    TIMESTAMP,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 

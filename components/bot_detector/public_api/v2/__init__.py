@@ -12,6 +12,7 @@ from bot_detector.public_api.v2.structs import (
 )
 
 __all__ = [
+    "PublicApiClient",
     "Detection",
     "Equipment",
     "FeedbackExportResponse",
@@ -20,6 +21,5 @@ __all__ = [
     "LabelResponse",
     "Ok",
     "PredictionResponse",
-    "PublicApiClient",
     "ReportScoreResponse",
 ]

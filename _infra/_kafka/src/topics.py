@@ -1,5 +1,6 @@
-from config import KafkaSeederConfig
 from kafka.admin import KafkaAdminClient, NewTopic
+
+from config import KafkaSeederConfig
 
 config = KafkaSeederConfig()
 

@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from typing import Generic, Literal, TypeVar
+from typing import Generic, Literal, Type, TypeVar
 
 from bot_detector.event_queue.adapters.kafka import KafkaConfig
 from bot_detector.event_queue.adapters.memory import InMemoryConfig
@@ -58,7 +58,7 @@ class WorkerRunner(Generic[T]):
     def __init__(
         self,
         config: KafkaConfig | InMemoryConfig,
-        model: type[T],
+        model: Type[T],
         worker: Worker[T],
         stop_event: asyncio.Event,
         batch_size: int = 1000,

@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Optional
 
 import aiohttp
 from bot_detector.database.core import Settings as DatabaseSettings
@@ -12,11 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 @dataclass
 class BotDependencies:
-    session: aiohttp.ClientSession | None = None
-    public_api: PublicApiClient | None = None
-    legacy_api: LegacyApiClient | None = None
-    osrs_items: OsrsItemsClient | None = None
-    session_factory: async_sessionmaker[AsyncSession] | None = None
+    session: Optional[aiohttp.ClientSession] = None
+    public_api: Optional[PublicApiClient] = None
+    legacy_api: Optional[LegacyApiClient] = None
+    osrs_items: Optional[OsrsItemsClient] = None
+    session_factory: Optional[async_sessionmaker[AsyncSession]] = None
 
     def init_session(self, session: aiohttp.ClientSession | None = None):
         if self.session is None:
@@ -53,7 +54,7 @@ class BotDependencies:
             self.session_factory = async_session
             self.async_engine = async_engine
 
-    def init(self, settings: Settings, session: aiohttp.ClientSession | None = None):
+    def init(self, settings: Settings, session: Optional[aiohttp.ClientSession] = None):
         if settings.API_TOKEN is None:
             raise ValueError("API_TOKEN must be set in settings")
         if settings.API_USER is None:

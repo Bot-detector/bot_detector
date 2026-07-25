@@ -84,12 +84,13 @@ async def migrate_banned_player_reports(
         Number of report_archive rows inserted by this call (0 on a re-run for
         already-archived data).
     """
-    async with session_factory() as session, session.begin():
-        result = await session.execute(
-            _insert_archive(),
-            params={"reported_id": reported_id},
-        )
-        inserted = cast(CursorResult, result).rowcount
+    async with session_factory() as session:
+        async with session.begin():
+            result = await session.execute(
+                _insert_archive(),
+                params={"reported_id": reported_id},
+            )
+            inserted = cast(CursorResult, result).rowcount
 
     logger.info(
         f"migrate_banned_player_reports: archived {inserted} rows for reported_id={reported_id}"

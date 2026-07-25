@@ -1,9 +1,10 @@
 import random
-from collections.abc import Generator
 from datetime import date, timedelta
+from typing import Generator
+
+from pydantic import BaseModel
 
 import osrs_data
-from pydantic import BaseModel
 from seeders.players_to_scrape import PlayerStruct
 
 

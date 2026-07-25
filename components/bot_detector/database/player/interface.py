@@ -20,6 +20,7 @@ class playerInterface(ABC):
         limit: int = 10_000,
     ) -> list[PlayerStruct]:
         """Select a player from the database by player_id."""
+        pass
 
     @abstractmethod
     async def update_player(self, player_id: int, player_data: PlayerStruct):

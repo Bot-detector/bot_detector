@@ -1,5 +1,5 @@
 import logging
-from typing import Literal
+from typing import Literal, Optional
 
 import discord
 from bot_detector.discord_bot import cogs
@@ -81,7 +81,7 @@ async def on_disconnect():
 async def sync(
     ctx: Context,
     guilds: Greedy[discord.Object],
-    spec: Literal["~", "*", "^"] | None = None,
+    spec: Optional[Literal["~", "*", "^"]] = None,
 ) -> None:
     logger.debug(f"{ctx.author.name=}, {ctx.author.id=}, Requesting sync, {spec=}")
     if not guilds:

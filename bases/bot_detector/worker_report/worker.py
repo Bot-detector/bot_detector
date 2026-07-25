@@ -18,8 +18,9 @@ async def insert_batch(
 ) -> None:
     logger.debug(f"batch inserting: {len(batch)}")
     try:
-        async with session_factory() as session, session.begin():
-            await report_repo.insert(async_session=session, reports=batch)
+        async with session_factory() as session:
+            async with session.begin():
+                await report_repo.insert(async_session=session, reports=batch)
     except OperationalError as e:
         logger.error(f"OperationalError during batch insert: {e}")
         raise

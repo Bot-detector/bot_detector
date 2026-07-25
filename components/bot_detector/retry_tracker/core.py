@@ -1,13 +1,14 @@
 import random
 import time
 from dataclasses import dataclass
+from typing import Optional
 
 
 @dataclass
 class RetryState:
     consecutive_failures: int = 0
     last_attempt: float = 0.0
-    last_success: float | None = None
+    last_success: Optional[float] = None
 
 
 class RetryTracker:

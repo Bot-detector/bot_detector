@@ -1,9 +1,5 @@
 import pytest
-from bot_detector.event_queue.adapters.memory import (
-    InMemoryAdapter,
-    InMemoryConfig,
-    MemoryLagProbe,
-)
+from bot_detector.event_queue.adapters.memory import InMemoryAdapter, InMemoryConfig
 from bot_detector.event_queue.core.event_queue import (
     Queue,
     QueueConsumer,
@@ -14,6 +10,7 @@ from bot_detector.event_queue.factory import (
     QueueFactory,
     create_lag_probe,
 )
+from bot_detector.event_queue.adapters.memory import MemoryLagProbe
 from pydantic import BaseModel
 
 

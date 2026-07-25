@@ -1,10 +1,10 @@
 from bot_detector.api_public.src.app.report import ReportService
 from bot_detector.api_public.src.app.views.response.ok import Ok
 from bot_detector.api_public.src.core._cache import SimpleALRUCache
-from bot_detector.api_public.src.core.fastapi.dependencies import wide_event
 from bot_detector.api_public.src.core.fastapi.dependencies.queue import (
     get_reports_to_insert_producer,
 )
+from bot_detector.api_public.src.core.fastapi.dependencies import wide_event
 from bot_detector.api_public.src.core.fastapi.dependencies.session import get_session
 from bot_detector.database.api_public import PlayerRepo
 from bot_detector.event_queue.core import QueueProducer

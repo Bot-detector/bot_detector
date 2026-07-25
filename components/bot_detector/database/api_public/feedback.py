@@ -1,10 +1,11 @@
+from sqlalchemy import and_, insert, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.expression import Insert, Select
+
 from bot_detector.database.feedback.structs import (
     PredictionFeedbackTableStruct as PredictionFeedback,
 )
 from bot_detector.database.player.structs import PlayersTableStruct as Player
-from sqlalchemy import and_, insert, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql.expression import Insert, Select
 
 
 class FeedbackRepo:

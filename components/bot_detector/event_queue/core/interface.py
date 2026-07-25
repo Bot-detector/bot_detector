@@ -1,4 +1,4 @@
-from typing import Generic, Protocol, TypeVar, runtime_checkable
+from typing import Generic, Optional, Protocol, TypeVar, runtime_checkable
 
 from pydantic import BaseModel
 
@@ -16,7 +16,7 @@ class QueueBackendProducerProtocol(Generic[T], Protocol):
 
     async def stop(self) -> None: ...
 
-    async def put(self, messages: list[T]) -> Exception | None: ...
+    async def put(self, messages: list[T]) -> Optional[Exception]: ...
 
 
 @runtime_checkable
@@ -30,11 +30,11 @@ class QueueBackendConsumerProtocol(Generic[T], Protocol):
 
     async def stop(self) -> None: ...
 
-    async def get_one(self) -> T | None | Exception: ...
+    async def get_one(self) -> Optional[T] | Exception: ...
 
     async def get_many(self, count: int) -> list[T] | Exception: ...
 
-    async def commit(self) -> Exception | None: ...
+    async def commit(self) -> Optional[Exception]: ...
 
 
 @runtime_checkable
@@ -45,3 +45,4 @@ class QueueBackendProtocol(
 ):
     """Combined protocol for producer and consumer operations."""
 
+    ...
