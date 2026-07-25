@@ -23,7 +23,7 @@ jobs:
       image: ghcr.io/astral-sh/uv:bookworm-slim
     steps:
       - uses: actions/checkout@v4
-      - run: uvx ruff check .
+      - run: uvx ruff@0.15.22 check .
 
   formatting:
     runs-on: ubuntu-latest
@@ -32,7 +32,7 @@ jobs:
       image: ghcr.io/astral-sh/uv:bookworm-slim
     steps:
       - uses: actions/checkout@v4
-      - run: uvx ruff format --check .
+      - run: uvx ruff@0.15.22 format --check .
 
   tests:
     runs-on: ubuntu-latest
