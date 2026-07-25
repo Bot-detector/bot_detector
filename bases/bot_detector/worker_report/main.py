@@ -12,6 +12,7 @@ from bot_detector.event_queue.adapters.kafka import (
 )
 from bot_detector.event_queue.structs import ReportsToInsertStruct
 from bot_detector.worker.core import WorkerRunner
+from bot_detector.worker.metrics import start_metrics_server
 from bot_detector.worker_report.settings import Settings
 from bot_detector.worker_report.worker import ReportWorker
 
@@ -22,6 +23,7 @@ KAFKA_SETTINGS = KafkaSettings()
 
 
 async def main():
+    start_metrics_server(port=SETTINGS.METRICS_PORT)
     session_factory, async_engine = db.get_session_factory(SETTINGS=DBSettings())
     report_repo = ReportRepo()
     stop_event = asyncio.Event()
@@ -49,6 +51,7 @@ async def main():
             model=ReportsToInsertStruct,
             batch_size=SETTINGS.MAX_BATCH_SIZE,
             stop_event=stop_event,
+            worker_name="report",
         )
         task = asyncio.create_task(runner.run())
         tasks.append(task)

@@ -123,6 +123,7 @@ async def test_worker_runner_processes_batch():
         config=InMemoryConfig(maxsize=100),
         model=DummyMessage,
         worker=worker,
+        worker_name="test",
         stop_event=asyncio.Event(),
         batch_size=10,
     )
@@ -150,6 +151,7 @@ async def test_worker_runner_requeues_on_error():
         config=InMemoryConfig(maxsize=100),
         model=DummyMessage,
         worker=worker,
+        worker_name="test",
         stop_event=asyncio.Event(),
         batch_size=10,
     )
@@ -179,6 +181,7 @@ async def test_worker_runner_requeues_on_worker_error():
         config=InMemoryConfig(maxsize=100),
         model=DummyMessage,
         worker=worker,
+        worker_name="test",
         stop_event=asyncio.Event(),
         batch_size=10,
     )
@@ -210,6 +213,7 @@ async def test_worker_runner_requeues_only_error_batch():
         config=InMemoryConfig(maxsize=100),
         model=DummyMessage,
         worker=worker,
+        worker_name="test",
         stop_event=asyncio.Event(),
         batch_size=10,
     )
@@ -241,6 +245,7 @@ async def test_worker_runner_requeues_only_returned_subset():
         config=InMemoryConfig(maxsize=100),
         model=DummyMessage,
         worker=worker,
+        worker_name="test",
         stop_event=asyncio.Event(),
         batch_size=10,
     )
@@ -273,6 +278,7 @@ async def test_worker_runner_skips_empty_batch():
         config=InMemoryConfig(maxsize=100),
         model=DummyMessage,
         worker=worker,
+        worker_name="test",
         stop_event=asyncio.Event(),
         batch_size=10,
     )
@@ -296,6 +302,7 @@ async def test_worker_runner_graceful_shutdown():
         config=InMemoryConfig(maxsize=100),
         model=DummyMessage,
         worker=worker,
+        worker_name="test",
         stop_event=asyncio.Event(),
         batch_size=10,
     )

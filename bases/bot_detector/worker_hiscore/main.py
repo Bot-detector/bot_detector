@@ -18,6 +18,7 @@ from bot_detector.event_queue.structs import (
     ScrapedStruct,
 )
 from bot_detector.worker.core import WorkerRunner
+from bot_detector.worker.metrics import start_metrics_server
 from bot_detector.worker_hiscore.settings import Settings
 from bot_detector.worker_hiscore.worker import HiscoreWorker
 
@@ -55,6 +56,7 @@ async def get_data_to_predict_producer() -> QueueProducer[DataToPredictStruct]:
 
 
 async def main():
+    start_metrics_server(port=SETTINGS.METRICS_PORT)
     session_factory, async_engine = db.get_session_factory(SETTINGS=DBSettings())
 
     player_repo = PlayerRepo()
@@ -84,6 +86,7 @@ async def main():
         )
         runner = WorkerRunner(
             worker=worker,
+            worker_name="hiscore",
             config=kafka_config,
             model=ScrapedStruct,
             batch_size=SETTINGS.MAX_BATCH_SIZE,

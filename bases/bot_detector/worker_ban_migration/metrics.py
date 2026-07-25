@@ -1,9 +1,4 @@
-import os
-
-from prometheus_client import Counter, start_http_server
-
-if os.environ.get("ENVIRONMENT") != "test":
-    start_http_server(8000)
+from prometheus_client import Counter
 
 # Prometheus metrics
 accounts_migrated_counter = Counter(
