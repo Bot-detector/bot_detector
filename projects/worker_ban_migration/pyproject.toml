@@ -9,11 +9,11 @@ requires-python = ">=3.10"
 
 dependencies = [
     "asyncmy==0.2.11",
-    "cryptography==46.0.3",
+    "cryptography==48.0.1",
     "pydantic-settings==2.7.0",
     "pydantic==2.10.4",
     "sqlalchemy==2.0.44",
-    "orjson==3.11.5",
+    "orjson==3.11.6",
     "aiokafka==0.12.0",
     "prometheus-client==0.22.0",
 ]
