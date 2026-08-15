@@ -1,6 +1,81 @@
 {% extends "base.html" %}
 
 {% block content %}
+<style>
+    .lookup-dd { position: relative; display: inline-block; }
+    .lookup-dd summary {
+        list-style: none;
+        display: inline-flex;
+        align-items: center;
+        gap: .35rem;
+        padding: 3px 9px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.12);
+        background: rgba(255,255,255,0.04);
+        color: #9aa0ab;
+        font-size: 0.72rem;
+        font-weight: 600;
+        line-height: 1;
+        cursor: pointer;
+        user-select: none;
+        transition: color .15s ease, border-color .15s ease, background .15s ease;
+    }
+    .lookup-dd summary::-webkit-details-marker { display: none; }
+    .lookup-dd summary:hover,
+    .lookup-dd[open] summary {
+        color: #e6e9ee;
+        border-color: rgba(255,255,255,0.25);
+        background: rgba(255,255,255,0.08);
+    }
+    .lookup-dd .dd-caret { font-size: .6rem; transition: transform .15s ease; }
+    .lookup-dd[open] .dd-caret { transform: rotate(180deg); }
+    .lookup-dd .dd-menu {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        z-index: 1050;
+        margin: 0;
+        padding: .35rem 0;
+        list-style: none;
+        min-width: 15rem;
+        background: #16171a;
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 0.5rem;
+        box-shadow: 0 8px 24px rgba(4,6,10,0.8);
+    }
+    .lookup-dd .dd-menu li { padding: 0; margin: 0; }
+    .lookup-dd .dd-header {
+        padding: .35rem 1rem;
+        font-size: .72rem;
+        font-weight: 700;
+        color: #9aa0ab;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+    }
+    .lookup-dd .dd-item {
+        display: flex;
+        align-items: center;
+        gap: .7rem;
+        width: 100%;
+        padding: .1rem 1rem;
+        border: none;
+        background: transparent;
+        color: #cdd3da;
+        font-size: .85rem;
+        text-align: left;
+        text-decoration: none;
+        cursor: pointer;
+    }
+    .lookup-dd .dd-item i { width: 1.1rem; color: #9aa0ab; text-align: center; }
+    .lookup-dd .dd-item:hover { background: rgba(255,255,255,0.06); color: #e6eef7; }
+</style>
+<script>
+    document.addEventListener('click', function (e) {
+        document.querySelectorAll('details.lookup-dd[open]').forEach(function (d) {
+            if (!d.contains(e.target)) { d.removeAttribute('open'); }
+        });
+    });
+</script>
 <div class="pt-5">
     <div class="container">
         <div class="row">
@@ -54,17 +129,57 @@
                                 {% set conf_hue = (220 - (prediction.prediction_confidence * 80))|int %}
                                 <div
                                 class="card mb-4"
-                                style="background:#16171a;border-radius:0.75rem;border:1px solid rgba(255,255,255,0.03);box-shadow:0 6px 18px rgba(4,6,10,0.65);overflow:hidden;"
+                                style="background:#16171a;border-radius:0.75rem;border:1px solid rgba(255,255,255,0.03);box-shadow:0 6px 18px rgba(4,6,10,0.65);"
                                 >
                                 <!-- Header -->
                                 <div
                                     class="d-flex align-items-center justify-content-between"
-                                    style="padding:0.9rem 1rem;background:linear-gradient(90deg, rgba(255,255,255,0.02), rgba(0,0,0,0.03));"
+                                    style="padding:0.9rem 1rem;background:linear-gradient(90deg, rgba(255,255,255,0.02), rgba(0,0,0,0.03));border-radius:0.75rem 0.75rem 0 0;"
                                 >
                                     <div style="display:flex;align-items:center;gap:.75rem;">
                                     <div style="width:10px;height:38px;border-radius:6px;background: hsl({{ conf_hue }},48%,50%); box-shadow:0 2px 6px rgba(0,0,0,0.45)"></div>
                                     <div>
-                                        <div style="font-weight:700;color:#e6e9ee;font-size:1.05rem;">{{ prediction.player_name }}</div>
+                                        <div style="display:flex;align-items:center;gap:.5rem;">
+                                            <span style="font-weight:700;color:#e6e9ee;font-size:1.05rem;">{{ prediction.player_name }}</span>
+                                            <details class="lookup-dd">
+                                                <summary title="Look up on external sites"
+                                                    aria-label="External lookups for {{ prediction.player_name }}">
+                                                    <i class="fa-solid fa-magnifying-glass"></i>
+                                                    <span>lookup</span>
+                                                    <i class="fa-solid fa-chevron-down dd-caret"></i>
+                                                </summary>
+                                                <ul class="dd-menu">
+                                                    <li class="dd-header">Look up on external sites</li>
+                                                    <li>
+                                                        <form action="https://secure.runescape.com/m=hiscore_oldschool/hiscorepersonal"
+                                                            method="post" target="_blank">
+                                                            <input type="hidden" name="user1" value="{{ prediction.player_name }}">
+                                                            <button type="submit" class="dd-item">
+                                                                <i class="fa-solid fa-trophy"></i> OSRS Hiscores
+                                                            </button>
+                                                        </form>
+                                                    </li>
+                                                    <li>
+                                                        <a class="dd-item" target="_blank" rel="noopener" referrerpolicy="origin"
+                                                            href="https://templeosrs.com/player/overview.php?player={{ prediction.player_name|urlencode }}">
+                                                            <i class="fa-solid fa-chart-line"></i> TempleOSRS
+                                                        </a>
+                                                    </li>
+                                                    <li>
+                                                        <a class="dd-item" target="_blank" rel="noopener" referrerpolicy="origin"
+                                                            href="https://crystalmathlabs.com/track.php?player={{ prediction.player_name|urlencode }}">
+                                                            <i class="fa-solid fa-gem"></i> Crystal Math Labs
+                                                        </a>
+                                                    </li>
+                                                    <li>
+                                                        <a class="dd-item" target="_blank" rel="noopener" referrerpolicy="origin"
+                                                            href="https://wiseoldman.net/players/{{ prediction.player_name|urlencode }}">
+                                                            <i class="fa-solid fa-hat-wizard"></i> Wise Old Man
+                                                        </a>
+                                                    </li>
+                                                </ul>
+                                            </details>
+                                        </div>
                                         <div style="font-size:0.78rem;color:#9aa0ab;margin-top:2px;">Result snapshot • {{ prediction.created if prediction.created is defined else '' }}</div>
                                     </div>
                                     </div>
