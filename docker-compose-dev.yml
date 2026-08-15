@@ -366,6 +366,7 @@ services:
       context: .
       dockerfile: ./projects/website/Dockerfile
       target: dev
+    command: ["uvicorn", "bot_detector.website.core.server:app", "--host", "0.0.0.0", "--port", "5000", "--reload", "--reload-dir", "/project/bases", "--reload-dir", "/project/components"]
     env_file:
       - .env
     environment:
@@ -374,11 +375,12 @@ services:
       RELEASE_VERSION: "0.1"
       PATREON_CLIENT_ID: ""
       PATREON_CLIENT_SECRET: ""
+      PYTHONPATH: "/project/bases:/project/components"
     volumes:
       - ./bases:/project/bases
       - ./components:/project/components
     ports:
-      - 5000
+      - 5000:5000
     networks:
       - botdetector-network
     healthcheck:
