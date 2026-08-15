@@ -2,20 +2,22 @@
 
 {% block content %}
 <style>
-    .lookup-dd { position: relative; display: inline-block; }
-    .lookup-dd summary {
-        list-style: none;
+    .pill {
         display: inline-flex;
         align-items: center;
         gap: .35rem;
-        padding: 3px 9px;
+        padding: 3px 10px;
         border-radius: 999px;
         border: 1px solid rgba(255,255,255,0.12);
-        background: rgba(255,255,255,0.04);
-        color: #9aa0ab;
-        font-size: 0.72rem;
+        font-size: 0.75rem;
         font-weight: 600;
         line-height: 1;
+    }
+    .lookup-dd { position: relative; display: inline-block; }
+    .lookup-dd summary {
+        list-style: none;
+        background: rgba(255,255,255,0.04);
+        color: #9aa0ab;
         cursor: pointer;
         user-select: none;
         transition: color .15s ease, border-color .15s ease, background .15s ease;
@@ -44,8 +46,8 @@
         box-shadow: 0 8px 24px rgba(4,6,10,0.8);
     }
     .lookup-dd .dd-menu li { padding: 0; margin: 0; }
-    .lookup-dd .dd-header {
-        padding: .35rem 1rem;
+    .lookup-dd .dd-menu li.dd-header {
+        padding: .35rem 1rem .35rem .75rem;
         font-size: .72rem;
         font-weight: 700;
         color: #9aa0ab;
@@ -68,6 +70,36 @@
     }
     .lookup-dd .dd-item i { width: 1.1rem; color: #9aa0ab; text-align: center; }
     .lookup-dd .dd-item:hover { background: rgba(255,255,255,0.06); color: #e6eef7; }
+    .pb-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 0.45rem;
+    }
+    .pb-row .pb-label { width: 8.5rem; color: #c9ced5; font-size: 0.82rem; }
+    .pb-row .pb-track {
+        flex-grow: 1;
+        max-width: 380px;
+        margin-left: 1rem;
+    }
+    .pb-row .pb-bar-bg {
+        background: linear-gradient(90deg, rgba(255,255,255,0.02), rgba(0,0,0,0.03));
+        border-radius: 6px;
+        height: 10px;
+        overflow: hidden;
+        border: 1px solid rgba(255,255,255,0.02);
+    }
+    .pb-row .pb-bar {
+        height: 10px;
+        box-shadow: inset 0 -1px 0 rgba(0,0,0,0.25);
+    }
+    .pb-row .pb-pct {
+        width: 62px;
+        text-align: right;
+        color: #9aa0ab;
+        font-size: 0.78rem;
+        margin-left: 0.75rem;
+    }
 </style>
 <script>
     document.addEventListener('click', function (e) {
@@ -139,7 +171,7 @@
                                         <div style="display:flex;align-items:center;gap:.5rem;">
                                             <span style="font-weight:700;color:#e6e9ee;font-size:1.05rem;">{{ prediction.player_name }}</span>
                                             <details class="lookup-dd">
-                                                <summary title="Look up on external sites"
+                                                <summary class="pill" title="Look up on external sites"
                                                     aria-label="External lookups for {{ prediction.player_name }}">
                                                     <i class="fa-solid fa-magnifying-glass"></i>
                                                     <span>lookup</span>
@@ -183,7 +215,7 @@
 
                                     <div style="display:flex;align-items:center;gap:.5rem;">
                                     {# confidence pill uses the same hue but softer #}
-                                    <div style="font-weight:600;font-size:0.9rem;color:#0f1417;padding:6px 10px;border-radius:999px;
+                                    <div class="pill" style="color:#0f1417;
                                                 background: linear-gradient(180deg, hsl({{ conf_hue }},55%,72%), hsl({{ conf_hue }},55%,66%));
                                                 border:1px solid rgba(255,255,255,0.06);">
                                         {{ (prediction.prediction_confidence * 100)|round(1) }}%
@@ -200,25 +232,6 @@
 
                                     <div class="d-flex flex-wrap" style="gap:0.5rem;">
                                     {# badges: hue derived per-score (220->140), softer saturation/lightness for subtle look #}
-                                    {% for bot_type, score in prediction.predictions_breakdown|dictsort(false, 'value', true) %}
-                                        {% if score != 0 %}
-                                        {% set hue = (220 - (score * 80))|int %}
-                                        <div
-                                            style="display:inline-flex;align-items:center;gap:.6rem;padding:.45rem .65rem;border-radius:0.45rem;
-                                                background: linear-gradient(180deg, hsla({{ hue }},35%,22%,0.95), hsla({{ hue }},32%,18%,0.95));
-                                                border:1px solid rgba(255,255,255,0.03); min-width:fit-content;"
-                                        >
-                                            <div style="width:8px;height:8px;border-radius:50%;
-                                                        background: linear-gradient(180deg, hsl({{ hue }},60%,60%), hsl({{ hue }},60%,50%));
-                                                        box-shadow:0 1px 4px rgba(0,0,0,0.5);"></div>
-
-                                            <div style="display:flex;flex-direction:column;">
-                                            <span style="font-size:0.78rem;color:#e6eef7;font-weight:600;">{{ bot_type.replace('_', ' ') }}</span>
-                                            <span style="font-size:0.72rem;color:#9aa0ab;">{{ (score * 100)|round(2) }}%</span>
-                                            </div>
-                                        </div>
-                                        {% endif %}
-                                    {% endfor %}
                                     </div>
 
                                     {# Optional: breakdown as small progress bars for more visual weight #}
@@ -226,17 +239,15 @@
                                     {% for bot_type, score in prediction.predictions_breakdown|dictsort(false, 'value', true) %}
                                         {% if score != 0 %}
                                         {% set hue = (220 - (score * 80))|int %}
-                                        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.45rem;">
-                                            <div style="color:#c9ced5;font-size:0.82rem;">{{ bot_type.replace('_', ' ') }}</div>
-                                            <div style="width:55%;max-width:380px;margin-left:1rem;">
-                                            <div style="background: linear-gradient(90deg, rgba(255,255,255,0.02), rgba(0,0,0,0.03));
-                                                        border-radius:6px;height:10px;overflow:hidden;border:1px solid rgba(255,255,255,0.02);">
-                                                <div style="height:10px;width:{{ (score * 100)|round(2) }}%;
-                                                            background: linear-gradient(90deg, hsl({{ hue }},60%,60%), hsl({{ hue }},60%,50%));
-                                                            box-shadow: inset 0 -1px 0 rgba(0,0,0,0.25);"></div>
+                                        <div class="pb-row">
+                                            <div class="pb-label">{{ bot_type.replace('_', ' ') }}</div>
+                                            <div class="pb-track">
+                                            <div class="pb-bar-bg">
+                                                <div class="pb-bar" style="width:{{ (score * 100)|round(2) }}%;
+                                                            background: linear-gradient(90deg, hsl({{ hue }},60%,60%), hsl({{ hue }},60%,50%));"></div>
                                             </div>
                                             </div>
-                                            <div style="width:62px;text-align:right;color:#9aa0ab;font-size:0.78rem;margin-left:0.75rem;">
+                                            <div class="pb-pct">
                                             {{ (score * 100)|round(2) }}%
                                             </div>
                                         </div>
