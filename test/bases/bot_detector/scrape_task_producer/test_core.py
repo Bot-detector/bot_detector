@@ -1,123 +1,146 @@
-import datetime
-
 import pytest
-from bot_detector.scrape_task_producer.core import FetchParams, determine_fetch_params
-from bot_detector.structs import PlayerStruct
+from bot_detector.scrape_task_producer.core import determine_event
+from bot_detector.scrape_task_producer.sm import InvalidTransition
+from bot_detector.scrape_task_producer.states import (
+    ScrapeEvent,
+    ScraperCtx,
+    ScrapeState,
+    scraper_sm,
+)
 
 
-def make_fetch_params(**overrides) -> FetchParams:
-    """Helper: start from sane defaults, apply any overrides."""
-    params = FetchParams(
-        days=overrides.get("days", 7),
-        confirmed_ban=overrides.get("confirmed_ban", False),
-        possible_ban=overrides.get("possible_ban", False),
-        player_id=overrides.get("player_id", 0),
-        limit=overrides.get("limit", 1),
-        step=overrides.get("step", "normal"),
-        done=overrides.get("done", False),
-    )
-    return params
+def make_ctx(days=20, limit=10, state=ScrapeState.NORMAL) -> ScraperCtx:
+    ctx = ScraperCtx(days=days, limit=limit)
+    if state == ScrapeState.POSSIBLE_BAN:
+        ctx.possible_ban = True
+    elif state == ScrapeState.CONFIRMED_BAN:
+        ctx.possible_ban = True
+        ctx.confirmed_ban = True
+    return ctx
 
 
-def make_player(id: int = 1) -> PlayerStruct:
-    """Minimal player factory with unique id."""
-    now = datetime.datetime(2025, 1, 1, 12, 0, 0)
-    return PlayerStruct(
-        id=id,
-        name=f"Player{id}",
-        created_at=now,
-        updated_at=now,
-        possible_ban=False,
-        confirmed_ban=False,
-        confirmed_player=True,
-        label_id=1,
-        label_jagex=2,
-    )
+def test_fetch_more_updates_player_id_keeps_state():
+    ctx = make_ctx()
+    ctx.last_fetched_id = 42
+
+    new_state = scraper_sm.handle(ctx, ScrapeState.NORMAL, ScrapeEvent.FETCH_MORE)
+
+    assert new_state == ScrapeState.NORMAL
+    assert ctx.player_id == 42
+    assert ctx.days == 20
 
 
-def test_returns_same_object_when_players_is_none():
-    fp = make_fetch_params(
-        days=3, possible_ban=True, confirmed_ban=True, player_id=5, limit=2
-    )
-    result = determine_fetch_params(fp, players=None)
-    assert result is fp  # no mutation, same instance
+def test_reduce_days_decrements_days_resets_player_id():
+    ctx = make_ctx(days=5)
+    ctx.player_id = 99
+
+    new_state = scraper_sm.handle(ctx, ScrapeState.NORMAL, ScrapeEvent.REDUCE_DAYS)
+
+    assert new_state == ScrapeState.NORMAL
+    assert ctx.days == 4
+    assert ctx.player_id == 0
 
 
-def test_sets_player_id_to_last_when_full_page_of_results():
-    players = [make_player(42)]
-    fp = make_fetch_params(limit=1)
-    result = determine_fetch_params(fp, players=players)
-    assert result.player_id == 42
-    # days and flags unchanged
-    assert result.days == 7
-    assert not result.possible_ban and not result.confirmed_ban
+def test_reduce_days_floors_at_one():
+    ctx = make_ctx(days=1)
+
+    scraper_sm.handle(ctx, ScrapeState.NORMAL, ScrapeEvent.REDUCE_DAYS)
+
+    assert ctx.days == 1
 
 
-def test_resets_possible_ban_if_confirmed_ban_without_possible():
-    # confirmed_ban=True but possible_ban=False → possible_ban forced True
-    fp = make_fetch_params(confirmed_ban=True, possible_ban=False, step="confirmed_ban")
-    result = determine_fetch_params(fp, players=[make_player()])
-    assert result.possible_ban is True
+def test_next_step_normal_to_possible_ban():
+    ctx = make_ctx(days=1)
+
+    new_state = scraper_sm.handle(ctx, ScrapeState.NORMAL, ScrapeEvent.NEXT_STEP)
+
+    assert new_state == ScrapeState.POSSIBLE_BAN
+    assert ctx.possible_ban is True
+    assert ctx.confirmed_ban is False
+    assert ctx.days == 20  # Resets to max_days
 
 
-@pytest.mark.parametrize("initial_days", [7, 5, 3])
-def test_decrements_days_when_no_players_and_no_bans(initial_days):
-    fp = make_fetch_params(days=initial_days, possible_ban=False, confirmed_ban=False)
-    result = determine_fetch_params(fp, players=[])
-    assert result.days == initial_days - 1
-    assert result.player_id == 0
+def test_next_step_possible_ban_to_confirmed_ban():
+    ctx = make_ctx(days=7, state=ScrapeState.POSSIBLE_BAN)
+
+    new_state = scraper_sm.handle(ctx, ScrapeState.POSSIBLE_BAN, ScrapeEvent.NEXT_STEP)
+
+    assert new_state == ScrapeState.CONFIRMED_BAN
+    assert ctx.possible_ban is True
+    assert ctx.confirmed_ban is True
+    assert ctx.days == 20
 
 
-def test_decrements_days_when_no_players_and_possible_only_above_max():
-    # default max_possible_ban_days=2, so days=5>2 → decrement
-    fp = make_fetch_params(days=5, possible_ban=True, confirmed_ban=False)
-    result = determine_fetch_params(fp, players=[])
-    assert result.days == 4
+def test_next_step_confirmed_ban_to_done():
+    ctx = make_ctx(days=14, state=ScrapeState.CONFIRMED_BAN)
+
+    new_state = scraper_sm.handle(ctx, ScrapeState.CONFIRMED_BAN, ScrapeEvent.NEXT_STEP)
+
+    assert new_state == ScrapeState.DONE
+    assert ctx.possible_ban is False
+    assert ctx.confirmed_ban is False
+    assert ctx.days == 20
 
 
-def test_decrements_days_when_no_players_and_both_bans_above_max():
-    # default max_confirmed_ban_days=7, so days=8>7 → decrement
-    fp = make_fetch_params(days=8, possible_ban=True, confirmed_ban=True)
-    result = determine_fetch_params(fp, players=[])
-    assert result.days == 7
+def test_new_day_resets_to_normal():
+    ctx = make_ctx(days=5, state=ScrapeState.DONE)
+    ctx.player_id = 123
+
+    new_state = scraper_sm.handle(ctx, ScrapeState.DONE, ScrapeEvent.NEW_DAY)
+
+    assert new_state == ScrapeState.NORMAL
+    assert ctx.player_id == 0
+    assert ctx.days == 20
+    assert ctx.possible_ban is False
 
 
-def test_switches_to_possible_ban_when_days_at_one_and_no_bans():
-    fp = make_fetch_params(
-        days=1,
-        possible_ban=False,
-        confirmed_ban=False,
-        step="normal",
-    )
-    result = determine_fetch_params(fp, players=[], max_days=10)
-    # days resets to max_days, possible_ban flips on
-    assert result.days == 10
-    assert result.step == "possible_ban"
+# --- determine_event logic tests ---
 
 
-def test_advances_to_confirmed_ban_when_possible_cycle_exhausted():
-    # days <= max_possible_ban_days (default 2), possible_ban=True, confirmed_ban=False
-    fp = make_fetch_params(
-        days=2,
-        step="possible_ban",
-    )
-    result = determine_fetch_params(fp, players=[], max_days=9)
-    assert result.days == 9
-    assert result.step == "confirmed_ban"
+def test_determine_event_fetch_more():
+    ctx = make_ctx(limit=10)
+    # 10 players returned, hit limit
+    event = determine_event(ctx, ScrapeState.NORMAL, player_count=10)
+    assert event == ScrapeEvent.FETCH_MORE
 
 
-def test_full_reset_after_confirmed_cycle_exhausted():
-    # days <= max_confirmed_ban_days (default 7), both bans True
-    fp = make_fetch_params(
-        days=7,
-        step="confirmed_ban",
-    )
-    result = determine_fetch_params(
-        fp,
-        players=[],
-        max_days=11,
-        max_possible_ban_days=3,
-        max_confirmed_ban_days=7,
-    )
-    assert result.step == "normal"
-    assert result.days == 11
+def test_determine_event_reduce_days_normal():
+    ctx = make_ctx(days=2, limit=10)
+    # 5 players returned, under limit. Days > 1 threshold for NORMAL
+    event = determine_event(ctx, ScrapeState.NORMAL, player_count=5)
+    assert event == ScrapeEvent.REDUCE_DAYS
+
+
+def test_determine_event_next_step_normal():
+    ctx = make_ctx(days=1, limit=10)
+    # Days <= 1 threshold for NORMAL
+    event = determine_event(ctx, ScrapeState.NORMAL, player_count=5)
+    assert event == ScrapeEvent.NEXT_STEP
+
+
+def test_determine_event_reduce_days_possible_ban():
+    ctx = make_ctx(days=8, limit=10)
+    # Days > 7 threshold for POSSIBLE_BAN
+    event = determine_event(ctx, ScrapeState.POSSIBLE_BAN, player_count=0)
+    assert event == ScrapeEvent.REDUCE_DAYS
+
+
+def test_determine_event_next_step_possible_ban():
+    ctx = make_ctx(days=7, limit=10)
+    # Days <= 7 threshold for POSSIBLE_BAN
+    event = determine_event(ctx, ScrapeState.POSSIBLE_BAN, player_count=0)
+    assert event == ScrapeEvent.NEXT_STEP
+
+
+@pytest.mark.parametrize(
+    "event",
+    [
+        ScrapeEvent.FETCH_MORE,
+        ScrapeEvent.REDUCE_DAYS,
+        ScrapeEvent.NEXT_STEP,
+    ],
+)
+def test_invalid_transition_from_done(event):
+    ctx = make_ctx(state=ScrapeState.DONE)
+    with pytest.raises(InvalidTransition):
+        scraper_sm.handle(ctx, ScrapeState.DONE, event)

@@ -1,7 +1,6 @@
 import asyncio
 import logging
-from dataclasses import asdict, dataclass
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time
 
 from bot_detector.database import Settings as DBSettings
 from bot_detector.database import get_session_factory
@@ -18,187 +17,72 @@ from bot_detector.event_queue.lag_probe import LagProbeProtocol
 from bot_detector.event_queue.structs import ToScrapeStruct
 from bot_detector.structs import MetaData, PlayerStruct
 from bot_detector.wide_event import WideEventLogger
-from pydantic_settings import BaseSettings
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from typing_extensions import Literal
+
+from .config import Settings
+from .states import (
+    ScrapeEvent,
+    ScraperCtx,
+    ScrapeState,
+    _force_log,
+    determine_event,
+    scraper_sm,
+)
 
 logger = logging.getLogger(__name__)
 wide_event = WideEventLogger()
 
 
-def _force_log() -> None:
-    wide_event.add({"force_log": True})
-
-
-class Settings(BaseSettings):
-    LIMIT: int = 10_000
-    MAX_LAG: int = 100_000
-
-
-@dataclass
-class FetchParams:
-    step: Literal["normal", "possible_ban", "confirmed_ban"]
-    days: int
-    first_date: date | None = None
-    last_date: date | None = None
-    confirmed_ban: bool = False
-    possible_ban: bool = False
-    player_id: int = 0
-    limit: int = 10_000
-    done: bool = False
-
-    def __post_init__(self):
-        self._update_step_flags()
-        self.update_date(days=self.days, infinity=False)
-
-    def update_date(self, days: int, infinity: bool = False) -> None:
-        self.days = days
-        delta = timedelta(days=365) if infinity else timedelta(days=self.days)
-        self.first_date = date.today() - delta
-        self.last_date = date.today() - timedelta(days=self.days - 1)
-        assert self.first_date < self.last_date
-
-    def _update_step_flags(self) -> None:
-        match self.step:
-            case "normal":
-                self.possible_ban = False
-                self.confirmed_ban = False
-            case "possible_ban":
-                self.possible_ban = True
-                self.confirmed_ban = False
-            case "confirmed_ban":
-                self.possible_ban = True
-                self.confirmed_ban = True
-            case _:
-                raise ValueError(f"Invalid step: {self.step}")
-
-    def set_step(
-        self, step: Literal["normal", "possible_ban", "confirmed_ban"]
-    ) -> None:
-        self.step = step
-        self._update_step_flags()
-
-    def reset_for_new_day(self, max_days: int) -> None:
-        self.set_step("normal")
-        self.update_date(days=max_days, infinity=True)
-        self.player_id = 0
-
-
 async def produce_players(
-    players: list[PlayerStruct],
-    player_queue: QueueProducer[ToScrapeStruct],
+    players: list[PlayerStruct], player_queue: QueueProducer[ToScrapeStruct]
 ):
     if not players:
         return
-
     wide_event.add({"queue_players": {"count": len(players)}})
     metadata = MetaData(version=1, source="scrape_task_producer")
     player_structs = [
-        ToScrapeStruct(metadata=metadata, player_data=player)
-        for player in players
-        if len(player.name) <= 13
+        ToScrapeStruct(metadata=metadata, player_data=p)
+        for p in players
+        if len(p.name) <= 13
     ]
-    if not player_structs:
-        return
-    error = await player_queue.put(player_structs)
-    if isinstance(error, Exception):
-        raise error
-
-
-def _reduce_days(fetch_params: FetchParams) -> FetchParams:
-    wide_event.add({"reduce_days": {"fetch_params": asdict(fetch_params)}})
-    _days = fetch_params.days - 1 if fetch_params.days > 1 else 1
-    fetch_params.update_date(days=_days)
-    fetch_params.player_id = 0
-    return fetch_params
-
-
-def determine_fetch_params(
-    fetch_params: FetchParams,
-    players: list[PlayerStruct] | None,
-    max_days: int = 20,
-    max_possible_ban_days: int = 7,
-    max_confirmed_ban_days: int = 14,
-):
-    if players is None:
-        return fetch_params
-
-    fetch_params._update_step_flags()
-
-    if len(players) >= fetch_params.limit:
-        fetch_params.player_id = players[-1].id
-        return fetch_params
-
-    match fetch_params.step:
-        case "normal":
-            if fetch_params.days > 1:
-                return _reduce_days(fetch_params)
-
-            assert fetch_params.days <= 1
-            wide_event.add(
-                {"set_step": {"from": fetch_params.step, "to": "confirmed_ban"}}
-            )
-            _force_log()
-            fetch_params.set_step("possible_ban")
-            fetch_params.update_date(days=max_days, infinity=True)
-            return fetch_params
-
-        case "possible_ban":
-            if fetch_params.days > max_possible_ban_days:
-                return _reduce_days(fetch_params)
-
-            assert fetch_params.days <= max_possible_ban_days
-            wide_event.add(
-                {"set_step": {"from": fetch_params.step, "to": "confirmed_ban"}}
-            )
-            _force_log()
-            fetch_params.set_step("confirmed_ban")
-            fetch_params.update_date(days=max_days, infinity=True)
-            return fetch_params
-
-        case "confirmed_ban":
-            if fetch_params.days > max_confirmed_ban_days:
-                return _reduce_days(fetch_params)
-
-            assert fetch_params.days <= max_confirmed_ban_days
-            wide_event.add(
-                {"set_step": {"from": fetch_params.step, "to": "confirmed_ban"}}
-            )
-            _force_log()
-            fetch_params.set_step("normal")
-            fetch_params.update_date(days=max_days, infinity=True)
-            fetch_params.done = True
-            return fetch_params
+    if player_structs:
+        err = await player_queue.put(player_structs)
+        if isinstance(err, Exception):
+            raise err
 
 
 async def process_players(
-    async_session: async_sessionmaker[AsyncSession],
+    async_session,
     player_repo: PlayerRepo,
-    player_queue: QueueProducer[ToScrapeStruct],
+    player_queue: QueueProducer,
     lag_probe: LagProbeProtocol,
     lag_topic: str,
     lag_group_id: str,
     limit: int = 10,
 ):
-    max_days = 20
-    fp = FetchParams(
-        step="normal",
-        days=max_days,
-        player_id=0,
-        limit=limit,
-    )
-
+    ctx = ScraperCtx(days=20, limit=limit)
+    state = ScrapeState.NORMAL
     last_day = date.today()
 
     while True:
         token = wide_event.set({})
         try:
             lag = await lag_probe.lag(topic=lag_topic, group_id=lag_group_id)
+
             if last_day != date.today():
-                wide_event.add({"new_day_reset": True})
-                _force_log()
                 last_day = date.today()
-                fp.reset_for_new_day(max_days)
+                state = scraper_sm.handle(ctx, state, ScrapeEvent.NEW_DAY)
+
+            if state == ScrapeState.DONE:
+                now = datetime.now()
+                end_of_today = datetime.combine(now.date(), time.max)
+
+                time_remaining = end_of_today - now
+                # at least sleep for 1 second
+                sleep_time = max(int(time_remaining.total_seconds()), 1)
+                wide_event.add({"done_for_day": {"sleep_seconds": sleep_time}})
+                _force_log()
+                await asyncio.sleep(sleep_time)
+                continue
 
             if lag >= Settings().MAX_LAG:
                 wide_event.add({"lag_throttle": {"lag": lag}})
@@ -206,104 +90,85 @@ async def process_players(
                 await asyncio.sleep(10)
                 continue
 
-            fp_dict = asdict(fp)
-            fp_dict.update(
-                {"first_date": str(fp.first_date), "last_date": str(fp.last_date)}
+            wide_event.add(
+                {
+                    "fetch_params": {
+                        "step": state.name,
+                        "days": ctx.days,
+                        "first_date": str(ctx.first_date),
+                        "last_date": str(ctx.last_date),
+                    }
+                }
             )
-            wide_event.add({"fetch_params": fp_dict})
 
             async with async_session() as session:
                 players = await player_repo.select_player(
                     async_session=session,
-                    player_id=fp.player_id,
-                    possible_ban=fp.possible_ban,
-                    confirmed_ban=fp.confirmed_ban,
-                    or_none=fp.step == "normal",
-                    first_date=fp.first_date,
-                    last_date=fp.last_date,
-                    limit=fp.limit,
+                    player_id=ctx.player_id,
+                    possible_ban=ctx.possible_ban,
+                    confirmed_ban=ctx.confirmed_ban,
+                    or_none=state == ScrapeState.NORMAL,
+                    first_date=ctx.first_date,
+                    last_date=ctx.last_date,
+                    limit=ctx.limit,
                 )
 
-            await produce_players(players=players, player_queue=player_queue)
+            await produce_players(players, player_queue)
 
-            fp = determine_fetch_params(
-                fetch_params=fp,
-                players=players,
-                max_days=max_days,
-            )
+            if players:
+                ctx.last_fetched_id = players[-1].id
 
-            if fp.done:
-                fp.done = False
-                now = datetime.now()
-                end_of_today = datetime.combine(now.date(), time.max)
+            event = determine_event(ctx, state, len(players) if players else 0)
+            state = scraper_sm.handle(ctx, state, event)
 
-                time_remaining = end_of_today - now
-                sleep_time = int(time_remaining.total_seconds())
-                sleep_time = max(sleep_time, 1)  # Ensure at least 1 second sleep
-                wide_event.add({"done_for_day": {"sleep_seconds": sleep_time}})
-                _force_log()
-                await asyncio.sleep(sleep_time)
         except Exception as exc:
             wide_event.add({"error": {"message": str(exc)}})
             raise
         finally:
             final_ctx = wide_event.get()
-            force_log = bool(final_ctx.pop("force_log", False))
             if "error" in final_ctx:
                 logger.error(final_ctx)
-            elif force_log:
-                final_ctx.update({"log_reason": "force"})
+            elif final_ctx.pop("force_log", False):
+                final_ctx["log_reason"] = "force"
                 logger.info(final_ctx)
             elif wide_event.sample():
-                final_ctx.update({"log_reason": "sample"})
+                final_ctx["log_reason"] = "sample"
                 logger.info(final_ctx)
             wide_event.reset(token)
 
 
 async def main():
     async_session, async_engine = get_session_factory(SETTINGS=DBSettings())
-
-    bootstrap_servers = KafkaSettings().bootstrap_servers
-    lag_topic = "players.to_scrape"
-    lag_group_id = "scraper"
-
-    def partition_key_fn(msg: ToScrapeStruct) -> str:
-        return str(msg.player_data.id % 10)
-
-    player_queue = QueueFactory.create_queue(
-        model=ToScrapeStruct,
-        queue_type="producer",
-        backend_type="kafka",
-        config=KafkaConfig(
-            topic=lag_topic,
-            bootstrap_servers=bootstrap_servers,
-            producer=True,
-            consumer=False,
-            producer_config=KafkaProducerConfig(partition_key_fn=partition_key_fn),
+    cfg = KafkaConfig(
+        topic="players.to_scrape",
+        bootstrap_servers=KafkaSettings().bootstrap_servers,
+        producer=True,
+        consumer=False,
+        producer_config=KafkaProducerConfig(
+            partition_key_fn=lambda m: str(m.player_data.id % 10)
         ),
     )
+    player_queue = QueueFactory.create_queue(ToScrapeStruct, "producer", "kafka", cfg)
     if isinstance(player_queue, Exception):
         raise player_queue
 
-    assert isinstance(player_queue, QueueProducer)
-
-    lag_probe = KafkaLagProbe(bootstrap_servers)
-
+    lag_probe = KafkaLagProbe(KafkaSettings().bootstrap_servers)
     if isinstance(lag_probe, Exception):
         raise lag_probe
 
     await player_queue.start()
     await lag_probe.start()
 
+    assert isinstance(player_queue, QueueProducer)
     try:
         await process_players(
-            async_session=async_session,
-            player_repo=PlayerRepo(),
-            player_queue=player_queue,
-            lag_probe=lag_probe,
-            lag_topic=lag_topic,
-            lag_group_id=lag_group_id,
-            limit=Settings().LIMIT,
+            async_session,
+            PlayerRepo(),
+            player_queue,
+            lag_probe,
+            "players.to_scrape",
+            "scraper",
+            Settings().LIMIT,
         )
     finally:
         await async_engine.dispose()
@@ -311,13 +176,5 @@ async def main():
         await player_queue.stop()
 
 
-async def run_async():
-    await main()
-
-
-def run():
-    asyncio.run(run_async())
-
-
 if __name__ == "__main__":
-    run()
+    asyncio.run(main())
