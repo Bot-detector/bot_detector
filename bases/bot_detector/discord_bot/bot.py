@@ -126,8 +126,15 @@ async def sync(
     for guild in guilds:
         try:
             await ctx.bot.tree.sync(guild=guild)
-        except discord.HTTPException:
-            pass
+        except discord.HTTPException as error:
+            logger.error(
+                {
+                    "author": ctx.author.name,
+                    "author_id": ctx.author.id,
+                    "msg": f"failed to sync the tree to guild {guild.id}",
+                    "error": str(error),
+                }
+            )
         else:
             ret += 1
 
