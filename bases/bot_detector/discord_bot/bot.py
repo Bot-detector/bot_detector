@@ -45,7 +45,8 @@ async def globally_check_channel(ctx: Context):
 
 @bot.event
 async def setup_hook():
-    DEPS.init(settings=Settings())
+    settings = Settings()
+    DEPS.init(settings=settings)
     await bot.add_cog(cogs.funCommands(bot, deps=DEPS))
     await bot.add_cog(cogs.botDetectiveCommands(bot, deps=DEPS))
     await bot.add_cog(cogs.errorHandler(bot, deps=DEPS))
@@ -55,6 +56,20 @@ async def setup_hook():
     await bot.add_cog(cogs.playerStatsCommands(bot, deps=DEPS))
     await bot.add_cog(cogs.mapCommands(bot, deps=DEPS))
     await bot.add_cog(cogs.feedbackListCommands(bot, deps=DEPS))
+    await sync_command_tree(settings=settings)
+
+
+async def sync_command_tree(settings: Settings) -> None:
+    # guild scoped sync is instant, global sync takes up to an hour to propagate
+    if settings.SYNC_GUILD_ID is None:
+        logger.warning("SYNC_GUILD_ID is not set, skipping startup command tree sync")
+        return
+    guild = discord.Object(id=settings.SYNC_GUILD_ID)
+    bot.tree.copy_global_to(guild=guild)
+    synced = await bot.tree.sync(guild=guild)
+    logger.info(
+        {"msg": f"synced {len(synced)} commands to guild {guild.id} on startup"}
+    )
 
 
 # default events

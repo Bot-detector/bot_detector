@@ -13,3 +13,4 @@ class Settings(BaseSettings):
     API_URL: Optional[str] = Field(default=None)
     WEBHOOK: Optional[str] = Field(default=None)
     OSRS_ITEMS_USER_AGENT: str = Field(default=...)
+    SYNC_GUILD_ID: Optional[int] = Field(default=None)
