@@ -89,7 +89,15 @@ async def sync(
     :param guilds: Optional list of guild ids to sync to.
     :param spec: Optional sync spec, `~` current guild, `*` copy global to current guild, `^` clear current guild.
     """
-    logger.debug(f"{ctx.author.name=}, {ctx.author.id=}, Requesting sync, {spec=}")
+    logger.debug(
+        {
+            "author": ctx.author.name,
+            "author_id": ctx.author.id,
+            "guild": ctx.guild.name if ctx.guild else None,
+            "guild_id": ctx.guild.id if ctx.guild else None,
+            "msg": f"is using sync, {spec=}, guilds={[guild.id for guild in guilds]}",
+        }
+    )
     if not guilds:
         if spec == "~":
             synced = await ctx.bot.tree.sync(guild=ctx.guild)
@@ -103,8 +111,14 @@ async def sync(
         else:
             synced = await ctx.bot.tree.sync()
 
-        await ctx.send(
-            f"Synced {len(synced)} commands {'globally' if spec is None else 'to the current guild.'}"
+        scope = "globally" if spec is None else "to the current guild"
+        await ctx.send(f"Synced {len(synced)} commands {scope}.")
+        logger.info(
+            {
+                "author": ctx.author.name,
+                "author_id": ctx.author.id,
+                "msg": f"synced {len(synced)} commands {scope}, {spec=}",
+            }
         )
         return
 
@@ -118,3 +132,10 @@ async def sync(
             ret += 1
 
     await ctx.send(f"Synced the tree to {ret}/{len(guilds)}.")
+    logger.info(
+        {
+            "author": ctx.author.name,
+            "author_id": ctx.author.id,
+            "msg": f"synced the tree to {ret}/{len(guilds)} guilds",
+        }
+    )
