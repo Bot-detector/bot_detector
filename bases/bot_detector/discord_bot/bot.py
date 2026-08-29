@@ -96,13 +96,13 @@ async def on_disconnect():
 async def sync(
     ctx: Context,
     guilds: Greedy[discord.Object],
-    spec: Optional[Literal["~", "*", "^"]] = None,
+    spec: Optional[Literal["~", "*", "^", "!"]] = None,
 ) -> None:
     """Syncs the app command tree. Bot owner only.
 
     :param ctx: The context of the command.
     :param guilds: Optional list of guild ids to sync to.
-    :param spec: Optional sync spec, `~` current guild, `*` copy global to current guild, `^` clear current guild.
+    :param spec: Optional sync spec, `~` current guild, `*` copy global to current guild, `^` clear current guild, `!` delete all global commands (one-time cleanup).
     """
     logger.debug(
         {
@@ -113,20 +113,41 @@ async def sync(
             "msg": f"is using sync, {spec=}, guilds={[guild.id for guild in guilds]}",
         }
     )
+    if spec == "!":
+        try:
+            global_commands = await ctx.bot.tree.fetch_commands()
+            for command in global_commands:
+                await command.delete()
+        except discord.HTTPException as error:
+            logger.error(
+                {
+                    "author": ctx.author.name,
+                    "author_id": ctx.author.id,
+                    "msg": "failed to delete global commands",
+                    "error": str(error),
+                }
+            )
+            await ctx.send("Failed to delete global commands.")
+            return
+        await ctx.send(f"Deleted {len(global_commands)} global commands.")
+        logger.info(
+            {
+                "author": ctx.author.name,
+                "author_id": ctx.author.id,
+                "msg": f"deleted {len(global_commands)} global commands",
+            }
+        )
+        return
     if not guilds:
-        if spec == "~":
-            synced = await ctx.bot.tree.sync(guild=ctx.guild)
-        elif spec == "*":
+        if spec == "*":
             ctx.bot.tree.copy_global_to(guild=ctx.guild)
             synced = await ctx.bot.tree.sync(guild=ctx.guild)
         elif spec == "^":
             ctx.bot.tree.clear_commands(guild=ctx.guild)
-            await ctx.bot.tree.sync(guild=ctx.guild)
-            synced = []
+            synced = await ctx.bot.tree.sync(guild=ctx.guild)
         else:
-            synced = await ctx.bot.tree.sync()
-
-        scope = "globally" if spec is None else "to the current guild"
+            synced = await ctx.bot.tree.sync(guild=ctx.guild)
+        scope = "to the current guild"
         await ctx.send(f"Synced {len(synced)} commands {scope}.")
         logger.info(
             {
