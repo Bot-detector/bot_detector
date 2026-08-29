@@ -72,6 +72,28 @@ class rsnLinkingCommands(commands.Cog):
         )
         return embed
 
+    async def set_primary_msg(self, name: str) -> discord.Embed:
+        embed = discord.Embed(title=f"Setting '{name}' as Primary:", color=0x00FF00)
+        embed.add_field(
+            name="STATUS",
+            inline=False,
+            value=cleandoc(
+                f"""
+                '{name}' is now your primary account.
+                """
+            ),
+        )
+        embed.add_field(
+            name="INFO",
+            inline=False,
+            value=cleandoc(
+                """
+                You can change your primary at any time by typing '/set_primary <RSN>'.
+                """
+            ),
+        )
+        return embed
+
     async def unlink_msg(self, name: str, role_removed: bool) -> discord.Embed:
         embed = discord.Embed(title=f"Unlinking '{name}':", color=0xFFA500)
         embed.add_field(
@@ -348,4 +370,60 @@ class rsnLinkingCommands(commands.Cog):
                 role_removed = True
 
         embed = await self.unlink_msg(name=name, role_removed=role_removed)
+        await ctx.reply(embed=embed)
+
+    @commands.hybrid_command(name="set_primary")
+    async def set_primary(self, ctx: Context, *, name: str):
+        logger.debug(
+            f"{ctx.author.name=}, {ctx.author.id=}, Requesting set_primary, {name=}"
+        )
+
+        if not name:
+            await ctx.reply(
+                "Please specify the RSN of the account you'd wish to set as primary. /set_primary <RSN>"
+            )
+            return
+
+        if not string_processing.is_valid_rsn(name):
+            await ctx.reply(f"{name} isn't a valid Runescape user name.")
+            return
+
+        assert self.deps.legacy_api is not None
+        player = await self.deps.legacy_api.get_player(player_name=name)
+        player_id = player.get("id") if player else None
+        if player_id is None:
+            await ctx.reply(f"No player found for '{name}'.")
+            return
+
+        session_factory = self.deps.get_session_factory()
+        discord_id = str(ctx.author.id)
+        async with session_factory() as session:
+            linked = await self.verification_repo.get_linked_accounts(
+                async_session=session,
+                discord_id=discord_id,
+            )
+            match = [
+                account for account in linked if account.Player_id == int(player_id)
+            ]
+
+            if not match:
+                await ctx.reply(f"'{name}' is not linked to your Discord account.")
+                return
+
+            if match[0].primary_rsn == 1:
+                await ctx.reply(f"'{name}' is already your primary account.")
+                return
+
+            updated = await self.verification_repo.set_primary_rsn(
+                async_session=session,
+                discord_id=discord_id,
+                player_id=int(player_id),
+                is_primary=True,
+            )
+
+        if not updated:
+            await ctx.reply(f"Failed to set '{name}' as your primary account.")
+            return
+
+        embed = await self.set_primary_msg(name=name)
         await ctx.reply(embed=embed)
