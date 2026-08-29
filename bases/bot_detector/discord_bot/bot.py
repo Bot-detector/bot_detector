@@ -45,7 +45,8 @@ async def globally_check_channel(ctx: Context):
 
 @bot.event
 async def setup_hook():
-    DEPS.init(settings=Settings())
+    settings = Settings()
+    DEPS.init(settings=settings)
     await bot.add_cog(cogs.funCommands(bot, deps=DEPS))
     await bot.add_cog(cogs.botDetectiveCommands(bot, deps=DEPS))
     await bot.add_cog(cogs.errorHandler(bot, deps=DEPS))
@@ -55,6 +56,20 @@ async def setup_hook():
     await bot.add_cog(cogs.playerStatsCommands(bot, deps=DEPS))
     await bot.add_cog(cogs.mapCommands(bot, deps=DEPS))
     await bot.add_cog(cogs.feedbackListCommands(bot, deps=DEPS))
+    await sync_command_tree(settings=settings)
+
+
+async def sync_command_tree(settings: Settings) -> None:
+    # guild scoped sync is instant, global sync takes up to an hour to propagate
+    if settings.SYNC_GUILD_ID is None:
+        logger.warning("SYNC_GUILD_ID is not set, skipping startup command tree sync")
+        return
+    guild = discord.Object(id=settings.SYNC_GUILD_ID)
+    bot.tree.copy_global_to(guild=guild)
+    synced = await bot.tree.sync(guild=guild)
+    logger.info(
+        {"msg": f"synced {len(synced)} commands to guild {guild.id} on startup"}
+    )
 
 
 # default events
@@ -75,7 +90,7 @@ async def on_disconnect():
     logger.info("Bot disconnected.")
 
 
-@bot.command()
+@bot.hybrid_command()
 @commands.guild_only()
 @commands.is_owner()
 async def sync(
@@ -83,7 +98,21 @@ async def sync(
     guilds: Greedy[discord.Object],
     spec: Optional[Literal["~", "*", "^"]] = None,
 ) -> None:
-    logger.debug(f"{ctx.author.name=}, {ctx.author.id=}, Requesting sync, {spec=}")
+    """Syncs the app command tree. Bot owner only.
+
+    :param ctx: The context of the command.
+    :param guilds: Optional list of guild ids to sync to.
+    :param spec: Optional sync spec, `~` current guild, `*` copy global to current guild, `^` clear current guild.
+    """
+    logger.debug(
+        {
+            "author": ctx.author.name,
+            "author_id": ctx.author.id,
+            "guild": ctx.guild.name if ctx.guild else None,
+            "guild_id": ctx.guild.id if ctx.guild else None,
+            "msg": f"is using sync, {spec=}, guilds={[guild.id for guild in guilds]}",
+        }
+    )
     if not guilds:
         if spec == "~":
             synced = await ctx.bot.tree.sync(guild=ctx.guild)
@@ -97,8 +126,14 @@ async def sync(
         else:
             synced = await ctx.bot.tree.sync()
 
-        await ctx.send(
-            f"Synced {len(synced)} commands {'globally' if spec is None else 'to the current guild.'}"
+        scope = "globally" if spec is None else "to the current guild"
+        await ctx.send(f"Synced {len(synced)} commands {scope}.")
+        logger.info(
+            {
+                "author": ctx.author.name,
+                "author_id": ctx.author.id,
+                "msg": f"synced {len(synced)} commands {scope}, {spec=}",
+            }
         )
         return
 
@@ -106,9 +141,23 @@ async def sync(
     for guild in guilds:
         try:
             await ctx.bot.tree.sync(guild=guild)
-        except discord.HTTPException:
-            pass
+        except discord.HTTPException as error:
+            logger.error(
+                {
+                    "author": ctx.author.name,
+                    "author_id": ctx.author.id,
+                    "msg": f"failed to sync the tree to guild {guild.id}",
+                    "error": str(error),
+                }
+            )
         else:
             ret += 1
 
     await ctx.send(f"Synced the tree to {ret}/{len(guilds)}.")
+    logger.info(
+        {
+            "author": ctx.author.name,
+            "author_id": ctx.author.id,
+            "msg": f"synced the tree to {ret}/{len(guilds)} guilds",
+        }
+    )
