@@ -2,6 +2,7 @@ import logging
 from inspect import cleandoc
 
 import discord
+from bot_detector.database.discord import DiscordVerificationRepo
 from bot_detector.discord_bot.dependencies import BotDependencies
 from bot_detector.discord_bot.utils import checks, string_processing
 from discord.ext import commands
@@ -14,6 +15,7 @@ class rsnLinkingCommands(commands.Cog):
     def __init__(self, bot: commands.Bot, deps: BotDependencies) -> None:
         self.bot = bot
         self.deps = deps
+        self.verification_repo = DiscordVerificationRepo()
 
     def _batch(self, iterable, n=1):
         length = len(iterable)
@@ -67,6 +69,38 @@ class rsnLinkingCommands(commands.Cog):
         )
         embed.set_thumbnail(
             url="https://user-images.githubusercontent.com/5789682/117361316-e1f9e200-ae87-11eb-8b42-9ef5e225930d.png"
+        )
+        return embed
+
+    async def unlink_msg(self, name: str, role_removed: bool) -> discord.Embed:
+        embed = discord.Embed(title=f"Unlinking '{name}':", color=0xFFA500)
+        embed.add_field(
+            name="STATUS",
+            inline=False,
+            value=cleandoc(
+                f"""
+                '{name}' has been unlinked from your Discord account.
+                """
+            ),
+        )
+        if role_removed:
+            embed.add_field(
+                name="ROLES",
+                inline=False,
+                value=cleandoc(
+                    """
+                    The Verified role was removed because you have no verified accounts remaining.
+                    """
+                ),
+            )
+        embed.add_field(
+            name="INFO",
+            inline=False,
+            value=cleandoc(
+                """
+                If this was a mistake, you can re-link your account at any time by typing '/link <RSN>'.
+                """
+            ),
         )
         return embed
 
@@ -260,3 +294,58 @@ class rsnLinkingCommands(commands.Cog):
 
         if embeds:
             await ctx.reply(embeds=embeds)
+
+    @commands.hybrid_command(name="unlink")
+    async def unlink(self, ctx: Context, *, name: str):
+        logger.debug(
+            f"{ctx.author.name=}, {ctx.author.id=}, Requesting unlink, {name=}"
+        )
+
+        if not name:
+            await ctx.reply(
+                "Please specify the RSN of the account you'd wish to unlink. /unlink <RSN>"
+            )
+            return
+
+        if not string_processing.is_valid_rsn(name):
+            await ctx.reply(f"{name} isn't a valid Runescape user name.")
+            return
+
+        assert self.deps.legacy_api is not None
+        player = await self.deps.legacy_api.get_player(player_name=name)
+        player_id = player.get("id") if player else None
+        if player_id is None:
+            await ctx.reply(f"No player found for '{name}'. Nothing to unlink.")
+            return
+
+        session_factory = self.deps.get_session_factory()
+        discord_id = str(ctx.author.id)
+        async with session_factory() as session:
+            deleted = await self.verification_repo.delete_verification(
+                async_session=session,
+                discord_id=discord_id,
+                player_id=int(player_id),
+            )
+            remaining: list = []
+            if deleted:
+                remaining = await self.verification_repo.get_linked_accounts(
+                    async_session=session,
+                    discord_id=discord_id,
+                )
+
+        if not deleted:
+            await ctx.reply(f"'{name}' is not linked to your Discord account.")
+            return
+
+        role_removed = False
+        if not remaining and ctx.guild is not None:
+            verified_role = discord.utils.find(
+                lambda r: r.id == checks.VERIFIED_PLAYER_ROLE,
+                ctx.guild.roles,
+            )
+            if verified_role and isinstance(ctx.author, discord.Member):
+                await ctx.author.remove_roles(verified_role)
+                role_removed = True
+
+        embed = await self.unlink_msg(name=name, role_removed=role_removed)
+        await ctx.reply(embed=embed)
