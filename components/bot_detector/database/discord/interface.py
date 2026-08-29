@@ -55,3 +55,13 @@ class DiscordVerificationInterface(ABC):
         auto_commit: bool = True,
     ) -> bool:
         pass
+
+    @abstractmethod
+    async def delete_verification(
+        self,
+        async_session: AsyncSession,
+        discord_id: str,
+        player_id: int,
+        auto_commit: bool = True,
+    ) -> bool:
+        pass

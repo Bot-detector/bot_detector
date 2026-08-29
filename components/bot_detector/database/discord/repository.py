@@ -3,7 +3,7 @@ from datetime import datetime
 
 from bot_detector.database.discord.interface import DiscordVerificationInterface
 from bot_detector.database.discord.structs import DiscordVerificationTableStruct
-from sqlalchemy import insert, select, update
+from sqlalchemy import delete, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -123,6 +123,24 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
 
         await async_session.execute(clear_query)
         result = await async_session.execute(set_query)
+        if auto_commit:
+            await async_session.commit()
+        return result.rowcount > 0  # type: ignore[attr-defined]
+
+    async def delete_verification(
+        self,
+        async_session: AsyncSession,
+        discord_id: str,
+        player_id: int,
+        auto_commit: bool = True,
+    ) -> bool:
+        query = (
+            delete(DiscordVerificationTableStruct)
+            .where(DiscordVerificationTableStruct.Discord_id == discord_id)
+            .where(DiscordVerificationTableStruct.Player_id == player_id)
+        )
+
+        result = await async_session.execute(query)
         if auto_commit:
             await async_session.commit()
         return result.rowcount > 0  # type: ignore[attr-defined]
