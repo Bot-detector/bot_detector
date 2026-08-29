@@ -8,7 +8,7 @@ from bot_detector.discord_bot.dependencies import DEPS
 from bot_detector.discord_bot.utils import checks
 from discord import AllowedMentions, Game, Intents
 from discord.ext import commands
-from discord.ext.commands import Bot, Context, Greedy
+from discord.ext.commands import Bot, Context
 
 logger = logging.getLogger(__name__)
 
@@ -75,40 +75,35 @@ async def on_disconnect():
     logger.info("Bot disconnected.")
 
 
-@bot.command()
+@bot.hybrid_command(name="sync")
 @commands.guild_only()
 @commands.is_owner()
 async def sync(
     ctx: Context,
-    guilds: Greedy[discord.Object],
     spec: Optional[Literal["~", "*", "^"]] = None,
+    guild_id: Optional[int] = None,
 ) -> None:
-    logger.debug(f"{ctx.author.name=}, {ctx.author.id=}, Requesting sync, {spec=}")
-    if not guilds:
-        if spec == "~":
-            synced = await ctx.bot.tree.sync(guild=ctx.guild)
-        elif spec == "*":
-            ctx.bot.tree.copy_global_to(guild=ctx.guild)
-            synced = await ctx.bot.tree.sync(guild=ctx.guild)
-        elif spec == "^":
-            ctx.bot.tree.clear_commands(guild=ctx.guild)
-            await ctx.bot.tree.sync(guild=ctx.guild)
-            synced = []
-        else:
-            synced = await ctx.bot.tree.sync()
+    logger.debug(
+        f"{ctx.author.name=}, {ctx.author.id=}, Requesting sync, {spec=}, {guild_id=}"
+    )
 
-        await ctx.send(
-            f"Synced {len(synced)} commands {'globally' if spec is None else 'to the current guild.'}"
-        )
+    if guild_id is not None:
+        await ctx.bot.tree.sync(guild=discord.Object(id=guild_id))
+        await ctx.send(f"Synced the tree to guild {guild_id}.")
         return
 
-    ret = 0
-    for guild in guilds:
-        try:
-            await ctx.bot.tree.sync(guild=guild)
-        except discord.HTTPException:
-            pass
-        else:
-            ret += 1
+    if spec == "~":
+        synced = await ctx.bot.tree.sync(guild=ctx.guild)
+    elif spec == "*":
+        ctx.bot.tree.copy_global_to(guild=ctx.guild)
+        synced = await ctx.bot.tree.sync(guild=ctx.guild)
+    elif spec == "^":
+        ctx.bot.tree.clear_commands(guild=ctx.guild)
+        await ctx.bot.tree.sync(guild=ctx.guild)
+        synced = []
+    else:
+        synced = await ctx.bot.tree.sync()
 
-    await ctx.send(f"Synced the tree to {ret}/{len(guilds)}.")
+    await ctx.send(
+        f"Synced {len(synced)} commands {'globally' if spec is None else 'to the current guild.'}"
+    )
