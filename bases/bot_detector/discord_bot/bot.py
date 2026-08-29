@@ -75,7 +75,7 @@ async def on_disconnect():
     logger.info("Bot disconnected.")
 
 
-@bot.command()
+@bot.hybrid_command()
 @commands.guild_only()
 @commands.is_owner()
 async def sync(
@@ -83,6 +83,12 @@ async def sync(
     guilds: Greedy[discord.Object],
     spec: Optional[Literal["~", "*", "^"]] = None,
 ) -> None:
+    """Syncs the app command tree. Bot owner only.
+
+    :param ctx: The context of the command.
+    :param guilds: Optional list of guild ids to sync to.
+    :param spec: Optional sync spec, `~` current guild, `*` copy global to current guild, `^` clear current guild.
+    """
     logger.debug(f"{ctx.author.name=}, {ctx.author.id=}, Requesting sync, {spec=}")
     if not guilds:
         if spec == "~":
