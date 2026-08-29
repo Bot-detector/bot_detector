@@ -6,6 +6,8 @@ from bot_detector.discord_bot.utils import (
     DISCORD_STAFF,
     OWNER_ROLE,
     VERIFICATION_STAFF,
+    build_kc_embed,
+    resolve_primary_rsn,
 )
 from discord.ext import commands
 from discord.ext.commands import Cog, Context
@@ -79,3 +81,55 @@ class modCommands(Cog):
         # check if there are any embeds left
         if embeds != []:
             await ctx.reply(embeds=embeds)
+
+    @commands.hybrid_command()
+    @commands.has_any_role(DISCORD_STAFF, VERIFICATION_STAFF, OWNER_ROLE)
+    async def admin_kc(self, ctx: Context, discord_id: str):
+        """Shows the report (KC) stats of a user's linked accounts.
+
+        :param ctx: The context of the command.
+        :param discord_id: The Discord ID of the user to look up.
+        """
+        debug = {
+            "author": ctx.author.name,
+            "author_id": ctx.author.id,
+            "msg": f"is using admin_kc for {discord_id}",
+        }
+        logger.debug(debug)
+        await ctx.typing()
+
+        assert self.deps.legacy_api is not None
+        linked_accounts = await self.deps.legacy_api.get_discord_links(
+            discord_id=str(discord_id)
+        )
+
+        if not linked_accounts:
+            await ctx.reply(
+                f"No linked OSRS accounts found for Discord ID {discord_id}."
+            )
+            return
+
+        linked_accounts = [
+            {"name": acc.get("name"), "primary_rsn": acc.get("primary_rsn")}
+            for acc in linked_accounts
+            if acc.get("Verified_status") == 1
+        ]
+
+        if not linked_accounts:
+            await ctx.reply(
+                f"None of the accounts linked to {discord_id} are verified."
+            )
+            return
+
+        assert self.deps.public_api is not None
+        data = await self.deps.public_api.get_report_score(
+            names=[n["name"] for n in linked_accounts]
+        )
+
+        if not data:
+            await ctx.reply("No data found.")
+            return
+
+        primary_rsn = resolve_primary_rsn(linked_accounts)
+        embed = build_kc_embed(primary_rsn=primary_rsn, data=data)
+        await ctx.reply(embed=embed)

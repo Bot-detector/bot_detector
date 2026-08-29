@@ -20,6 +20,7 @@ from bot_detector.discord_bot.utils.checks import (
     is_allowed_channel,
     is_supporter,
 )
+from bot_detector.discord_bot.utils.kc_embed import build_kc_embed, resolve_primary_rsn
 from bot_detector.discord_bot.utils.string_processing import (
     get_random_id,
     is_valid_rsn,
@@ -52,4 +53,6 @@ __all__ = [
     "is_supporter",
     "BOOSTER_ROLE",
     "SUPPORTER_ROLE",
+    "build_kc_embed",
+    "resolve_primary_rsn",
 ]
