@@ -1,5 +1,5 @@
 import logging
-from typing import Literal, Optional
+from typing import Literal
 
 import discord
 from bot_detector.discord_bot import cogs
@@ -8,7 +8,7 @@ from bot_detector.discord_bot.dependencies import DEPS
 from bot_detector.discord_bot.utils import checks
 from discord import AllowedMentions, Game, Intents
 from discord.ext import commands
-from discord.ext.commands import Bot, Context, Greedy
+from discord.ext.commands import Bot, Context
 
 logger = logging.getLogger(__name__)
 
@@ -93,16 +93,11 @@ async def on_disconnect():
 @bot.hybrid_command()
 @commands.guild_only()
 @commands.is_owner()
-async def sync(
-    ctx: Context,
-    guilds: Greedy[discord.Object],
-    spec: Optional[Literal["~", "*", "^", "!"]] = None,
-) -> None:
-    """Syncs the app command tree. Bot owner only.
+async def sync(ctx: Context, scope: Literal["local", "global"]) -> None:
+    """Syncs the app command tree and clears the other scope. Bot owner only.
 
     :param ctx: The context of the command.
-    :param guilds: Optional list of guild ids to sync to.
-    :param spec: Optional sync spec, `~` current guild, `*` copy global to current guild, `^` clear current guild, `!` delete all global commands (one-time cleanup).
+    :param scope: `local` syncs to the current guild and deletes global commands, `global` syncs global commands and deletes the current guild's commands.
     """
     logger.debug(
         {
@@ -110,75 +105,42 @@ async def sync(
             "author_id": ctx.author.id,
             "guild": ctx.guild.name if ctx.guild else None,
             "guild_id": ctx.guild.id if ctx.guild else None,
-            "msg": f"is using sync, {spec=}, guilds={[guild.id for guild in guilds]}",
+            "msg": f"is using sync, {scope=}",
         }
     )
-    if spec == "!":
-        try:
-            global_commands = await ctx.bot.tree.fetch_commands()
-            for command in global_commands:
-                await command.delete()
-        except discord.HTTPException as error:
-            logger.error(
-                {
-                    "author": ctx.author.name,
-                    "author_id": ctx.author.id,
-                    "msg": "failed to delete global commands",
-                    "error": str(error),
-                }
-            )
-            await ctx.send("Failed to delete global commands.")
-            return
-        await ctx.send(f"Deleted {len(global_commands)} global commands.")
-        logger.info(
-            {
-                "author": ctx.author.name,
-                "author_id": ctx.author.id,
-                "msg": f"deleted {len(global_commands)} global commands",
-            }
-        )
-        return
-    if not guilds:
-        if spec == "*":
+    try:
+        if scope == "local":
             ctx.bot.tree.copy_global_to(guild=ctx.guild)
             synced = await ctx.bot.tree.sync(guild=ctx.guild)
-        elif spec == "^":
-            ctx.bot.tree.clear_commands(guild=ctx.guild)
-            synced = await ctx.bot.tree.sync(guild=ctx.guild)
+            ctx.bot.tree.clear_commands(guild=None)
+            await ctx.bot.tree.sync()
+            await ctx.send(
+                f"Synced {len(synced)} commands to the current guild, "
+                "deleted all global commands."
+            )
         else:
-            synced = await ctx.bot.tree.sync(guild=ctx.guild)
-        scope = "to the current guild"
-        await ctx.send(f"Synced {len(synced)} commands {scope}.")
-        logger.info(
+            synced = await ctx.bot.tree.sync()
+            ctx.bot.tree.clear_commands(guild=ctx.guild)
+            await ctx.bot.tree.sync(guild=ctx.guild)
+            await ctx.send(
+                f"Synced {len(synced)} global commands, "
+                "deleted the current guild's commands."
+            )
+    except discord.HTTPException as error:
+        logger.error(
             {
                 "author": ctx.author.name,
                 "author_id": ctx.author.id,
-                "msg": f"synced {len(synced)} commands {scope}, {spec=}",
+                "msg": f"failed to sync, {scope=}",
+                "error": str(error),
             }
         )
+        await ctx.send(f"Failed to sync {scope} commands.")
         return
-
-    ret = 0
-    for guild in guilds:
-        try:
-            await ctx.bot.tree.sync(guild=guild)
-        except discord.HTTPException as error:
-            logger.error(
-                {
-                    "author": ctx.author.name,
-                    "author_id": ctx.author.id,
-                    "msg": f"failed to sync the tree to guild {guild.id}",
-                    "error": str(error),
-                }
-            )
-        else:
-            ret += 1
-
-    await ctx.send(f"Synced the tree to {ret}/{len(guilds)}.")
     logger.info(
         {
             "author": ctx.author.name,
             "author_id": ctx.author.id,
-            "msg": f"synced the tree to {ret}/{len(guilds)} guilds",
+            "msg": f"synced {len(synced)} commands, {scope=}",
         }
     )
