@@ -12,11 +12,11 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "aiofiles>=25.1.0",
-    "aiohttp==3.11.11",
+    "aiohttp==3.14.3",
     "aiokafka==0.12.0",
     "asyncmy==0.2.11",
     "boto3==1.40.34",
-    "cryptography==46.0.3",
+    "cryptography==50.0.0",
     "discord-py>=2.2.2",
     "fastapi==0.115.12",
     "jinja2==3.1.6",
