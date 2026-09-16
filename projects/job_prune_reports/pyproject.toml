@@ -9,8 +9,8 @@ version = "0.1.0"
 requires-python = ">=3.10"
 
 dependencies = [
-    "asyncmy==0.2.11",
-    "cryptography==46.0.3",
+    "asyncmy==0.2.12",
+    "cryptography==50.0.0",
     "pydantic-settings==2.7.0",
     "sqlalchemy==2.0.44",
 ]
