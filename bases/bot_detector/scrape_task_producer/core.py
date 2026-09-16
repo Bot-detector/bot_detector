@@ -16,6 +16,13 @@ from bot_detector.event_queue.core import QueueProducer
 from bot_detector.event_queue.factory import QueueFactory
 from bot_detector.event_queue.lag_probe import LagProbeProtocol
 from bot_detector.event_queue.structs import ToScrapeStruct
+from bot_detector.scrape_task_producer.metrics import (
+    done_for_day_counter,
+    lag_throttle_counter,
+    new_day_reset_counter,
+    players_produced_counter,
+    step_transition_counter,
+)
 from bot_detector.structs import MetaData, PlayerStruct
 from bot_detector.wide_event import WideEventLogger
 from pydantic_settings import BaseSettings
@@ -75,6 +82,7 @@ class FetchParams:
     def set_step(
         self, step: Literal["normal", "possible_ban", "confirmed_ban"]
     ) -> None:
+        step_transition_counter.labels(from_step=self.step, to_step=step).inc()
         self.step = step
         self._update_step_flags()
 
@@ -103,6 +111,7 @@ async def produce_players(
     error = await player_queue.put(player_structs)
     if isinstance(error, Exception):
         raise error
+    players_produced_counter.inc(len(player_structs))
 
 
 def _reduce_days(fetch_params: FetchParams) -> FetchParams:
@@ -197,12 +206,14 @@ async def process_players(
             if last_day != date.today():
                 wide_event.add({"new_day_reset": True})
                 _force_log()
+                new_day_reset_counter.inc()
                 last_day = date.today()
                 fp.reset_for_new_day(max_days)
 
             if lag >= Settings().MAX_LAG:
                 wide_event.add({"lag_throttle": {"lag": lag}})
                 _force_log()
+                lag_throttle_counter.inc()
                 await asyncio.sleep(10)
                 continue
 
@@ -234,6 +245,7 @@ async def process_players(
 
             if fp.done:
                 fp.done = False
+                done_for_day_counter.inc()
                 now = datetime.now()
                 end_of_today = datetime.combine(now.date(), time.max)
 
