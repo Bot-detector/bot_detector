@@ -9,6 +9,12 @@ on:
       REGISTRY:
         required: true
         type: string
+      # manifest kind of VALUE_FILE: deployment | job | cronjob.
+      # Determines the yaml path to the container image.
+      KIND:
+        required: false
+        type: string
+        default: "deployment"
     secrets:
       HETZNER_ACTIONS_RUNNER_TOKEN:
         required: true
@@ -29,6 +35,27 @@ jobs:
         run: |
           echo "GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")" >> $GITHUB_OUTPUT
 
+      - name: Resolve image path
+        id: image_path
+        env:
+          KIND: ${{ inputs.KIND }}
+        run: |
+          case "$KIND" in
+            deployment|job)
+              IMAGE_PATH="spec.template.spec.containers[0].image"
+              ;;
+            cronjob)
+              IMAGE_PATH="spec.jobTemplate.spec.template.spec.containers[0].image"
+              ;;
+            *)
+              echo "Unknown KIND '$KIND', expected deployment | job | cronjob" >&2
+              exit 1
+              ;;
+          esac
+          echo "KIND=$KIND"
+          echo "IMAGE_PATH=$IMAGE_PATH"
+          echo "IMAGE_PATH=$IMAGE_PATH" >> $GITHUB_OUTPUT
+
       - name: Update Image Version
         uses: fjogeleit/yaml-update-action@main
         with:
@@ -43,5 +70,5 @@ jobs:
           createPR: true
           changes: |
             {
-              "spec.template.spec.containers[0].image": "${{ inputs.REGISTRY }}:${{ steps.vars.outputs.GIT_HASH }}"
+              "${{ steps.image_path.outputs.IMAGE_PATH }}": "${{ inputs.REGISTRY }}:${{ steps.vars.outputs.GIT_HASH }}"
             }

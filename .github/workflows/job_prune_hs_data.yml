@@ -66,5 +66,6 @@ jobs:
     with:
       registry: ${{ needs.env_vars.outputs.QUAY_REGISTERY }}
       value_file: ${{ needs.env_vars.outputs.DEPLOYMENT_FILE }}
+      kind: cronjob
     secrets:
       HETZNER_ACTIONS_RUNNER_TOKEN: ${{ secrets.HETZNER_ACTIONS_RUNNER_TOKEN }}
