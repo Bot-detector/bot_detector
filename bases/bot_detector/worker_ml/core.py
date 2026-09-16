@@ -17,6 +17,12 @@ from bot_detector.event_queue.factory import QueueFactory
 from bot_detector.event_queue.structs import DataToPredictStruct, ScrapedStruct
 from bot_detector.ml_api import InputData, MLApiClient, Prediction
 from bot_detector.structs import PredictionCreate
+from bot_detector.worker_ml.metrics import (
+    api_errors_counter,
+    batches_consumed_counter,
+    messages_requeued_counter,
+    predictions_inserted_counter,
+)
 from bot_detector.worker_ml.settings import Settings
 from bot_detector.worker_ml.settings import Settings as MLSettings
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -110,6 +116,7 @@ async def consume_data_to_predict(
             await asyncio.sleep(15)
             continue
 
+        batches_consumed_counter.labels(loop="data_to_predict").inc()
         _input_data = [transform_data_to_predict_struct(d) for d in _batch]
 
         # external network call
@@ -127,6 +134,7 @@ async def consume_data_to_predict(
                     "error": str(e),
                 }
             )
+            api_errors_counter.labels(loop="data_to_predict").inc()
             put_result = await data_to_predict_queue.put(_batch)
             if isinstance(put_result, Exception):
                 logger.error(
@@ -137,6 +145,7 @@ async def consume_data_to_predict(
                 )
                 await asyncio.sleep(15)
                 continue
+            messages_requeued_counter.labels(loop="data_to_predict").inc(len(_batch))
             commit_result = await data_to_predict_queue.commit()
             if isinstance(commit_result, Exception):
                 logger.error(
@@ -182,6 +191,7 @@ async def consume_data_to_predict(
                 )
                 await asyncio.sleep(15)
                 continue
+            messages_requeued_counter.labels(loop="data_to_predict").inc(len(_batch))
             commit_result = await data_to_predict_queue.commit()
             if isinstance(commit_result, Exception):
                 logger.error(
@@ -194,6 +204,7 @@ async def consume_data_to_predict(
                 continue
             await asyncio.sleep(15)
             continue
+        predictions_inserted_counter.inc(len(_predictions))
         commit_result = await data_to_predict_queue.commit()
         if isinstance(commit_result, Exception):
             logger.error(
@@ -226,6 +237,8 @@ async def consume_player_scraped(
                 logger.info("No highscore data to process.")
                 await asyncio.sleep(15)
                 continue
+
+            batches_consumed_counter.labels(loop="player_scraped").inc()
 
             # send to ml model for inference
             parsed_data = [transform_scraped_struct(b) for b in batch]
@@ -268,6 +281,7 @@ async def consume_player_scraped(
                         "error": str(e),
                     }
                 )
+                api_errors_counter.labels(loop="player_scraped").inc()
                 put_result = await player_sc_queue.put(batch)
                 if isinstance(put_result, Exception):
                     logger.error(
@@ -278,6 +292,7 @@ async def consume_player_scraped(
                     )
                     await asyncio.sleep(15)
                     continue
+                messages_requeued_counter.labels(loop="player_scraped").inc(len(batch))
                 commit_result = await player_sc_queue.commit()
                 if isinstance(commit_result, Exception):
                     logger.error(
@@ -296,6 +311,7 @@ async def consume_player_scraped(
                 session_factory=session_factory,
                 predictions=combined_predictions,
             )
+            predictions_inserted_counter.inc(len(combined_predictions))
             commit_result = await player_sc_queue.commit()
             if isinstance(commit_result, Exception):
                 logger.error(
@@ -320,6 +336,7 @@ async def consume_player_scraped(
                     )
                     await asyncio.sleep(15)
                     continue
+                messages_requeued_counter.labels(loop="player_scraped").inc(len(batch))
                 commit_result = await player_sc_queue.commit()
                 if isinstance(commit_result, Exception):
                     logger.error(
