@@ -8,6 +8,13 @@ from bot_detector.event_queue.adapters.memory import InMemoryConfig
 from bot_detector.event_queue.core import Queue
 from bot_detector.event_queue.factory import QueueFactory
 from bot_detector.worker.errors import WorkerError
+from bot_detector.worker.metrics import (
+    BATCHES_CONSUMED,
+    ERRORS,
+    HANDLE_LATENCY,
+    MESSAGES_CONSUMED,
+    MESSAGES_REQUEUED,
+)
 from pydantic import BaseModel
 
 T = TypeVar("T", bound=BaseModel)
@@ -62,12 +69,14 @@ class WorkerRunner(Generic[T]):
         worker: Worker[T],
         stop_event: asyncio.Event,
         batch_size: int = 1000,
+        name: str = "worker",
     ) -> None:
         self._worker = worker
         self._batch_size = batch_size
         self._config = config
         self._model = model
         self._stop_event = stop_event
+        self._name = name
         self._queue: Queue[T] = self._create_queue()
 
     def _detect_backend(self) -> Literal["kafka", "memory"]:
@@ -108,10 +117,12 @@ class WorkerRunner(Generic[T]):
         requeue_err = await self._queue.put(batch)
         if isinstance(requeue_err, Exception):
             logger.error(f"Failed to requeue batch: {requeue_err}")
+            ERRORS.labels(worker=self._name, kind="requeue").inc()
             return
         commit_err = await self._queue.commit()
         if isinstance(commit_err, Exception):
             logger.error(f"Failed to commit requeued batch: {commit_err}")
+            ERRORS.labels(worker=self._name, kind="commit").inc()
 
     async def _consume(self) -> None:
         """Main loop: get_many → handle → commit. Requeues what handle returns."""
@@ -121,6 +132,7 @@ class WorkerRunner(Generic[T]):
                 result = await self._queue.get_many(self._batch_size)
                 if isinstance(result, Exception):
                     logger.error(f"Error consuming messages: {result}")
+                    ERRORS.labels(worker=self._name, kind="consume").inc()
                     continue
 
                 batch = result
@@ -129,8 +141,11 @@ class WorkerRunner(Generic[T]):
                     continue
 
                 logger.info(f"Consumed {len(batch)} messages")
+                BATCHES_CONSUMED.labels(worker=self._name).inc()
+                MESSAGES_CONSUMED.labels(worker=self._name).inc(len(batch))
 
-                result = await self._worker.handle(batch)
+                with HANDLE_LATENCY.labels(worker=self._name).time():
+                    result = await self._worker.handle(batch)
                 if isinstance(result, WorkerError):
                     if result.error_batch:
                         logger.error(
@@ -138,6 +153,9 @@ class WorkerRunner(Generic[T]):
                             f"ok={len(result.ok_batch)}, "
                             f"requeuing={len(result.error_batch)} "
                             f"of {len(batch)}"
+                        )
+                        MESSAGES_REQUEUED.labels(worker=self._name).inc(
+                            len(result.error_batch)
                         )
                         await self._requeue(result.error_batch)
                         await asyncio.sleep(1)
@@ -149,20 +167,26 @@ class WorkerRunner(Generic[T]):
                         commit_err = await self._queue.commit()
                         if isinstance(commit_err, Exception):
                             logger.error(f"Failed to commit batch: {commit_err}")
+                            ERRORS.labels(worker=self._name, kind="commit").inc()
                 elif result:
                     logger.info(f"Requeuing {len(result)} of {len(batch)} messages")
+                    MESSAGES_REQUEUED.labels(worker=self._name).inc(len(result))
                     await self._requeue(result)
                 else:
                     commit_err = await self._queue.commit()
                     if isinstance(commit_err, Exception):
                         logger.error(f"Failed to commit batch: {commit_err}")
+                        ERRORS.labels(worker=self._name, kind="commit").inc()
             except asyncio.CancelledError:
                 if batch:
+                    MESSAGES_REQUEUED.labels(worker=self._name).inc(len(batch))
                     await self._requeue(batch)
                 raise
             except Exception as e:
                 logger.error(f"Error processing batch: {e}", exc_info=True)
+                ERRORS.labels(worker=self._name, kind="handle").inc()
                 if batch:
+                    MESSAGES_REQUEUED.labels(worker=self._name).inc(len(batch))
                     await self._requeue(batch)
                 await asyncio.sleep(1)
 
