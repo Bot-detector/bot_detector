@@ -49,6 +49,7 @@ async def main():
             model=ReportsToInsertStruct,
             batch_size=SETTINGS.MAX_BATCH_SIZE,
             stop_event=stop_event,
+            name="worker-report",
         )
         task = asyncio.create_task(runner.run())
         tasks.append(task)

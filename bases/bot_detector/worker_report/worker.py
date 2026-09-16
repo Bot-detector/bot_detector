@@ -5,6 +5,10 @@ from bot_detector.event_queue.structs import ReportsToInsertStruct
 from bot_detector.structs import ParsedDetection
 from bot_detector.worker.core import Worker
 from bot_detector.worker_report.adapter import transform_report
+from bot_detector.worker_report.metrics import (
+    reports_dropped_counter,
+    reports_inserted_counter,
+)
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -24,6 +28,7 @@ async def insert_batch(
     except OperationalError as e:
         logger.error(f"OperationalError during batch insert: {e}")
         raise
+    reports_inserted_counter.inc(len(batch))
     logger.info(f"inserted: {len(batch)}")
 
 
@@ -45,6 +50,9 @@ class ReportWorker(Worker[ReportsToInsertStruct]):
         parsed = [
             r for r in (transform_report(record) for record in batch) if r is not None
         ]
+        dropped = len(batch) - len(parsed)
+        if dropped:
+            reports_dropped_counter.inc(dropped)
         if not parsed:
             logger.info("No valid reports to process.")
             return []
