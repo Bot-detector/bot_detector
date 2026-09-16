@@ -9,6 +9,11 @@ from bot_detector.event_queue.structs import (
 )
 from bot_detector.worker.core import Worker
 from bot_detector.worker_hiscore import adapter
+from bot_detector.worker_hiscore.metrics import (
+    players_updated_counter,
+    rows_inserted_counter,
+    to_predict_produced_counter,
+)
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 logger = logging.getLogger(__name__)
@@ -36,6 +41,8 @@ async def insert_batch(
                 highscore_data=highscore_batch,
             )
             # session.begin() context manager will commit if no exceptions, rollback if exception occurs
+    players_updated_counter.inc(len(player_batch))
+    rows_inserted_counter.inc(len(highscore_batch))
     logger.debug(f"inserted: {len(batch)}")
 
 
@@ -71,5 +78,6 @@ class HiscoreWorker(Worker[ScrapedStruct]):
         to_predict_batch = [adapter.transform_scraped_struct(r) for r in batch]
         to_predict_batch = [d for d in to_predict_batch if d is not None]
         await self._data_to_predict_producer.put(to_predict_batch)
+        to_predict_produced_counter.inc(len(to_predict_batch))
         logger.info(f"[{self._id}] processed {len(to_predict_batch)} scrapes")
         return []
