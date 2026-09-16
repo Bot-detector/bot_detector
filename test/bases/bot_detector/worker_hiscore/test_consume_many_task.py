@@ -2,7 +2,6 @@ from datetime import date, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from bot_detector.event_queue.structs import ScrapedStruct
 from bot_detector.structs._metadata import MetaData
 from bot_detector.structs.hiscore import HighscoreBaseStruct

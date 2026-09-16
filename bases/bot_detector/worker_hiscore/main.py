@@ -88,6 +88,7 @@ async def main():
             model=ScrapedStruct,
             batch_size=SETTINGS.MAX_BATCH_SIZE,
             stop_event=stop_event,
+            name="highscore-worker",
         )
         task = asyncio.create_task(runner.run())
         tasks.append(task)
