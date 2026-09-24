@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Generic, Optional, TypeVar
+from typing import Any, Generic, Optional, TypeVar
 
 import orjson
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer, ConsumerRecord
@@ -24,6 +24,22 @@ from pydantic import BaseModel, ValidationError
 from .config import KafkaConfig
 
 T = TypeVar("T", bound=BaseModel)
+
+POISON_KEY = "_poison"
+
+
+def _deserialize_value(raw: bytes | None) -> Any:
+    """Never raises: poison bytes become a dict that fails model validation.
+
+    A raising deserializer would kill aiokafka's internal fetcher task and
+    silently stall the consumer.
+    """
+    if raw is None:
+        return None
+    try:
+        return orjson.loads(raw)
+    except orjson.JSONDecodeError:
+        return {POISON_KEY: True, "raw": raw[:200].decode("utf-8", errors="replace")}
 
 
 class _AIOKafkaProducerBase(Generic[T]):
@@ -131,7 +147,7 @@ class AIOKafkaConsumerAdapter(
                 group_id=_config.group_id,
                 auto_offset_reset=_config.auto_offset_reset,
                 enable_auto_commit=_config.enable_auto_commit,
-                value_deserializer=lambda x: orjson.loads(x),
+                value_deserializer=_deserialize_value,
             )
             await self.consumer.start()
 
