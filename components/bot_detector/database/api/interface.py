@@ -20,7 +20,7 @@ class ApiUserInterface(ABC):
         self,
         async_session: AsyncSession,
         permission: str,
-        token: str,
+        token: str | None = None,
         user_name: str | None = None,
         user_id: int | None = None,
     ) -> bool:
