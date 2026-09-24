@@ -34,6 +34,7 @@ dependencies = [
     "seaborn>=0.13.0",
     "sqlalchemy==2.0.44",
     "uvicorn==0.34.2",
+    "websockets==15.0.1",
 ]
 
 [dependency-groups]
