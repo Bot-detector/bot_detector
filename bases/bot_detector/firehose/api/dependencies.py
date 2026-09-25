@@ -20,8 +20,8 @@ manual_key_cookie_scheme = APIKeyCookie(name=MANUAL_KEY_COOKIE, auto_error=False
 async def get_api_key_http(request: Request) -> str | None:
     """Resolve the credential for http endpoints.
 
-    header wins, then the manual cookie (viewer button), then the
-    discord login cookie.
+    header wins, then the manual cookie (dev frontend token field), then
+    the discord login cookie.
     """
     return (
         request.headers.get("x-api-key")

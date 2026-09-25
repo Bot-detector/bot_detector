@@ -7,7 +7,7 @@ from bot_detector.firehose.app.auth.auth import ANONYMOUS_USER, API_KEY_COOKIE
 from bot_detector.firehose.app.state import FirehoseState
 from bot_detector.firehose.core.config import SETTINGS
 from fastapi import APIRouter, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import RedirectResponse
 
 router = APIRouter(tags=["Login"])
 logger = logging.getLogger(__name__)
@@ -57,7 +57,7 @@ async def login_callback(
     code: Annotated[Optional[str], Query()] = None,
     state: Annotated[Optional[str], Query()] = None,
     error: Annotated[Optional[str], Query()] = None,
-) -> HTMLResponse:
+) -> RedirectResponse:
     if error:
         raise HTTPException(status_code=400, detail=f"oauth error: {error}")
 
@@ -89,21 +89,8 @@ async def login_callback(
 
     # the discord access token IS the credential; the firehose validates
     # it against discord and the apiUser allowlist on every connect.
-    # cookie: keeps the browser logged in; the page below also shows the
-    # token so users can copy it for header-based access.
-    response = HTMLResponse(
-        f"""<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="utf-8"><title>Logged in</title></head>
-<body style="font-family: monospace; background: #111; color: #ddd">
-<h1>Logged in as {user.username} (id: {user.id})</h1>
-<p>your token (expires in {token.expires_in // 3600}h):</p>
-<p><code id="token" style="background:#222;padding:0.5rem;display:inline-block">{token.access_token}</code></p>
-<p>use it with: <code>X-API-Key: &lt;token&gt;</code></p>
-<p><a href="/firehose" style="color:#6f6">open the firehose</a></p>
-</body>
-</html>"""
-    )
+    # cookie: keeps the browser logged in; /me exposes identity + token.
+    response = RedirectResponse("/me", status_code=302)
     response.set_cookie(
         key=API_KEY_COOKIE,
         value=token.access_token,

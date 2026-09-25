@@ -1,7 +1,6 @@
 import asyncio
 import logging
 
-from bot_detector.firehose.api.viewer import VIEWER_HTML
 from bot_detector.firehose.app.auth.auth import API_KEY_COOKIE, MANUAL_KEY_COOKIE
 from bot_detector.firehose.app.consumer import ALLOWED_TOPICS
 from bot_detector.firehose.app.consumer_manager import serialize
@@ -12,32 +11,15 @@ from bot_detector.firehose.app.metrics import (
     stream_type,
 )
 from bot_detector.firehose.app.state import FirehoseState
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 router = APIRouter(tags=["Firehose"])
 logger = logging.getLogger(__name__)
 
 
-@router.get("/firehose", summary="Available firehose topics")
-async def firehose_topics() -> HTMLResponse:
-    items = "".join(
-        f'<li><a href="/firehose/{topic}">{topic}</a></li>' for topic in ALLOWED_TOPICS
-    )
-    return HTMLResponse(
-        f"""<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><title>Firehose topics</title></head>
-<body style="font-family: monospace; background: #111; color: #ddd">
-<h1>firehose topics</h1><ul>{items}</ul>
-</body></html>"""
-    )
-
-
-@router.get("/firehose/{topic}", summary="Websocket viewer page for a topic")
-async def firehose_page(topic: str) -> HTMLResponse:
-    if topic not in ALLOWED_TOPICS:
-        raise HTTPException(status_code=404, detail="unknown topic")
-    return HTMLResponse(VIEWER_HTML)
+@router.get("/firehose/topics", summary="Available firehose topics")
+async def firehose_topics() -> list[str]:
+    return ALLOWED_TOPICS
 
 
 @router.websocket("/firehose/{topic}")
@@ -47,7 +29,7 @@ async def firehose(websocket: WebSocket, topic: str) -> None:
         return
 
     # header for systems; cookie for browsers (login cookie, or the
-    # manual cookie set by the viewer's "connect with token" button).
+    # manual cookie set by the dev frontend's token field).
     # ?anonymous=1 forces the shared anonymous group.
     force_anonymous = websocket.query_params.get("anonymous") == "1"
     api_key = None
