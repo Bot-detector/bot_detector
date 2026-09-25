@@ -154,20 +154,23 @@ services:
   # COMPONENTS
   firehose:
     container_name: firehose
-    image: bd/firehose:dev
+    image: bd/firehose:prd
     build:
       context: ./
       dockerfile: ./projects/firehose/Dockerfile
-      target: dev
+      target: prod
     ports:
       - 8000:5000
-    volumes:
-      - ./bases:/project/bases
-      - ./components:/project/components
     networks:
       - botdetector-network
     env_file:
       - .env
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request,sys; sys.exit(0 if urllib.request.urlopen(\"http://localhost:5000/\").getcode()==200 else 1)'"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     depends_on:
       kafka:
         condition: service_healthy

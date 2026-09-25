@@ -61,3 +61,13 @@ dev-mode-dirs = [
 
 [tool.hatch.metadata]
 allow-direct-references = true
+
+[tool.mypy]
+# bricks are plain source dirs on sys.path (see _bot_detector.pth); without
+# mypy_path mypy resolves bot_detector.* from site-packages and skips them
+# (import-untyped, no py.typed markers)
+namespace_packages = true
+explicit_package_bases = true
+mypy_path = ["components", "bases"]
+# other bricks have pre-existing errors; extend as they get cleaned up
+files = ["bases/bot_detector/firehose"]
