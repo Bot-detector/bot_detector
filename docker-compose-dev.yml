@@ -154,6 +154,32 @@ services:
       "
 
   # COMPONENTS
+  firehose:
+    container_name: firehose
+    image: bd/firehose:dev
+    build:
+      context: ./
+      dockerfile: ./projects/firehose/Dockerfile
+      target: dev
+    ports:
+      - 8000:5000
+    volumes:
+      - ./bases:/project/bases
+      - ./components:/project/components
+    networks:
+      - botdetector-network
+    env_file:
+      - .env
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kafka_setup:
+        condition: service_completed_successfully
+      mysql:
+        condition: service_healthy
+      mysql_setup:
+        condition: service_completed_successfully
+
   hiscore_scraper:
     container_name: hiscore_scraper
     image: bd/hiscore_scraper:dev
