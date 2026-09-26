@@ -22,6 +22,74 @@ from seeders.reports import (
 
 config = MySQLSeederConfig()
 
+SIGHTING_SQL = sqlalchemy.text("""
+INSERT IGNORE INTO report_sighting (reporting_id, reported_id, manual_detect)
+VALUES (:reporting_id, :reported_id, :manual_detect)
+""")
+SIGHTING_LOOKUP_SQL = sqlalchemy.text("""
+SELECT report_sighting_id FROM report_sighting
+WHERE reporting_id = :reporting_id
+  AND reported_id = :reported_id
+  AND manual_detect = :manual_detect
+""")
+GEAR_SQL = sqlalchemy.text("""
+INSERT IGNORE INTO report_gear (
+    equip_head_id, equip_amulet_id, equip_torso_id, equip_legs_id,
+    equip_boots_id, equip_cape_id, equip_hands_id, equip_weapon_id, equip_shield_id
+) VALUES (
+    :equip_head_id, :equip_amulet_id, :equip_torso_id, :equip_legs_id,
+    :equip_boots_id, :equip_cape_id, :equip_hands_id, :equip_weapon_id, :equip_shield_id
+)
+""")
+GEAR_LOOKUP_SQL = sqlalchemy.text("""
+SELECT report_gear_id FROM report_gear
+WHERE equip_head_id <=> :equip_head_id
+  AND equip_amulet_id <=> :equip_amulet_id
+  AND equip_torso_id <=> :equip_torso_id
+  AND equip_legs_id <=> :equip_legs_id
+  AND equip_boots_id <=> :equip_boots_id
+  AND equip_cape_id <=> :equip_cape_id
+  AND equip_hands_id <=> :equip_hands_id
+  AND equip_weapon_id <=> :equip_weapon_id
+  AND equip_shield_id <=> :equip_shield_id
+""")
+LOCATION_SQL = sqlalchemy.text("""
+INSERT IGNORE INTO report_location (region_id, x_coord, y_coord, z_coord)
+VALUES (:region_id, :x_coord, :y_coord, :z_coord)
+""")
+LOCATION_LOOKUP_SQL = sqlalchemy.text("""
+SELECT report_location_id FROM report_location
+WHERE region_id = :region_id
+  AND x_coord = :x_coord
+  AND y_coord = :y_coord
+  AND z_coord = :z_coord
+""")
+REPORT_SQL = sqlalchemy.text("""
+INSERT IGNORE INTO report (report_sighting_id, report_location_id, report_gear_id,
+    reported_at, on_members_world, on_pvp_world, world_number, region_id)
+VALUES (:report_sighting_id, :report_location_id, :report_gear_id,
+    :reported_at, :on_members_world, :on_pvp_world, :world_number, :region_id)
+""")
+
+
+async def insert_ignore_get_id(
+    insert_sql: sqlalchemy.TextClause,
+    lookup_sql: sqlalchemy.TextClause,
+    params: dict,
+) -> int:
+    """Insert a row and return its id, resolving duplicates by unique key.
+
+    INSERT IGNORE returns lastrowid 0 when the row was skipped, so the id of
+    the existing row is looked up by its unique key instead.
+    """
+    async with Session.begin() as session:
+        result = await session.execute(insert_sql, params)
+        row_id = result.lastrowid
+        if row_id:
+            return row_id
+        existing = await session.execute(lookup_sql, params)
+        return existing.scalar() or 0
+
 
 async def get_player_count() -> int:
     sql = sqlalchemy.text("""
@@ -93,49 +161,28 @@ async def insert_reports(player_ids: list[int], count: int) -> None:
     gear_ids: list[int] = []
     location_ids: list[int] = []
 
-    sighting_sql = sqlalchemy.text("""
-    INSERT IGNORE INTO report_sighting (reporting_id, reported_id, manual_detect)
-    VALUES (:reporting_id, :reported_id, :manual_detect)
-    """)
-    gear_sql = sqlalchemy.text("""
-    INSERT IGNORE INTO report_gear (
-        equip_head_id, equip_amulet_id, equip_torso_id, equip_legs_id,
-        equip_boots_id, equip_cape_id, equip_hands_id, equip_weapon_id, equip_shield_id
-    ) VALUES (
-        :equip_head_id, :equip_amulet_id, :equip_torso_id, :equip_legs_id,
-        :equip_boots_id, :equip_cape_id, :equip_hands_id, :equip_weapon_id, :equip_shield_id
-    )
-    """)
-    location_sql = sqlalchemy.text("""
-    INSERT IGNORE INTO report_location (region_id, x_coord, y_coord, z_coord)
-    VALUES (:region_id, :x_coord, :y_coord, :z_coord)
-    """)
-    report_sql = sqlalchemy.text("""
-    INSERT INTO report (report_sighting_id, report_location_id, report_gear_id,
-        reported_at, on_members_world, on_pvp_world, world_number, region_id)
-    VALUES (:report_sighting_id, :report_location_id, :report_gear_id,
-        :reported_at, :on_members_world, :on_pvp_world, :world_number, :region_id)
-    """)
-
     for sighting in create_report_sightings(player_ids=player_ids, count=count):
-        async with Session.begin() as session:
-            result = await session.execute(
-                sighting_sql, sighting.model_dump(mode="json")
+        sighting_ids.append(
+            await insert_ignore_get_id(
+                SIGHTING_SQL, SIGHTING_LOOKUP_SQL, sighting.model_dump(mode="json")
             )
-            sighting_ids.append(result.lastrowid)
+        )
 
     for gear in create_report_gear(count=count):
-        async with Session.begin() as session:
-            result = await session.execute(gear_sql, gear.model_dump(mode="json"))
-            gear_ids.append(result.lastrowid)
+        gear_ids.append(
+            await insert_ignore_get_id(
+                GEAR_SQL, GEAR_LOOKUP_SQL, gear.model_dump(mode="json")
+            )
+        )
 
     for location in create_report_locations(count=count):
-        async with Session.begin() as session:
-            result = await session.execute(
-                location_sql, location.model_dump(mode="json")
+        location_ids.append(
+            await insert_ignore_get_id(
+                LOCATION_SQL, LOCATION_LOOKUP_SQL, location.model_dump(mode="json")
             )
-            location_ids.append(result.lastrowid)
+        )
 
+    inserted = 0
     for report in create_reports(
         sighting_ids=sighting_ids,
         gear_ids=gear_ids,
@@ -143,9 +190,10 @@ async def insert_reports(player_ids: list[int], count: int) -> None:
         count=count,
     ):
         async with Session.begin() as session:
-            await session.execute(report_sql, report.model_dump(mode="json"))
+            result = await session.execute(REPORT_SQL, report.model_dump(mode="json"))
+            inserted += result.rowcount
 
-    print(f"Seeded {count} reports")
+    print(f"Seeded {inserted} reports ({count - inserted} duplicates skipped)")
 
 
 async def insert_aged_reports(
@@ -160,52 +208,31 @@ async def insert_aged_reports(
     gear_ids: list[int] = []
     location_ids: list[int] = []
 
-    sighting_sql = sqlalchemy.text("""
-    INSERT IGNORE INTO report_sighting (reporting_id, reported_id, manual_detect)
-    VALUES (:reporting_id, :reported_id, :manual_detect)
-    """)
-    gear_sql = sqlalchemy.text("""
-    INSERT IGNORE INTO report_gear (
-        equip_head_id, equip_amulet_id, equip_torso_id, equip_legs_id,
-        equip_boots_id, equip_cape_id, equip_hands_id, equip_weapon_id, equip_shield_id
-    ) VALUES (
-        :equip_head_id, :equip_amulet_id, :equip_torso_id, :equip_legs_id,
-        :equip_boots_id, :equip_cape_id, :equip_hands_id, :equip_weapon_id, :equip_shield_id
-    )
-    """)
-    location_sql = sqlalchemy.text("""
-    INSERT IGNORE INTO report_location (region_id, x_coord, y_coord, z_coord)
-    VALUES (:region_id, :x_coord, :y_coord, :z_coord)
-    """)
-    report_sql = sqlalchemy.text("""
-    INSERT INTO report (report_sighting_id, report_location_id, report_gear_id,
-        reported_at, on_members_world, on_pvp_world, world_number, region_id)
-    VALUES (:report_sighting_id, :report_location_id, :report_gear_id,
-        :reported_at, :on_members_world, :on_pvp_world, :world_number, :region_id)
-    """)
-
     for sighting in create_report_sightings(player_ids=player_ids, count=count):
-        async with Session.begin() as session:
-            result = await session.execute(
-                sighting_sql, sighting.model_dump(mode="json")
+        sighting_ids.append(
+            await insert_ignore_get_id(
+                SIGHTING_SQL, SIGHTING_LOOKUP_SQL, sighting.model_dump(mode="json")
             )
-            sighting_ids.append(result.lastrowid)
+        )
 
     for gear in create_report_gear(count=count):
-        async with Session.begin() as session:
-            result = await session.execute(gear_sql, gear.model_dump(mode="json"))
-            gear_ids.append(result.lastrowid)
+        gear_ids.append(
+            await insert_ignore_get_id(
+                GEAR_SQL, GEAR_LOOKUP_SQL, gear.model_dump(mode="json")
+            )
+        )
 
     for location in create_report_locations(count=count):
-        async with Session.begin() as session:
-            result = await session.execute(
-                location_sql, location.model_dump(mode="json")
+        location_ids.append(
+            await insert_ignore_get_id(
+                LOCATION_SQL, LOCATION_LOOKUP_SQL, location.model_dump(mode="json")
             )
-            location_ids.append(result.lastrowid)
+        )
 
     cutoff = datetime.now() - timedelta(days=retention_days)
     old_count = count // 2
 
+    inserted = 0
     for i in range(count):
         if i < old_count:
             reported_at = cutoff - timedelta(days=random.randint(1, 30))
@@ -231,11 +258,13 @@ async def insert_aged_reports(
             region_id=random.randint(1, 15000),
         )
         async with Session.begin() as session:
-            await session.execute(report_sql, report.model_dump(mode="json"))
+            result = await session.execute(REPORT_SQL, report.model_dump(mode="json"))
+            inserted += result.rowcount
 
     print(
-        f"Seeded {count} aged reports "
-        f"({old_count} older than {retention_days}d retention cutoff)"
+        f"Seeded {inserted} aged reports "
+        f"({count - inserted} duplicates skipped, "
+        f"{old_count} older than {retention_days}d retention cutoff)"
     )
 
 
