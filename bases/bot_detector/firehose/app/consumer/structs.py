@@ -1,4 +1,8 @@
-from bot_detector.event_queue.structs import ReportsToInsertStruct, ScrapedStruct
+from bot_detector.event_queue.structs import (
+    NotFoundStruct,
+    ReportsToInsertStruct,
+    ScrapedStruct,
+)
 from pydantic import BaseModel
 
 ANONYMOUS_CONSUMER_GROUP_PREFIX = "fh-anonymous"
@@ -18,6 +22,7 @@ def report_ts(message: BaseModel) -> float | None:
 # permission for keyed access)
 TOPIC_MODELS: dict[str, type[BaseModel]] = {
     "players.scraped": ScrapedStruct,
+    "players.not_found": NotFoundStruct,
     "reports.to_insert": ReportsToInsertStruct,
 }
 
