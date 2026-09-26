@@ -448,15 +448,5 @@ INSERT INTO apiPermissions (permission)
 SELECT 'firehose' FROM DUAL
 WHERE NOT EXISTS (SELECT 1 FROM apiPermissions WHERE permission = 'firehose');
 
--- Ops: allowlisting a discord user for the firehose is done OUTSIDE this
--- stack. The firehose authenticates the discord access token, derives
--- username = CONCAT('discord_', <discord_id>), and requires:
---   1. an active apiUser row with that username
---   2. the 'firehose' permission for that user
--- Example:
--- INSERT INTO apiUser (username, token, is_active)
---   VALUES ('discord_123456789012345678', 'not-used-by-firehose', 1);
--- INSERT INTO apiUserPerms (user_id, permission_id)
---   SELECT u.id, p.id FROM apiUser u, apiPermissions p
---   WHERE u.username = 'discord_123456789012345678'
---     AND p.permission = 'firehose';
+-- use 99_local_allowlist.sql to add users to the firehose allowlist
+

@@ -181,3 +181,7 @@ _infra/_minio_data/*
 # firehose dev frontend
 _infra/_firehose_frontend/node_modules/
 _infra/_firehose_frontend/dist/
+
+# local mysql init (personal firehose allowlist, not for git)
+_infra/_mysql/docker-entrypoint-initdb.d/99_*.sql
+
