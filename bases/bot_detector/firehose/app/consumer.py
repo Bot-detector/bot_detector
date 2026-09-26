@@ -1,4 +1,3 @@
-import hashlib
 import logging
 from collections.abc import AsyncIterator
 from typing import Any, Protocol, runtime_checkable
@@ -17,8 +16,8 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
-ANONYMOUS_CONSUMER_GROUP_PREFIX = "firehose-anonymous"
-KEYED_CONSUMER_GROUP_PREFIX = "firehose"
+ANONYMOUS_CONSUMER_GROUP_PREFIX = "fh-anonymous"
+KEYED_CONSUMER_GROUP_PREFIX = "fh"
 
 # hardcoded catalog: topics exposed by the firehose -> message model
 # (add entries here to expose more topics; each needs a `firehose.<topic>`
@@ -66,8 +65,10 @@ class QueueRepo:
     def resolve_consumer_group(self, user: AuthUser, topic: str) -> str:
         if user.name == ANONYMOUS_USER:
             return f"{ANONYMOUS_CONSUMER_GROUP_PREFIX}-{topic}"
-        digest = hashlib.sha256(user.name.encode("utf-8")).hexdigest()[:12]
-        return f"{KEYED_CONSUMER_GROUP_PREFIX}-{topic}-{user.name}-{digest}"
+        return (
+            f"{KEYED_CONSUMER_GROUP_PREFIX}-{topic}-"
+            f"{user.name.removeprefix('discord_')}"
+        )
 
     def create_consumer(
         self, user: AuthUser, topic: str

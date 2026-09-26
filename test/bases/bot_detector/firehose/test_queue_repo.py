@@ -20,7 +20,7 @@ def repo() -> QueueRepo:
 def test_resolve_consumer_group_anonymous(repo: QueueRepo):
     assert (
         repo.resolve_consumer_group(user=ANONYMOUS, topic=TOPIC)
-        == "firehose-anonymous-players.scraped"
+        == "fh-anonymous-players.scraped"
     )
 
 
@@ -30,10 +30,16 @@ def test_resolve_consumer_group_keyed_is_stable_and_unique(repo: QueueRepo):
     group_one = repo.resolve_consumer_group(user=user_one, topic=TOPIC)
     group_two = repo.resolve_consumer_group(user=user_two, topic=TOPIC)
 
-    assert group_one.startswith("firehose-players.scraped-system-one-")
-    assert group_two.startswith("firehose-players.scraped-system-two-")
+    assert group_one.startswith("fh-players.scraped-system-one")
+    assert group_two.startswith("fh-players.scraped-system-two")
     assert group_one == repo.resolve_consumer_group(user=user_one, topic=TOPIC)
     assert group_one != group_two
+
+
+def test_resolve_consumer_group_strips_discord_prefix(repo: QueueRepo):
+    user = AuthUser(name="discord_123456789012345678")
+    group = repo.resolve_consumer_group(user=user, topic=TOPIC)
+    assert group == "fh-players.scraped-123456789012345678"
 
 
 def test_resolve_consumer_group_is_topic_scoped(repo: QueueRepo):
@@ -50,9 +56,7 @@ def test_create_consumer_anonymous_uses_shared_group_latest(repo: QueueRepo):
     backend = consumer._backend
     assert isinstance(backend, AIOKafkaConsumerAdapter)
     assert backend.config.consumer_config is not None
-    assert (
-        backend.config.consumer_config.group_id == "firehose-anonymous-players.scraped"
-    )
+    assert backend.config.consumer_config.group_id == "fh-anonymous-players.scraped"
     assert backend.config.consumer_config.auto_offset_reset == "latest"
     assert backend.config.topic == "players.scraped"
 
