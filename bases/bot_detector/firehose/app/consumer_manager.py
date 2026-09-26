@@ -1,65 +1,21 @@
 import asyncio
 import logging
 
-from bot_detector.event_queue.core import QueueConsumer
 from bot_detector.firehose.app.auth.auth import ANONYMOUS_USER, AuthUser
 from bot_detector.firehose.app.consumer import QueueRepoProtocol
+from bot_detector.firehose.app.group_stream import (
+    DelayedGroupStream,
+    GroupStream,
+)
 from bot_detector.firehose.app.metrics import FIREHOSE_CONSUMERS, stream_type
-from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
-QUEUE_MAX_SIZE = 1000
-
-
-def serialize(message: BaseModel) -> str:
-    import orjson
-
-    return orjson.dumps(message.model_dump()).decode("utf-8")
-
-
-class GroupStream:
-    """One shared kafka consumer fanned out over an internal queue.
-
-    Multiple websocket connections may await get(); each message is
-    delivered exactly once, to whichever connection asks first.
-    """
-
-    def __init__(
-        self,
-        topic: str,
-        group: str,
-        anonymous: bool,
-        consumer: QueueConsumer[BaseModel],
-        loop: asyncio.AbstractEventLoop,
-    ):
-        self.topic = topic
-        self.group = group
-        self.anonymous = anonymous
-        self.type = stream_type(anonymous=anonymous)
-        self.count = 0
-        self._consumer = consumer
-        self._queue: asyncio.Queue = asyncio.Queue(maxsize=QUEUE_MAX_SIZE)
-        self._loop = loop
-        self._task = loop.create_task(self._pump())
-
-    async def get(self) -> BaseModel | Exception:
-        return await self._queue.get()
-
-    async def _pump(self) -> None:
-        try:
-            await self._consumer.start()
-            while True:
-                message = await self._consumer.get_one()
-                await self._queue.put(message)
-        except asyncio.CancelledError:
-            pass
-        except Exception:
-            logger.exception(f"pump failed for group={self.group}")
-
-    async def stop(self) -> None:
-        self._task.cancel()
-        await self._consumer.stop()
+# stream class per topic; unknown topics get the plain stream
+TOPIC_STREAMS: dict[str, type[GroupStream]] = {
+    "players.scraped": GroupStream,
+    "reports.to_insert": DelayedGroupStream,
+}
 
 
 class ConsumerManager:
@@ -78,7 +34,8 @@ class ConsumerManager:
             if isinstance(consumer, Exception):
                 return consumer
             anonymous = user.name == ANONYMOUS_USER
-            stream = GroupStream(
+            stream_cls = TOPIC_STREAMS.get(topic, GroupStream)
+            stream = stream_cls(
                 topic=topic,
                 group=group,
                 anonymous=anonymous,

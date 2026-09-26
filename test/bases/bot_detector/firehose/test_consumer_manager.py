@@ -8,6 +8,14 @@ from bot_detector.firehose.app.consumer_manager import ConsumerManager, GroupStr
 from prometheus_client import REGISTRY
 
 
+from bot_detector.firehose.app.group_stream import (
+    DELAYED_TOPIC,
+    DelayedGroupStream,
+)
+
+TOPIC = "players.scraped"
+
+
 class FakeConsumer(QueueConsumer[ScrapedStruct]):
     def __init__(self, group: str):
         self.group = group
@@ -158,3 +166,16 @@ async def test_consumer_gauges_track_lifecycle():
 
     await manager.release(user=user, topic=topic)
     assert gauge_value(topic, "keyed") == before
+
+
+@pytest.mark.asyncio
+async def test_reports_topic_gets_delayed_stream():
+    manager, _ = make_manager()
+    user = AuthUser(name="system-one")
+
+    stream = manager.get(user=user, topic=DELAYED_TOPIC)
+
+    assert isinstance(stream, DelayedGroupStream)
+    assert stream.DELAY_S == 2 * 60 * 60
+
+    await manager.release(user=user, topic=DELAYED_TOPIC)

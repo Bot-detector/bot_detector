@@ -2,7 +2,7 @@ import asyncio
 import logging
 
 from bot_detector.firehose.app.consumer import ALLOWED_TOPICS
-from bot_detector.firehose.app.consumer_manager import serialize
+from bot_detector.firehose.app.group_stream import serialize
 from bot_detector.firehose.app.metrics import (
     FIREHOSE_BYTES,
     FIREHOSE_CONNECTIONS,

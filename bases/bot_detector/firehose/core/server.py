@@ -8,9 +8,9 @@ from bot_detector.database.core import get_session_factory
 from bot_detector.firehose.api import firehose, me
 from bot_detector.firehose.app.auth.auth import ApiKeyAuthRepo
 from bot_detector.firehose.app.auth.discord import DiscordOAuth
+from bot_detector.firehose.app.connection_manager import ConnectionManager
 from bot_detector.firehose.app.consumer import QueueRepo
 from bot_detector.firehose.app.consumer_manager import ConsumerManager
-from bot_detector.firehose.app.connection_manager import ConnectionManager
 from bot_detector.firehose.app.state import FirehoseState
 from bot_detector.firehose.core.config import SETTINGS, Settings
 from bot_detector.firehose.core.logging import setup_logging
