@@ -3,9 +3,11 @@ from bot_detector.database.api.interface import ApiUserInterface
 from bot_detector.database.api.structs import ApiUserTableStruct
 from bot_detector.firehose.app.auth.auth import (
     ANONYMOUS,
+    WILDCARD_SCOPE,
     ApiKeyAuthRepo,
     AuthUser,
     InvalidApiKey,
+    firehose_permission,
 )
 from bot_detector.firehose.app.auth.discord import DiscordOAuth, DiscordUser
 from bot_detector.firehose.core.config import Settings
@@ -14,9 +16,13 @@ TOPIC = "players.scraped"
 
 
 class FakeUserRepo(ApiUserInterface):
-    def __init__(self, row: ApiUserTableStruct | None, allowed: bool):
+    def __init__(
+        self,
+        row: ApiUserTableStruct | None,
+        permissions: list[str] | None = None,
+    ):
         self.row = row
-        self.allowed = allowed
+        self.permissions = permissions or []
 
     async def log_usage(self, async_session, user_id, route, auto_commit=True):
         raise NotImplementedError
@@ -24,13 +30,13 @@ class FakeUserRepo(ApiUserInterface):
     async def has_permission(
         self, async_session, permission, token=None, user_name=None, user_id=None
     ):
-        return self.allowed
+        return permission in self.permissions
 
     async def get_user(self, async_session, user_name, is_active=None):
         return self.row
 
-    async def create_user(self, async_session, username, token, auto_commit=True):
-        raise NotImplementedError
+    async def get_permissions(self, async_session, user_id):
+        return self.permissions
 
 
 class FakeSession:
@@ -56,14 +62,14 @@ class FakeOAuth(DiscordOAuth):
 
 def make_repo(
     row: ApiUserTableStruct | None = None,
-    allowed: bool = False,
+    permissions: list[str] | None = None,
     oauth_result: DiscordUser | Exception | None = None,
     with_db: bool = True,
 ) -> ApiKeyAuthRepo:
     repo = ApiKeyAuthRepo(
         settings=Settings(),
         session_factory=FakeSessionFactory() if with_db else None,
-        user_repo=FakeUserRepo(row=row, allowed=allowed),
+        user_repo=FakeUserRepo(row=row, permissions=permissions),
     )
     if oauth_result is None and with_db:
         oauth_result = DiscordUser(id="123", username="someone")
@@ -72,7 +78,7 @@ def make_repo(
     return repo
 
 
-def make_row(user_id: int = 7, username: str = "discord_123") -> ApiUserTableStruct:
+def make_row(username: str = "discord_123") -> ApiUserTableStruct:
     return ApiUserTableStruct(
         username=username, token="legacy-not-used", is_active=True
     )
@@ -86,10 +92,10 @@ async def test_authenticate_no_key_returns_anonymous():
 
 
 @pytest.mark.asyncio
-async def test_authenticate_static_dev_key_returns_user():
+async def test_authenticate_static_dev_key_returns_wildcard_scope():
     repo = make_repo(with_db=False)
     user = await repo.authenticate(api_key="changeme-key-one", topic=TOPIC)
-    assert user == AuthUser(name="system-one")
+    assert user == AuthUser(name="system-one", scopes=[WILDCARD_SCOPE])
 
 
 @pytest.mark.asyncio
@@ -107,22 +113,30 @@ async def test_authenticate_discord_invalid_token_is_403():
 
 
 @pytest.mark.asyncio
-async def test_authenticate_registered_and_allowlisted_is_keyed():
-    repo = make_repo(row=make_row(), allowed=True)
+async def test_authenticate_registered_and_allowlisted_returns_scopes():
+    scopes = [firehose_permission(TOPIC), "discord_general"]
+    repo = make_repo(row=make_row(), permissions=scopes)
     user = await repo.authenticate(api_key="discord-access-token", topic=TOPIC)
-    assert user == AuthUser(name="discord_123")
+    assert user == AuthUser(name="discord_123", scopes=scopes)
 
 
 @pytest.mark.asyncio
-async def test_authenticate_registered_without_permission_is_403():
-    repo = make_repo(row=make_row(), allowed=False)
+async def test_authenticate_registered_without_topic_permission_is_403():
+    repo = make_repo(row=make_row(), permissions=["discord_general"])
+    user = await repo.authenticate(api_key="discord-access-token", topic=TOPIC)
+    assert isinstance(user, InvalidApiKey)
+
+
+@pytest.mark.asyncio
+async def test_authenticate_registered_without_permissions_is_403():
+    repo = make_repo(row=make_row(), permissions=[])
     user = await repo.authenticate(api_key="discord-access-token", topic=TOPIC)
     assert isinstance(user, InvalidApiKey)
 
 
 @pytest.mark.asyncio
 async def test_authenticate_unregistered_discord_user_is_403():
-    repo = make_repo(row=None, allowed=True)
+    repo = make_repo(row=None, permissions=[firehose_permission(TOPIC)])
     user = await repo.authenticate(api_key="discord-access-token", topic=TOPIC)
     assert isinstance(user, InvalidApiKey)
 
@@ -136,7 +150,7 @@ async def test_authenticate_db_failure_is_403():
     repo = ApiKeyAuthRepo(
         settings=Settings(),
         session_factory=FakeSessionFactory(),
-        user_repo=BrokenRepo(row=None, allowed=False),
+        user_repo=BrokenRepo(row=None, permissions=[]),
     )
     repo.discord_oauth = FakeOAuth(result=DiscordUser(id="123", username="someone"))
     user = await repo.authenticate(api_key="discord-access-token", topic=TOPIC)

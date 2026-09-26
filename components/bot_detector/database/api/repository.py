@@ -71,3 +71,19 @@ class ApiUserRepo(ApiUserInterface):
             query = query.where(ApiUserTableStruct.is_active == is_active)
         result = await async_session.execute(query)
         return result.scalar_one_or_none()
+
+    async def get_permissions(
+        self,
+        async_session: AsyncSession,
+        user_id: int,
+    ) -> list[str]:
+        query = (
+            select(ApiPermissionTableStruct.permission)
+            .join(
+                ApiUserPermTableStruct,
+                ApiUserPermTableStruct.permission_id == ApiPermissionTableStruct.id,
+            )
+            .where(ApiUserPermTableStruct.user_id == user_id)
+        )
+        result = await async_session.execute(query)
+        return list(result.scalars().all())

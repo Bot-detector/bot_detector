@@ -17,10 +17,5 @@ class Settings(BaseSettings):
         }
     )
 
-    # discord oauth2 (authorization code grant)
-    discord_client_id: str = ""
-    discord_client_secret: str = ""
-    discord_redirect_uri: str = "http://localhost:8000/login/callback"
-
 
 SETTINGS = Settings()

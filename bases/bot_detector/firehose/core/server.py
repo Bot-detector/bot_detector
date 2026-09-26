@@ -5,7 +5,7 @@ import uvicorn
 from aiohttp import ClientSession
 from bot_detector.database.core import Settings as DatabaseSettings
 from bot_detector.database.core import get_session_factory
-from bot_detector.firehose.api import firehose, login
+from bot_detector.firehose.api import firehose, me
 from bot_detector.firehose.app.auth.auth import ApiKeyAuthRepo
 from bot_detector.firehose.app.auth.discord import DiscordOAuth
 from bot_detector.firehose.app.consumer import QueueRepo
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 def init_routers(_app: FastAPI) -> None:
-    _app.include_router(login.router)
+    _app.include_router(me.router)
     _app.include_router(firehose.router)
     _app.mount("/metrics", make_asgi_app())
 
@@ -30,11 +30,7 @@ def init_routers(_app: FastAPI) -> None:
 async def lifespan(_app: FastAPI):
     state: FirehoseState = _app.state.firehose
     state.http_session = ClientSession()
-    state.discord_oauth = DiscordOAuth(
-        client_id=state.settings.discord_client_id,
-        client_secret=state.settings.discord_client_secret,
-        http=state.http_session,
-    )
+    state.discord_oauth = DiscordOAuth(http=state.http_session)
     state.auth_repo.discord_oauth = state.discord_oauth
     yield
     await state.consumer_manager.shutdown()

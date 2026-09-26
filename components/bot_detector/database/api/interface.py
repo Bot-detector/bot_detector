@@ -34,3 +34,11 @@ class ApiUserInterface(ABC):
         is_active: bool | None = None,
     ) -> ApiUserTableStruct | None:
         pass
+
+    @abstractmethod
+    async def get_permissions(
+        self,
+        async_session: AsyncSession,
+        user_id: int,
+    ) -> list[str]:
+        pass

@@ -10,8 +10,7 @@ from pydantic import BaseModel
 logger = logging.getLogger(__name__)
 
 ANONYMOUS_USER = "anonymous"
-API_KEY_COOKIE = "firehose_api_key"
-MANUAL_KEY_COOKIE = "firehose_api_key_manual"
+WILDCARD_SCOPE = "firehose.*"
 
 
 def firehose_permission(topic: str) -> str:
@@ -21,9 +20,10 @@ def firehose_permission(topic: str) -> str:
 
 class AuthUser(BaseModel):
     name: str
+    scopes: list[str] = []
 
 
-ANONYMOUS = AuthUser(name=ANONYMOUS_USER)
+ANONYMOUS = AuthUser(name=ANONYMOUS_USER, scopes=[])
 
 
 class InvalidApiKey(Exception):
@@ -44,14 +44,17 @@ class AuthRepoProtocol(Protocol):
 class ApiKeyAuthRepo:
     """Stateless auth: the credential is the discord access token.
 
+    The token lives entirely client-side (PKCE); this repo only
+    validates it on every request:
+
     - no credential            -> anonymous consumer group
     - invalid discord token    -> 403
     - not registered/allowlisted (apiUser.username = f"discord_{id}",
-      active, `firehose` permission) -> 403
+      active, `firehose.{topic}` permission) -> 403
     - registered + allowlisted -> own keyed consumer group
 
     The legacy apiUser.token column is never read or issued. Static dev
-    keys from settings are checked first.
+    keys from settings are checked first and hold the wildcard scope.
     """
 
     def __init__(
@@ -73,7 +76,7 @@ class ApiKeyAuthRepo:
 
         name = self._settings.api_keys.get(api_key)
         if name is not None:
-            return AuthUser(name=name)
+            return AuthUser(name=name, scopes=[WILDCARD_SCOPE])
 
         if self.discord_oauth is None or self._session_factory is None:
             return InvalidApiKey("auth backend not configured")
@@ -91,15 +94,13 @@ class ApiKeyAuthRepo:
                 )
                 if row is None:
                     return InvalidApiKey("not allowlisted")
-                allowed = await self._user_repo.has_permission(
-                    async_session=session,
-                    permission=firehose_permission(topic),
-                    user_id=row.id,
+                scopes = await self._user_repo.get_permissions(
+                    async_session=session, user_id=row.id
                 )
         except Exception as e:
             logger.warning(f"db auth failed: {e}")
             return InvalidApiKey("auth backend unavailable")
 
-        if not allowed:
+        if firehose_permission(topic) not in scopes:
             return InvalidApiKey("not allowlisted")
-        return AuthUser(name=username)
+        return AuthUser(name=username, scopes=scopes)

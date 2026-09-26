@@ -12,7 +12,6 @@ export default defineConfig({
     proxy: {
       // ws: true upgrades websocket connections (/firehose/{topic})
       "/firehose": { target, ws: true },
-      "/login": { target },
       "/me": { target },
     },
   },

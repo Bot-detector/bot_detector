@@ -1,7 +1,6 @@
 import asyncio
 import logging
 
-from bot_detector.firehose.app.auth.auth import API_KEY_COOKIE, MANUAL_KEY_COOKIE
 from bot_detector.firehose.app.consumer import ALLOWED_TOPICS
 from bot_detector.firehose.app.consumer_manager import serialize
 from bot_detector.firehose.app.metrics import (
@@ -28,16 +27,14 @@ async def firehose(websocket: WebSocket, topic: str) -> None:
         await websocket.close(code=4404, reason="unknown topic")
         return
 
-    # header for systems; cookie for browsers (login cookie, or the
-    # manual cookie set by the dev frontend's token field).
-    # ?anonymous=1 forces the shared anonymous group.
+    # header for systems; ?token= for browsers (a websocket cannot set
+    # headers from javascript). ?anonymous=1 forces the shared anonymous
+    # group.
     force_anonymous = websocket.query_params.get("anonymous") == "1"
     api_key = None
     if not force_anonymous:
-        api_key = (
-            websocket.headers.get("x-api-key")
-            or websocket.cookies.get(MANUAL_KEY_COOKIE)
-            or websocket.cookies.get(API_KEY_COOKIE)
+        api_key = websocket.headers.get("x-api-key") or websocket.query_params.get(
+            "token"
         )
     state: FirehoseState = websocket.app.state.firehose
 
