@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 from aiohttp import ClientError, ClientSession
 from aioresponses import aioresponses
@@ -37,6 +39,20 @@ async def test_get_current_user_returns_error_on_http_error():
                 payload={"message": "401: Unauthorized", "code": 0},
             )
             user = await oauth.get_current_user(access_token="a-bad-token")
+
+    assert isinstance(user, DiscordOAuthError)
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_returns_error_on_timeout():
+    async with ClientSession() as http:
+        oauth = build_oauth(http=http)
+        with aioresponses() as mocked:
+            mocked.get(
+                f"{DISCORD_API_BASE}/users/@me",
+                exception=asyncio.TimeoutError(),
+            )
+            user = await oauth.get_current_user(access_token="an-access-token")
 
     assert isinstance(user, DiscordOAuthError)
 

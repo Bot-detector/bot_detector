@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Any
 
@@ -7,6 +8,7 @@ from pydantic import BaseModel
 logger = logging.getLogger(__name__)
 
 DISCORD_API_BASE = "https://discord.com/api/v10"
+DEFAULT_TIMEOUT_S = 10.0
 
 
 class DiscordUser(BaseModel):
@@ -27,8 +29,13 @@ class DiscordOAuth:
     it is live via GET /users/@me.
     """
 
-    def __init__(self, http: aiohttp.ClientSession):
+    def __init__(
+        self,
+        http: aiohttp.ClientSession,
+        timeout_s: float = DEFAULT_TIMEOUT_S,
+    ):
         self._http = http
+        self._timeout = aiohttp.ClientTimeout(total=timeout_s)
 
     async def get_current_user(self, access_token: str) -> DiscordUser | Exception:
         try:
@@ -45,12 +52,17 @@ class DiscordOAuth:
     async def _get(self, path: str, token: str) -> dict[str, Any]:
         url = f"{DISCORD_API_BASE}{path}"
         headers = {"Authorization": f"Bearer {token}"}
-        async with self._http.get(url, headers=headers) as response:
-            body = await response.json()
-            if response.status != 200:
-                raise DiscordOAuthError(
-                    f"GET {path} returned {response.status}: {body}"
-                )
-            if not isinstance(body, dict):
-                raise DiscordOAuthError(f"GET {path} returned non-dict body")
-            return body
+        try:
+            async with self._http.get(
+                url, headers=headers, timeout=self._timeout
+            ) as response:
+                body = await response.json()
+        except asyncio.TimeoutError as e:
+            raise DiscordOAuthError(
+                f"GET {path} timed out after {self._timeout.total}s"
+            ) from e
+        if response.status != 200:
+            raise DiscordOAuthError(f"GET {path} returned {response.status}: {body}")
+        if not isinstance(body, dict):
+            raise DiscordOAuthError(f"GET {path} returned non-dict body")
+        return body
