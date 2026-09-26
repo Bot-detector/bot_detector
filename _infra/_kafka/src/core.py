@@ -8,6 +8,7 @@ sys.path.insert(0, "/app/_shared")
 
 from config import KafkaSeederConfig, load_names
 from seeders.players_banned import create_players_banned
+from seeders.players_not_found import create_players_not_found
 from seeders.players_scraped import create_players_scraped
 from seeders.players_to_scrape import create_players_to_scrape
 from seeders.reports_to_insert import create_reports_to_insert
@@ -90,6 +91,27 @@ def seed_reports_to_insert(
     print("Done seeding reports.to_insert")
 
 
+def seed_players_not_found(
+    producer: KafkaProducer,
+    names: list[str],
+    count: int,
+):
+    print(f"Seeding {count} not-found players to players.not_found...")
+
+    players = []
+    for to_scrape in create_players_to_scrape(names=names, count=count):
+        players.append(to_scrape.player_data)
+
+    for not_found in create_players_not_found(players, count):
+        producer.send(
+            topic="players.not_found",
+            value=not_found.model_dump(mode="json"),
+        )
+        print(f"  -> {not_found.player_data.name} (id={not_found.player_data.id})")
+    producer.flush()
+    print("Done seeding players.not_found")
+
+
 def seed_players_banned(
     producer: KafkaProducer,
     names: list[str],
@@ -134,6 +156,13 @@ def main():
             names=names,
             player_count=config.SEED_PLAYERS,
             scrapes_per_player=config.SEED_SCRAPES_PER_PLAYER,
+        )
+
+    if config.SEED_NOT_FOUND > 0:
+        seed_players_not_found(
+            producer=producer,
+            names=names,
+            count=config.SEED_NOT_FOUND,
         )
 
     if config.SEED_REPORTS > 0:
