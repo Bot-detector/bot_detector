@@ -3,7 +3,6 @@ from bot_detector.database.api.interface import ApiUserInterface
 from bot_detector.database.api.structs import ApiUserTableStruct
 from bot_detector.firehose.app.auth.auth import (
     ANONYMOUS,
-    WILDCARD_SCOPE,
     ApiKeyAuthRepo,
     AuthUser,
     Identity,
@@ -11,7 +10,6 @@ from bot_detector.firehose.app.auth.auth import (
     firehose_permission,
 )
 from bot_detector.firehose.app.auth.discord import DiscordOAuth, DiscordUser
-from bot_detector.firehose.core.config import Settings
 
 TOPIC = "players.scraped"
 
@@ -68,7 +66,6 @@ def make_repo(
     with_db: bool = True,
 ) -> ApiKeyAuthRepo:
     repo = ApiKeyAuthRepo(
-        settings=Settings(),
         session_factory=FakeSessionFactory() if with_db else None,
         user_repo=FakeUserRepo(row=row, permissions=permissions),
     )
@@ -90,13 +87,6 @@ async def test_authenticate_no_key_returns_anonymous():
     repo = make_repo(with_db=False)
     assert await repo.authenticate(api_key=None, topic=TOPIC) == ANONYMOUS
     assert await repo.authenticate(api_key="", topic=TOPIC) == ANONYMOUS
-
-
-@pytest.mark.asyncio
-async def test_authenticate_static_dev_key_returns_wildcard_scope():
-    repo = make_repo(with_db=False)
-    user = await repo.authenticate(api_key="changeme-key-one", topic=TOPIC)
-    assert user == AuthUser(name="system-one", scopes=[WILDCARD_SCOPE])
 
 
 @pytest.mark.asyncio
@@ -149,7 +139,6 @@ async def test_authenticate_db_failure_is_403():
             raise RuntimeError("db down")
 
     repo = ApiKeyAuthRepo(
-        settings=Settings(),
         session_factory=FakeSessionFactory(),
         user_repo=BrokenRepo(row=None, permissions=[]),
     )
@@ -163,15 +152,6 @@ async def test_identify_no_key_returns_anonymous_allowed():
     repo = make_repo(with_db=False)
     identity = await repo.identify(api_key=None)
     assert identity == Identity(user="anonymous", allowed=True, scopes=[])
-
-
-@pytest.mark.asyncio
-async def test_identify_static_dev_key_returns_wildcard():
-    repo = make_repo(with_db=False)
-    identity = await repo.identify(api_key="changeme-key-one")
-    assert identity == Identity(
-        user="system-one", allowed=True, scopes=[WILDCARD_SCOPE]
-    )
 
 
 @pytest.mark.asyncio
@@ -212,7 +192,6 @@ async def test_identify_db_failure_is_unknown_and_rejected():
             raise RuntimeError("db down")
 
     repo = ApiKeyAuthRepo(
-        settings=Settings(),
         session_factory=FakeSessionFactory(),
         user_repo=BrokenRepo(row=None, permissions=[]),
     )

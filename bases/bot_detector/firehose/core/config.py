@@ -1,4 +1,3 @@
-from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -7,15 +6,6 @@ class Settings(BaseSettings):
 
     host: str = "0.0.0.0"
     port: int = 5000
-
-    # hardcoded for now; swap for DB-backed validation later
-    # override via env: API_KEYS='{"key": "system-name"}'
-    api_keys: dict[str, str] = Field(
-        default_factory=lambda: {
-            "changeme-key-one": "system-one",
-            "changeme-key-two": "system-two",
-        }
-    )
 
 
 SETTINGS = Settings()

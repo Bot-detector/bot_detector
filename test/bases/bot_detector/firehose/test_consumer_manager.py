@@ -5,13 +5,11 @@ from bot_detector.event_queue.core import QueueConsumer
 from bot_detector.event_queue.structs import ScrapedStruct
 from bot_detector.firehose.app.auth.auth import AuthUser
 from bot_detector.firehose.app.consumer_manager import ConsumerManager, GroupStream
-from prometheus_client import REGISTRY
-
-
 from bot_detector.firehose.app.group_stream import (
     DELAYED_TOPIC,
     DelayedGroupStream,
 )
+from prometheus_client import REGISTRY
 
 TOPIC = "players.scraped"
 
