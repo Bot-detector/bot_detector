@@ -6,6 +6,7 @@ class Settings(BaseSettings):
 
     host: str = "0.0.0.0"
     port: int = 5000
+    metrics_port: int = 8000
 
 
 SETTINGS = Settings()
