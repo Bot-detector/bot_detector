@@ -13,7 +13,7 @@ from bot_detector.firehose.app.consumer import QueueRepo
 from bot_detector.firehose.app.consumer_manager import ConsumerManager
 from bot_detector.firehose.app.state import FirehoseState
 from bot_detector.firehose.core.config import SETTINGS, Settings
-from bot_detector.firehose.core.logging import setup_logging
+from bot_detector import logfmt  # noqa: F401  # configures root logging on import
 from fastapi import FastAPI
 from prometheus_client import make_asgi_app
 
@@ -57,7 +57,6 @@ def create_app(settings: Settings) -> FastAPI:
     return _app
 
 
-setup_logging()
 app = create_app(settings=SETTINGS)
 
 
