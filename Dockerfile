@@ -7,7 +7,7 @@ ENV UV_COMPILE_BYTECODE=1
 WORKDIR /app
 
 FROM base AS builder
-COPY --from=ghcr.io/astral-sh/uv:0.5.4 /uv /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.5.13 /uv /bin/
 
 COPY ./pyproject.toml ./uv.lock ./README.md ./
 COPY ./bases ./bases
@@ -17,7 +17,7 @@ RUN --mount=type=cache,id=uv_cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-install-project
 
 FROM base AS dev
-COPY --from=ghcr.io/astral-sh/uv:0.5.4 /uv uvx/ /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.5.13 /uv /uvx /bin/
 
 WORKDIR /app
 

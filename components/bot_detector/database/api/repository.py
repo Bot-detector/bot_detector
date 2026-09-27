@@ -29,12 +29,12 @@ class ApiUserRepo(ApiUserInterface):
         self,
         async_session: AsyncSession,
         permission: str,
-        token: str,
+        token: str | None = None,
         user_name: str | None = None,
         user_id: int | None = None,
     ) -> bool:
-        if not user_name and user_id is None:
-            raise ValueError("user_name or user_id is required")
+        if not token and user_id is None and user_name is None:
+            raise ValueError("token, user_name or user_id is required")
         api_user = ApiUserTableStruct
         api_user_perms = ApiUserPermTableStruct
         api_permissions = ApiPermissionTableStruct
@@ -42,9 +42,10 @@ class ApiUserRepo(ApiUserInterface):
             select(api_user_perms)
             .join(api_user, api_user_perms.user_id == api_user.id)
             .join(api_permissions, api_user_perms.permission_id == api_permissions.id)
-            .where(api_user.token == token)
             .where(api_permissions.permission == permission)
         )
+        if token is not None:
+            query = query.where(api_user.token == token)
         if user_name is not None:
             query = query.where(api_user.username == user_name)
         if user_id is not None:
@@ -70,3 +71,19 @@ class ApiUserRepo(ApiUserInterface):
             query = query.where(ApiUserTableStruct.is_active == is_active)
         result = await async_session.execute(query)
         return result.scalar_one_or_none()
+
+    async def get_permissions(
+        self,
+        async_session: AsyncSession,
+        user_id: int,
+    ) -> list[str]:
+        query = (
+            select(ApiPermissionTableStruct.permission)
+            .join(
+                ApiUserPermTableStruct,
+                ApiUserPermTableStruct.permission_id == ApiPermissionTableStruct.id,
+            )
+            .where(ApiUserPermTableStruct.user_id == user_id)
+        )
+        result = await async_session.execute(query)
+        return list(result.scalars().all())

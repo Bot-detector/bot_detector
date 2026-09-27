@@ -20,7 +20,7 @@ class ApiUserInterface(ABC):
         self,
         async_session: AsyncSession,
         permission: str,
-        token: str,
+        token: str | None = None,
         user_name: str | None = None,
         user_id: int | None = None,
     ) -> bool:
@@ -33,4 +33,12 @@ class ApiUserInterface(ABC):
         user_name: str,
         is_active: bool | None = None,
     ) -> ApiUserTableStruct | None:
+        pass
+
+    @abstractmethod
+    async def get_permissions(
+        self,
+        async_session: AsyncSession,
+        user_id: int,
+    ) -> list[str]:
         pass

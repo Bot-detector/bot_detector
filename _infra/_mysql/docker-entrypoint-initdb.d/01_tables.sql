@@ -443,3 +443,11 @@ SELECT v.id, s.id, 'Real_Player', 0.85, 1, 'looks legit', 'Real_Player'
 FROM Players v, Players s
 WHERE v.name = 'extreme4all' AND s.name = 'ferrariic'
 LIMIT 1;
+-- firehose permission (allowlist for keyed firehose consumer groups)
+INSERT INTO apiPermissions (permission)
+SELECT 'firehose' FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM apiPermissions WHERE permission = 'firehose');
+
+-- use ./99_local.sql for testing local overrides (e.g. for seeding test data)
+-- also useful for adding permissions
+

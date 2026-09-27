@@ -26,5 +26,6 @@ packages = ["bot_detector"]
 
 [tool.polylith.bricks]
 "../../bases/bot_detector/job_prune_reports" = "bot_detector/job_prune_reports"
+"../../components/bot_detector/structs" = "bot_detector/structs"
 "../../components/bot_detector/database" = "bot_detector/database"
 "../../components/bot_detector/logfmt" = "bot_detector/logfmt"

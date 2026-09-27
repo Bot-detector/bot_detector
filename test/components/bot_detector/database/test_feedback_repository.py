@@ -157,5 +157,7 @@ async def test_get_feedback_export_by_id_and_name():
 async def test_get_feedback_export_raises_when_no_identifier():
     repo = FeedbackExportRepo()
 
-    with pytest.raises(ValueError, match="Either voter_player_id or voter_player_name"):
+    with pytest.raises(
+        ValueError, match="voter_player_id or voter_player_name must be provided"
+    ):
         await repo.get_feedback_export(AsyncMock())

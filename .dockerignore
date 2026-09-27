@@ -1,2 +1,17 @@
-**/.venv
+# never copy secrets
 .env
+
+# local environments / build artifacts
+**/.venv
+.venv-docker
+**/node_modules
+**/dist
+**/__pycache__
+**/.pytest_cache
+**/.mypy_cache
+
+# not needed inside images
+.git
+spec/
+test/
+development/

@@ -45,7 +45,7 @@ services:
       - SEED_PLAYERS=100
       - SEED_SCRAPES_PER_PLAYER=10
       - SEED_REPORTS=0
-      - RESET_TOPICS=true
+      - RESET_TOPICS=false
       - RANDOM_SEED=42
     networks:
       - botdetector-network
@@ -152,6 +152,35 @@ services:
       - botdetector-network
 
   # COMPONENTS
+  firehose:
+    container_name: firehose
+    image: bd/firehose:prd
+    build:
+      context: ./
+      dockerfile: ./projects/firehose/Dockerfile
+      target: prod
+    ports:
+      - 8000:5000
+    networks:
+      - botdetector-network
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request,sys; sys.exit(0 if urllib.request.urlopen(\"http://localhost:5000/\").getcode()==200 else 1)'"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kafka_setup:
+        condition: service_completed_successfully
+      mysql:
+        condition: service_healthy
+      mysql_setup:
+        condition: service_completed_successfully
+
   hiscore_scraper:
     container_name: hiscore_scraper
     image: bd/hiscore_scraper:prd

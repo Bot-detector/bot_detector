@@ -1,0 +1,34 @@
+[build-system]
+requires = ["hatchling", "hatch-polylith-bricks"]
+build-backend = "hatchling.build"
+
+[project]
+name = "firehose"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+
+dependencies = [
+    "aiokafka==0.12.0",
+    "aiohttp==3.11.11",
+    "asyncmy==0.2.11",
+    "fastapi==0.115.12",
+    "orjson==3.11.5",
+    "prometheus-client==0.22.0",
+    "pydantic-settings==2.7.0",
+    "sqlalchemy==2.0.44",
+    "uvicorn==0.34.2",
+    "websockets==15.0.1",
+]
+
+[project.scripts]
+firehose = "bot_detector.firehose.core.server:run"
+
+[tool.hatch.build.hooks.polylith-bricks]
+packages = ["bot_detector"]
+
+[tool.polylith.bricks]
+"../../bases/bot_detector/firehose" = "bot_detector/firehose"
+"../../components/bot_detector/event_queue" = "bot_detector/event_queue"
+"../../components/bot_detector/structs" = "bot_detector/structs"
+"../../components/bot_detector/database" = "bot_detector/database"
+"../../components/bot_detector/logfmt" = "bot_detector/logfmt"

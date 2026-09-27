@@ -47,6 +47,11 @@ class ReportToInsertStruct(BaseModel):
 def create_reports_to_insert(
     players: list[PlayerStruct], reports_per_player: int
 ) -> Generator[ReportToInsertStruct, None, None]:
+    # spread reports over the last 10h so the firehose 2h delay window has
+    # both eligible and not-yet-eligible messages; the offsets come from the
+    # seeded RNG, so runs are reproducible up to the wall-clock window
+    NOW_MINUS_10H_S = 10 * 60 * 60
+    base_ts = int(time.time())
     for player in players:
         for _ in range(reports_per_player):
             reporter = random.choice(players)
@@ -59,7 +64,7 @@ def create_reports_to_insert(
                     x_coord=random.randint(0, 5000),
                     y_coord=random.randint(0, 5000),
                     z_coord=random.randint(0, 3),
-                    ts=int(time.time()),
+                    ts=base_ts - random.randint(0, NOW_MINUS_10H_S),
                     manual_detect=0,
                     on_members_world=random.choice([0, 1]),
                     on_pvp_world=random.choice([0, 1]),
