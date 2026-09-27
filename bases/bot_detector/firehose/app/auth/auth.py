@@ -4,7 +4,6 @@ from typing import Any, Protocol
 from bot_detector.database.api.interface import ApiUserInterface
 from bot_detector.database.api.repository import ApiUserRepo
 from bot_detector.firehose.app.auth.discord import DiscordOAuth
-from bot_detector.firehose.core.config import Settings
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -66,18 +65,13 @@ class ApiKeyAuthRepo:
       (used by GET /me)
     - authenticate(api_key, topic) -> identify + `firehose.{topic}`
       permission gate (used by the websocket)
-
-    Static dev keys from settings are checked first and hold the
-    wildcard scope.
     """
 
     def __init__(
         self,
-        settings: Settings,
         session_factory: SessionFactoryProtocol | None = None,
         user_repo: ApiUserInterface | None = None,
     ):
-        self._settings = settings
         self._session_factory = session_factory
         self._user_repo = user_repo or ApiUserRepo()
         self.discord_oauth: DiscordOAuth | None = None
@@ -86,7 +80,6 @@ class ApiKeyAuthRepo:
         """Validate a credential without a topic gate.
 
         - no credential            -> anonymous, allowed
-        - static dev key           -> allowed, wildcard scope
         - invalid discord token    -> not allowed, identity unknown
         - not registered/allowlisted
           (apiUser.username = f"discord_{id}", active) -> not allowed,
@@ -97,10 +90,6 @@ class ApiKeyAuthRepo:
         """
         if not api_key:
             return Identity(user=ANONYMOUS_USER, allowed=True, scopes=[])
-
-        name = self._settings.api_keys.get(api_key)
-        if name is not None:
-            return Identity(user=name, allowed=True, scopes=[WILDCARD_SCOPE])
 
         if self.discord_oauth is None or self._session_factory is None:
             return Identity(user=None, allowed=False, scopes=[])

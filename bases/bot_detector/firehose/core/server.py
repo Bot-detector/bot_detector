@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 import uvicorn
 from aiohttp import ClientSession
+from bot_detector import logfmt  # noqa: F401  # configures root logging on import
 from bot_detector.database.core import Settings as DatabaseSettings
 from bot_detector.database.core import get_session_factory
 from bot_detector.firehose.api import firehose, me
@@ -13,7 +14,6 @@ from bot_detector.firehose.app.consumer import QueueRepo
 from bot_detector.firehose.app.consumer_manager import ConsumerManager
 from bot_detector.firehose.app.state import FirehoseState
 from bot_detector.firehose.core.config import SETTINGS, Settings
-from bot_detector import logfmt  # noqa: F401  # configures root logging on import
 from fastapi import FastAPI
 from prometheus_client import make_asgi_app
 
@@ -49,7 +49,7 @@ def create_app(settings: Settings) -> FastAPI:
     _app.state.firehose = FirehoseState(
         settings=settings,
         queue_repo=queue_repo,
-        auth_repo=ApiKeyAuthRepo(settings=settings, session_factory=session_factory),
+        auth_repo=ApiKeyAuthRepo(session_factory=session_factory),
         consumer_manager=ConsumerManager(queue_repo=queue_repo),
         connection_manager=ConnectionManager(),
     )
