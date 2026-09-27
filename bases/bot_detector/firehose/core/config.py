@@ -7,6 +7,7 @@ class Settings(BaseSettings):
 
     host: str = "0.0.0.0"
     port: int = 5000
+    metrics_port: int = 8000
 
     # hardcoded for now; swap for DB-backed validation later
     # override via env: API_KEYS='{"key": "system-name"}'
