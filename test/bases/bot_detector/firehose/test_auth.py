@@ -6,6 +6,7 @@ from bot_detector.firehose.app.auth.auth import (
     WILDCARD_SCOPE,
     ApiKeyAuthRepo,
     AuthUser,
+    Identity,
     InvalidApiKey,
     firehose_permission,
 )
@@ -155,3 +156,66 @@ async def test_authenticate_db_failure_is_403():
     repo.discord_oauth = FakeOAuth(result=DiscordUser(id="123", username="someone"))
     user = await repo.authenticate(api_key="discord-access-token", topic=TOPIC)
     assert isinstance(user, InvalidApiKey)
+
+
+@pytest.mark.asyncio
+async def test_identify_no_key_returns_anonymous_allowed():
+    repo = make_repo(with_db=False)
+    identity = await repo.identify(api_key=None)
+    assert identity == Identity(user="anonymous", allowed=True, scopes=[])
+
+
+@pytest.mark.asyncio
+async def test_identify_static_dev_key_returns_wildcard():
+    repo = make_repo(with_db=False)
+    identity = await repo.identify(api_key="changeme-key-one")
+    assert identity == Identity(
+        user="system-one", allowed=True, scopes=[WILDCARD_SCOPE]
+    )
+
+
+@pytest.mark.asyncio
+async def test_identify_invalid_discord_token_is_unknown_and_rejected():
+    repo = make_repo(oauth_result=RuntimeError("bad token"))
+    identity = await repo.identify(api_key="some-discord-token")
+    assert identity == Identity(user=None, allowed=False, scopes=[])
+
+
+@pytest.mark.asyncio
+async def test_identify_unregistered_discord_user_is_known_and_rejected():
+    repo = make_repo(row=None)
+    identity = await repo.identify(api_key="discord-access-token")
+    assert identity == Identity(user="discord_123", allowed=False, scopes=[])
+
+
+@pytest.mark.asyncio
+async def test_identify_registered_returns_all_scopes():
+    scopes = [firehose_permission(TOPIC), "discord_general"]
+    repo = make_repo(row=make_row(), permissions=scopes)
+    identity = await repo.identify(api_key="discord-access-token")
+    assert identity == Identity(user="discord_123", allowed=True, scopes=scopes)
+
+
+@pytest.mark.asyncio
+async def test_identify_registered_without_firehose_permission_is_allowed():
+    repo = make_repo(row=make_row(), permissions=["discord_general"])
+    identity = await repo.identify(api_key="discord-access-token")
+    assert identity == Identity(
+        user="discord_123", allowed=True, scopes=["discord_general"]
+    )
+
+
+@pytest.mark.asyncio
+async def test_identify_db_failure_is_unknown_and_rejected():
+    class BrokenRepo(FakeUserRepo):
+        async def get_user(self, async_session, user_name, is_active=None):
+            raise RuntimeError("db down")
+
+    repo = ApiKeyAuthRepo(
+        settings=Settings(),
+        session_factory=FakeSessionFactory(),
+        user_repo=BrokenRepo(row=None, permissions=[]),
+    )
+    repo.discord_oauth = FakeOAuth(result=DiscordUser(id="123", username="someone"))
+    identity = await repo.identify(api_key="discord-access-token")
+    assert identity == Identity(user=None, allowed=False, scopes=[])

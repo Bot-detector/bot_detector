@@ -26,6 +26,19 @@ class AuthUser(BaseModel):
 ANONYMOUS = AuthUser(name=ANONYMOUS_USER, scopes=[])
 
 
+class Identity(BaseModel):
+    """Credential validation result without a topic gate.
+
+    - user None + not allowed  -> credential invalid (identity unknown)
+    - user set + not allowed   -> identity known but not allowlisted
+    - allowed                  -> registered; scopes hold every permission
+    """
+
+    user: str | None = None
+    allowed: bool = False
+    scopes: list[str] = []
+
+
 class InvalidApiKey(Exception):
     """Credential is not a valid discord token, or the identity is not
     registered / not allowlisted for a keyed group."""
@@ -36,6 +49,8 @@ class SessionFactoryProtocol(Protocol):
 
 
 class AuthRepoProtocol(Protocol):
+    async def identify(self, api_key: str | None) -> Identity: ...
+
     async def authenticate(
         self, api_key: str | None, topic: str
     ) -> AuthUser | Exception: ...
@@ -47,14 +62,13 @@ class ApiKeyAuthRepo:
     The token lives entirely client-side (PKCE); this repo only
     validates it on every request:
 
-    - no credential            -> anonymous consumer group
-    - invalid discord token    -> 403
-    - not registered/allowlisted (apiUser.username = f"discord_{id}",
-      active, `firehose.{topic}` permission) -> 403
-    - registered + allowlisted -> own keyed consumer group
+    - identify(api_key)  -> credential validation without a topic gate
+      (used by GET /me)
+    - authenticate(api_key, topic) -> identify + `firehose.{topic}`
+      permission gate (used by the websocket)
 
-    The legacy apiUser.token column is never read or issued. Static dev
-    keys from settings are checked first and hold the wildcard scope.
+    Static dev keys from settings are checked first and hold the
+    wildcard scope.
     """
 
     def __init__(
@@ -68,23 +82,33 @@ class ApiKeyAuthRepo:
         self._user_repo = user_repo or ApiUserRepo()
         self.discord_oauth: DiscordOAuth | None = None
 
-    async def authenticate(
-        self, api_key: str | None, topic: str
-    ) -> AuthUser | Exception:
+    async def identify(self, api_key: str | None) -> Identity:
+        """Validate a credential without a topic gate.
+
+        - no credential            -> anonymous, allowed
+        - static dev key           -> allowed, wildcard scope
+        - invalid discord token    -> not allowed, identity unknown
+        - not registered/allowlisted
+          (apiUser.username = f"discord_{id}", active) -> not allowed,
+          identity known
+        - registered               -> allowed, every permission held
+
+        The legacy apiUser.token column is never read or issued.
+        """
         if not api_key:
-            return ANONYMOUS
+            return Identity(user=ANONYMOUS_USER, allowed=True, scopes=[])
 
         name = self._settings.api_keys.get(api_key)
         if name is not None:
-            return AuthUser(name=name, scopes=[WILDCARD_SCOPE])
+            return Identity(user=name, allowed=True, scopes=[WILDCARD_SCOPE])
 
         if self.discord_oauth is None or self._session_factory is None:
-            return InvalidApiKey("auth backend not configured")
+            return Identity(user=None, allowed=False, scopes=[])
 
         duser = await self.discord_oauth.get_current_user(access_token=api_key)
         if isinstance(duser, Exception):
             logger.info(f"discord token rejected: {duser}")
-            return InvalidApiKey("invalid discord token")
+            return Identity(user=None, allowed=False, scopes=[])
 
         username = f"discord_{duser.id}"
         try:
@@ -93,14 +117,26 @@ class ApiKeyAuthRepo:
                     async_session=session, user_name=username, is_active=True
                 )
                 if row is None:
-                    return InvalidApiKey("not allowlisted")
+                    return Identity(user=username, allowed=False, scopes=[])
                 scopes = await self._user_repo.get_permissions(
                     async_session=session, user_id=row.id
                 )
         except Exception as e:
             logger.warning(f"db auth failed: {e}")
-            return InvalidApiKey("auth backend unavailable")
+            return Identity(user=None, allowed=False, scopes=[])
+        return Identity(user=username, allowed=True, scopes=scopes)
 
-        if firehose_permission(topic) not in scopes:
+    async def authenticate(
+        self, api_key: str | None, topic: str
+    ) -> AuthUser | Exception:
+        if not api_key:
+            return ANONYMOUS
+        identity = await self.identify(api_key=api_key)
+        if not identity.allowed or identity.user is None:
             return InvalidApiKey("not allowlisted")
-        return AuthUser(name=username, scopes=scopes)
+        if (
+            firehose_permission(topic) not in identity.scopes
+            and WILDCARD_SCOPE not in identity.scopes
+        ):
+            return InvalidApiKey("not allowlisted")
+        return AuthUser(name=identity.user, scopes=identity.scopes)

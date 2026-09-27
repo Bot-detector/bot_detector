@@ -14,8 +14,8 @@ validates the presented Discord access token:
 
 1. token is live -> GET `discord.com/api/v10/users/@me`
 2. user is allowlisted -> active `apiUser` row
-   (`username = discord_<id>`) holding the `firehose.<topic>` permission
-3. identity + scopes -> returned to the client
+   (`username = discord_<id>`)
+3. identity + allowed topics -> returned to the client
 
 ```mermaid
 sequenceDiagram
@@ -30,7 +30,7 @@ sequenceDiagram
     D-->>B: access_token + refresh_token
     B->>A: GET /me (X-API-Key: access_token)
     A->>D: GET /users/@me (bearer)
-    A-->>B: { user, allowed, scopes }
+    A-->>B: { user, allowed, topics }
     B->>A: WS /firehose/{topic}?token=access_token
 ```
 
@@ -75,23 +75,27 @@ the redirect target registered in the Discord application.
 - **anonymous** – connect without a credential (`?anonymous=1`), shared consumer group
 - **discord login** – client-side PKCE (`src/discordAuth.js`); tokens live in
   `localStorage`, auto-refresh happens before expiry and on demand
-- **token** – paste a discord access token, sent as `?token=` on the
-  websocket and `X-API-Key` on `/me`
 
 ## API contract
 
-- `GET /me?topic=...` with `X-API-Key` (or `?token=`):
+- `GET /me` with `X-API-Key` (no credential = anonymous):
 
 ```json
-{ "user": "discord_123456789012345678", "token": "...", "allowed": true, "scopes": ["firehose.players.scraped"] }
+{ "user": "discord_123456789012345678", "token": "...", "allowed": true, "topics": ["players.scraped"] }
 ```
 
-`allowed=false` means the token was rejected (invalid, not registered,
-or missing the `firehose.<topic>` permission). `scopes` lists every
-permission the user holds.
+`allowed=false` means the credential was rejected. `user` is then
+`null` (invalid discord token) or the known discord id (registered
+check failed, not allowlisted). `topics` lists every topic the
+identity may consume with a key; anonymous identities get every
+topic (shared consumer group).
 
 - `WS /firehose/{topic}?token=<access_token>` or `?anonymous=1`;
-  non-browser clients may send `X-API-Key` instead.
+  non-browser clients may send `X-API-Key` instead. The websocket
+  still enforces the `firehose.<topic>` permission per connection.
+
+In Swagger UI (`/docs`) use the Authorize button to set `X-API-Key`;
+"try it out" then sends the credential on `/me`.
 
 Allowlisting a user is a DB step outside this stack; see
 `_infra/_mysql/docker-entrypoint-initdb.d/01_tables.sql`.
@@ -197,7 +201,7 @@ export async function accessToken(): Promise<string | null> {
   }
 }
 
-// validate against the api: token -> allowlist -> scopes
+// validate against the api: token -> allowlist -> topics
 export async function whoAmI(): Promise<unknown> {
   const token = await accessToken();
   const res = await fetch("/me", {

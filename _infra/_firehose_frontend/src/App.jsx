@@ -38,11 +38,10 @@ export default function App() {
   const [identity, setIdentity] = useState({
     user: "checking...",
     allowed: null,
-    scopes: [],
+    topics: [],
   });
   const [topics, setTopics] = useState([]);
   const [topic, setTopic] = useState("");
-  const [token, setToken] = useState("");
   const [status, setStatus] = useState("disconnected");
   const [messages, setMessages] = useState([]);
   const [count, setCount] = useState(0);
@@ -56,9 +55,18 @@ export default function App() {
   const refreshIdentity = useCallback(async () => {
     try {
       const accessToken = await validAccessToken();
-      setIdentity(await fetchIdentity(accessToken));
+      const next = await fetchIdentity(accessToken);
+      setIdentity(next);
+      // keep the selection on a topic the identity may consume
+      if (next.allowed && next.user && next.user !== "anonymous") {
+        setTopic((current) =>
+          next.topics.length && !next.topics.includes(current)
+            ? next.topics[0]
+            : current,
+        );
+      }
     } catch {
-      setIdentity({ user: "unknown", allowed: null, scopes: [] });
+      setIdentity({ user: "unknown", allowed: null, topics: [] });
     }
   }, []);
 
@@ -98,7 +106,7 @@ export default function App() {
     if (wsRef.current) wsRef.current.close();
   }
 
-  async function connect({ anonymous = false, manual = false } = {}) {
+  async function connect({ anonymous = false } = {}) {
     if (wsRef.current && wsRef.current.readyState <= WebSocket.OPEN) return;
     if (!topic) {
       setStatus("no topic selected");
@@ -106,12 +114,12 @@ export default function App() {
     }
 
     const params = new URLSearchParams();
-    if (anonymous) {
-      params.set("anonymous", "1");
-      setIdentity({ user: "anonymous", allowed: true, scopes: [] });
+    const accessToken = anonymous ? null : await validAccessToken();
+    if (accessToken) {
+      params.set("token", accessToken);
     } else {
-      const accessToken = manual ? token.trim() : await validAccessToken();
-      if (accessToken) params.set("token", accessToken);
+      params.set("anonymous", "1");
+      setIdentity({ user: "anonymous", allowed: true, topics });
     }
 
     const proto = location.protocol === "https:" ? "wss://" : "ws://";
@@ -138,7 +146,6 @@ export default function App() {
 
   async function doLogout() {
     await discordLogout();
-    setToken("");
     refreshIdentity();
   }
 
@@ -153,14 +160,22 @@ export default function App() {
 
       <div className="mb-3 flex flex-wrap items-center gap-3">
         <span>
-          identity: <strong>{identity.user}</strong>
-          {identity.allowed === false && <em className="text-red-400"> (403 - token not allowed)</em>}
+          identity: <strong>{identity.user ?? "invalid token"}</strong>
+          {identity.allowed === false && (
+            <em className="text-red-400">
+              {identity.user ? " (not allowlisted)" : " (invalid token)"}
+            </em>
+          )}
         </span>
-        {identity.user === "anonymous" && identity.allowed !== false && (
-          <button className={btn} onClick={() => startLogin().catch((e) => setStatus(e.message))}>
-            login with discord
-          </button>
-        )}
+        {!loggedIn &&
+          (identity.allowed !== false || identity.user == null) && (
+            <button
+              className={btn}
+              onClick={() => startLogin().catch((e) => setStatus(e.message))}
+            >
+              login with discord
+            </button>
+          )}
         {loggedIn && (
           <button className={btn} onClick={doLogout}>
             logout
@@ -168,12 +183,12 @@ export default function App() {
         )}
       </div>
 
-      {loggedIn && identity.scopes.length > 0 && (
+      {loggedIn && identity.topics.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          scopes:
-          {identity.scopes.map((s) => (
-            <span key={s} className="rounded bg-neutral-800 px-2 py-0.5 text-xs">
-              {s}
+          topics:
+          {identity.topics.map((t) => (
+            <span key={t} className="rounded bg-neutral-800 px-2 py-0.5 text-xs">
+              {t}
             </span>
           ))}
         </div>
@@ -188,30 +203,20 @@ export default function App() {
             onChange={(e) => setTopic(e.target.value)}
             disabled={connected}
           >
-            {topics.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
+            {topics.map((t) => {
+              const keyedOnly = loggedIn && !identity.topics.includes(t);
+              return (
+                <option key={t} value={t} disabled={keyedOnly}>
+                  {t}
+                  {keyedOnly ? " (anonymous only)" : ""}
+                </option>
+              );
+            })}
           </select>
-        </label>
-        <label className="flex items-center gap-2">
-          token:
-          <input
-            className="w-80 rounded border border-neutral-600 bg-neutral-800 px-2 py-1.5"
-            type="password"
-            placeholder="discord access token (optional)"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            disabled={connected}
-          />
         </label>
       </div>
 
       <div className="mb-3 flex flex-wrap gap-3">
-        <button className={btn} onClick={() => connect({ manual: true })} disabled={connected}>
-          connect with token
-        </button>
         <button className={btn} onClick={() => connect()} disabled={connected}>
           connect with login
         </button>

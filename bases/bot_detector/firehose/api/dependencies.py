@@ -2,16 +2,13 @@
 
 from typing import Annotated
 
-from fastapi import Depends, Request
+from fastapi import Security
+from fastapi.security import APIKeyHeader
 
+API_KEY_HEADER = APIKeyHeader(
+    name="X-API-Key",
+    auto_error=False,
+    description="Discord access token (or static dev key).",
+)
 
-def get_api_key_http(request: Request) -> str | None:
-    """Resolve the credential for http endpoints.
-
-    header wins, then ?token= (parity with websocket, which cannot set
-    headers from a browser).
-    """
-    return request.headers.get("x-api-key") or request.query_params.get("token")
-
-
-ApiKey = Annotated[str | None, Depends(get_api_key_http)]
+ApiKey = Annotated[str | None, Security(API_KEY_HEADER)]
