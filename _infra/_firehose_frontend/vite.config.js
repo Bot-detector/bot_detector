@@ -11,8 +11,9 @@ export default defineConfig({
     port: 5173,
     proxy: {
       // ws: true upgrades websocket connections (/firehose/{topic})
-      "/firehose": { target, ws: true },
-      "/me": { target },
+      // changeOrigin: rewrite the Host header so remote https targets work
+      "/firehose": { target, ws: true, changeOrigin: true },
+      "/me": { target, changeOrigin: true },
     },
   },
 });
