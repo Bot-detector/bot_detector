@@ -177,3 +177,18 @@ async def test_reports_topic_gets_delayed_stream():
     assert stream.DELAY_S == 2 * 60 * 60
 
     await manager.release(user=user, topic=DELAYED_TOPIC)
+
+
+@pytest.mark.asyncio
+async def test_anonymous_stream_subscribes_per_connection():
+    manager, _ = make_manager()
+    user = AuthUser(name="anonymous")
+    topic = "players.scraped"
+
+    stream = manager.get(user=user, topic=topic)
+    assert isinstance(stream, GroupStream)
+
+    inbox = stream.subscribe()
+    assert inbox is not None
+
+    await manager.release(user=user, topic=topic)

@@ -75,10 +75,15 @@ the redirect target registered in the Discord application.
 The API endpoint is selectable in the UI (preset dropdown + free-form
 input): the dev proxy default, `localhost:5000`,
 `localhost:8000` (compose dev), and the live
-`https://firehose.osrsbotdetector.com`. A custom value can be typed;
-press Enter or leave the field to apply. The choice is persisted in
-`localStorage` and survives reloads; the default comes from
-`VITE_FIREHOSE_URL` (see `.env.example`).
+`https://firehose.osrsbotdetector.com`. A custom `host:port` can be
+typed (e.g. `http://192.168.1.10:9000`); press Enter or leave the
+field to apply. The choice is persisted in `localStorage` and
+survives reloads; the default comes from `VITE_FIREHOSE_URL` (see
+`.env.example`).
+
+The compose dev stack does not pin the api target via an env
+variable — pick the endpoint in the UI (`localhost:8000` for the
+compose firehose, or the live endpoint).
 
 `""` (dev proxy) keeps every request same-origin. An explicit URL is
 called directly by the browser (cross-origin); the api answers with

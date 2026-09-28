@@ -1,3 +1,4 @@
+import asyncio
 from typing import Protocol, runtime_checkable
 
 from pydantic import BaseModel
@@ -12,6 +13,10 @@ class GroupStreamProtocol(Protocol):
     anonymous: bool
     type: str
     count: int
+
+    def subscribe(self) -> asyncio.Queue | None: ...
+
+    def unsubscribe(self, inbox: asyncio.Queue | None) -> None: ...
 
     async def get(self) -> BaseModel | Exception: ...
 

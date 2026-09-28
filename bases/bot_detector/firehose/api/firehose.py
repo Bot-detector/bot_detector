@@ -50,6 +50,10 @@ async def firehose(websocket: WebSocket, topic: str) -> None:
         return
 
     conn_type = stream_type(anonymous=stream.anonymous)
+    # anonymous streams fan out: this connection gets its own inbox and a
+    # copy of every message; keyed streams compete on the shared queue
+    # and rebroadcast to the group's connections
+    inbox = stream.subscribe()
     await state.connection_manager.connect(websocket=websocket, group=stream.group)
     FIREHOSE_CONNECTIONS.labels(topic=topic, type=conn_type).inc()
     logger.info(
@@ -57,7 +61,10 @@ async def firehose(websocket: WebSocket, topic: str) -> None:
     )
     try:
         while True:
-            message = await stream.get()
+            if inbox is not None:
+                message = await inbox.get()
+            else:
+                message = await stream.get()
             if message is None:
                 continue
             if isinstance(message, Exception):
@@ -71,14 +78,16 @@ async def firehose(websocket: WebSocket, topic: str) -> None:
             FIREHOSE_BYTES.labels(topic=topic, type=conn_type).inc(
                 len(payload.encode("utf-8"))
             )
-            await state.connection_manager.broadcast(
-                message=payload, group=stream.group
-            )
+            if inbox is None:
+                await state.connection_manager.broadcast(
+                    message=payload, group=stream.group
+                )
     except WebSocketDisconnect:
         logger.info("client disconnected")
     except Exception:
         logger.exception("stream aborted")
     finally:
         FIREHOSE_CONNECTIONS.labels(topic=topic, type=conn_type).dec()
+        stream.unsubscribe(inbox)
         state.connection_manager.disconnect(websocket=websocket)
         await state.consumer_manager.release(user=user, topic=topic)
