@@ -21,6 +21,7 @@ on:
 env:
   QUAY_REGISTERY: quay.io/bot_detector/firehose
   DOCKERFILE: ./projects/firehose/Dockerfile
+  DEPLOYMENT_FILE: firehose-prd/deployment.yaml
   PROJECT_DIR: projects/firehose
 
 jobs:
@@ -30,12 +31,14 @@ jobs:
     outputs:
       QUAY_REGISTERY: ${{ env.QUAY_REGISTERY }}
       DOCKERFILE: ${{ env.DOCKERFILE }}
+      DEPLOYMENT_FILE: ${{ env.DEPLOYMENT_FILE }}
       PROJECT_DIR: ${{ env.PROJECT_DIR }}
     steps:
       - run: |
           echo "Exposing env vars to other jobs"
           echo "QUAY_REGISTERY=${{ env.QUAY_REGISTERY }}"
           echo "DOCKERFILE=${{ env.DOCKERFILE }}"
+          echo "DEPLOYMENT_FILE=${{ env.DEPLOYMENT_FILE }}"
           echo "PROJECT_DIR=${{ env.PROJECT_DIR }}"
 
   common:
@@ -56,5 +59,12 @@ jobs:
     secrets:
       QUAY_REGISTERY_PASSWORD: ${{ secrets.QUAY_REGISTERY_PASSWORD }}
 
-  # TODO: add deploy job once a firehose deployment.yaml exists
-  # (see _deploy.yml usage in other workflows)
+  deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'deploy to prd' }}
+    uses: ./.github/workflows/_deploy.yml
+    needs: [build, env_vars]
+    with:
+      registry: ${{ needs.env_vars.outputs.QUAY_REGISTERY }}
+      value_file: ${{ needs.env_vars.outputs.DEPLOYMENT_FILE }}
+    secrets:
+      HETZNER_ACTIONS_RUNNER_TOKEN: ${{ secrets.HETZNER_ACTIONS_RUNNER_TOKEN }}
