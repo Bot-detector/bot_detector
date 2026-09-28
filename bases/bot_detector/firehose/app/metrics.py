@@ -27,6 +27,11 @@ FIREHOSE_BYTES = Counter(
     "message payload bytes delivered to a consumer group",
     ["topic", "type"],
 )
+FIREHOSE_DROPPED = Counter(
+    "firehose_dropped_total",
+    "oldest messages evicted from a slow anonymous connection's inbox",
+    ["topic", "type"],
+)
 
 
 def stream_type(anonymous: bool) -> str:
