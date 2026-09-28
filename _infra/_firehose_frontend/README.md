@@ -81,13 +81,12 @@ press Enter or leave the field to apply. The choice is persisted in
 `VITE_FIREHOSE_URL` (see `.env.example`).
 
 `""` (dev proxy) keeps every request same-origin. An explicit URL is
-called directly by the browser; the api sends no CORS headers, so
-`/me` and `/firehose/topics` will not answer cross-origin (only the
-websocket does — browsers do not apply CORS to websockets). To point
-the whole frontend at a remote api, proxy it instead:
-`FIREHOSE_URL=https://firehose.osrsbotdetector.com npm run dev`. The
-Discord PKCE login is independent of the api endpoint — the redirect
-stays on the SPA origin.
+called directly by the browser (cross-origin); the api answers with
+CORS headers (`CORS_ORIGINS` setting, default any origin, GET +
+`X-API-Key` only), so `/me`, `/firehose/topics` and the websocket all
+work against localhost and live alike. The Discord PKCE login is
+independent of the api endpoint — the redirect stays on the SPA
+origin.
 
 ## Flows
 

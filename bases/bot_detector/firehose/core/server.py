@@ -15,6 +15,7 @@ from bot_detector.firehose.app.consumer_manager import ConsumerManager
 from bot_detector.firehose.app.state import FirehoseState
 from bot_detector.firehose.core.config import SETTINGS, Settings
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import start_http_server
 
 logger = logging.getLogger(__name__)
@@ -47,6 +48,15 @@ def create_app(settings: Settings) -> FastAPI:
         title="Bot-Detector-Firehose",
         description="Streams kafka messages over a websocket",
         lifespan=lifespan,
+    )
+    # the firehose frontend may run on another origin and select this
+    # api as its endpoint; websockets are not cors-restricted, this
+    # covers /me and /firehose/topics
+    _app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_methods=["GET", "OPTIONS"],
+        allow_headers=["X-API-Key"],
     )
     queue_repo = QueueRepo(settings=settings)
     session_factory, _ = get_session_factory(DatabaseSettings())

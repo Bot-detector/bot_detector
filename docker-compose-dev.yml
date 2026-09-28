@@ -197,8 +197,6 @@ services:
       - 5173:5173
     networks:
       - botdetector-network
-    depends_on:
-      - firehose
 
   hiscore_scraper:
     container_name: hiscore_scraper
