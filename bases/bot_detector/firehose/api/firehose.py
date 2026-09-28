@@ -60,7 +60,7 @@ async def firehose(websocket: WebSocket, topic: str) -> None:
     await state.connection_manager.connect(websocket=websocket, group=stream.group)
     FIREHOSE_CONNECTIONS.labels(topic=topic, type=conn_type).inc()
     logger.info(
-        f"client connected topic={topic} group={stream.group} (connections={state.connection_manager.count(group=stream.group)})"
+        f"client connected topic={topic} group={stream.group} ({client_name=}, connections={state.connection_manager.count(group=stream.group)})"
     )
     try:
         while True:
