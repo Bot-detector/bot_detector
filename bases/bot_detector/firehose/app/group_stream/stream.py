@@ -1,21 +1,33 @@
 import asyncio
 import logging
+import uuid
 
 from bot_detector.event_queue.core import QueueConsumer
-from bot_detector.firehose.app.group_stream.structs import QUEUE_MAX_SIZE
+from bot_detector.firehose.app.group_stream.structs import QUEUE_MAX_SIZE, Inbox
 from bot_detector.firehose.app.metrics import FIREHOSE_DROPPED, stream_type
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
+
+# how often the pump re-checks for inbox space while every inbox is full
+POLL_INTERVAL_S = 0.01
+
+# short id length for unnamed subscribers (log identification only)
+SHORT_ID_CHARS = 8
 
 
 class GroupStream:
     """One shared kafka consumer fanned out to connections.
 
     Anonymous streams fan out: every subscriber (one per websocket
-    connection) gets a copy of each message through its own queue; a
-    full inbox always appends, evicting its oldest message, so one slow
-    client never stalls the others and re-syncs to the newest tail.
+    connection) gets a copy of each message through its own inbox.
+
+    - while at least one inbox has space, a full inbox always appends,
+      evicting its oldest message, so a slow connection re-syncs to the
+      newest tail without stalling the others
+    - while every inbox is full nobody is consuming; the pump waits
+      instead of destroying messages (kafka retains the stream until a
+      connection catches up)
 
     Keyed streams compete: connections share one queue and each message
     is delivered exactly once, to whichever connection asks first (the
@@ -38,19 +50,26 @@ class GroupStream:
         self._consumer = consumer
         self._fanout = anonymous
         self._queue: asyncio.Queue = asyncio.Queue(maxsize=QUEUE_MAX_SIZE)
-        self._subscribers: list[asyncio.Queue] = []
+        self._subscribers: list[Inbox] = []
         self._loop = loop
         self._task = loop.create_task(self._pump())
 
-    def subscribe(self) -> asyncio.Queue | None:
-        """Register a per-connection inbox; None for compete streams."""
+    def subscribe(self, name: str | None = None) -> Inbox | None:
+        """Register a per-connection inbox; None for compete streams.
+
+        Unnamed subscribers get a short uuid, enough to tell eviction
+        log lines apart.
+        """
         if not self._fanout:
             return None
-        inbox: asyncio.Queue = asyncio.Queue(maxsize=QUEUE_MAX_SIZE)
+        inbox = Inbox(
+            name=name or uuid.uuid4().hex[-SHORT_ID_CHARS:],
+            queue=asyncio.Queue(maxsize=QUEUE_MAX_SIZE),
+        )
         self._subscribers.append(inbox)
         return inbox
 
-    def unsubscribe(self, inbox: asyncio.Queue | None) -> None:
+    def unsubscribe(self, inbox: Inbox | None) -> None:
         if inbox is not None and inbox in self._subscribers:
             self._subscribers.remove(inbox)
 
@@ -65,18 +84,25 @@ class GroupStream:
         if not self._fanout:
             await self._queue.put(message)
             return
+        # every inbox full = nobody consuming; wait rather than destroy
+        # messages (kafka retains the stream until a connection catches up)
+        while self._subscribers and all(
+            inbox.queue.full() for inbox in self._subscribers
+        ):
+            await asyncio.sleep(POLL_INTERVAL_S)
         for inbox in list(self._subscribers):
             try:
-                inbox.put_nowait(message)
+                inbox.queue.put_nowait(message)
             except asyncio.QueueFull:
                 # append always succeeds: evict the oldest message so a
-                # slow connection re-syncs to the newest tail instead of
-                # missing everything going forward
-                _ = inbox.get_nowait()
-                inbox.put_nowait(message)
+                # slow connection re-syncs to the newest tail; another
+                # connection still has capacity, so the stream is live
+                _ = inbox.queue.get_nowait()
+                inbox.queue.put_nowait(message)
                 FIREHOSE_DROPPED.labels(topic=self.topic, type=self.type).inc()
                 logger.warning(
-                    f"slow connection, evicting oldest message group={self.group}"
+                    "inbox full, evicting oldest "
+                    f"subscriber={inbox.name} group={self.group}"
                 )
 
     async def _pump(self) -> None:

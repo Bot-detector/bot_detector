@@ -1,6 +1,6 @@
-import asyncio
 from typing import Protocol, runtime_checkable
 
+from bot_detector.firehose.app.group_stream.structs import Inbox
 from pydantic import BaseModel
 
 
@@ -14,9 +14,9 @@ class GroupStreamProtocol(Protocol):
     type: str
     count: int
 
-    def subscribe(self) -> asyncio.Queue | None: ...
+    def subscribe(self, name: str | None = None) -> Inbox | None: ...
 
-    def unsubscribe(self, inbox: asyncio.Queue | None) -> None: ...
+    def unsubscribe(self, inbox: Inbox | None) -> None: ...
 
     async def get(self) -> BaseModel | Exception: ...
 
