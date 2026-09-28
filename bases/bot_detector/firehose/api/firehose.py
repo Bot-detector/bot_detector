@@ -52,8 +52,11 @@ async def firehose(websocket: WebSocket, topic: str) -> None:
     conn_type = stream_type(anonymous=stream.anonymous)
     # anonymous streams fan out: this connection gets its own inbox and a
     # copy of every message; keyed streams compete on the shared queue
-    # and rebroadcast to the group's connections
-    inbox = stream.subscribe()
+    # and rebroadcast to the group's connections. the client address
+    # names the inbox for eviction logs
+    client = websocket.client
+    client_name = f"{client.host}:{client.port}" if client else None
+    inbox = stream.subscribe(name=client_name)
     await state.connection_manager.connect(websocket=websocket, group=stream.group)
     FIREHOSE_CONNECTIONS.labels(topic=topic, type=conn_type).inc()
     logger.info(
@@ -62,7 +65,7 @@ async def firehose(websocket: WebSocket, topic: str) -> None:
     try:
         while True:
             if inbox is not None:
-                message = await inbox.get()
+                message = await inbox.queue.get()
             else:
                 message = await stream.get()
             if message is None:
