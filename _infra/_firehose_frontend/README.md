@@ -62,13 +62,32 @@ http://localhost:5000 (a locally running firehose API). Override with:
 # against the compose-dev stack (firehose mapped to localhost:8000)
 FIREHOSE_URL=http://localhost:8000 npm run dev
 
-# against any other api
-FIREHOSE_URL=http://host:port npm run dev
+# against any other api, e.g. the live endpoint
+FIREHOSE_URL=https://firehose.osrsbotdetector.com npm run dev
 ```
 
 The vite dev server proxies `/firehose` and `/me` to the API, so the app
 is same-origin (no CORS setup). `/callback` is served by the SPA; it is
 the redirect target registered in the Discord application.
+
+## Endpoint
+
+The API endpoint is selectable in the UI (preset dropdown + free-form
+input): the dev proxy default, `localhost:5000`,
+`localhost:8000` (compose dev), and the live
+`https://firehose.osrsbotdetector.com`. A custom value can be typed;
+press Enter or leave the field to apply. The choice is persisted in
+`localStorage` and survives reloads; the default comes from
+`VITE_FIREHOSE_URL` (see `.env.example`).
+
+`""` (dev proxy) keeps every request same-origin. An explicit URL is
+called directly by the browser; the api sends no CORS headers, so
+`/me` and `/firehose/topics` will not answer cross-origin (only the
+websocket does — browsers do not apply CORS to websockets). To point
+the whole frontend at a remote api, proxy it instead:
+`FIREHOSE_URL=https://firehose.osrsbotdetector.com npm run dev`. The
+Discord PKCE login is independent of the api endpoint — the redirect
+stays on the SPA origin.
 
 ## Flows
 

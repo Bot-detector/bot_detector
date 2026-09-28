@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ENDPOINT_PRESETS,
+  loadEndpoint,
+  saveEndpoint,
+  wsOrigin,
+} from "./apiEndpoint";
+import {
   clearTokens,
   handleCallback,
   logout as discordLogout,
@@ -18,15 +24,15 @@ function pretty(data) {
   }
 }
 
-async function fetchIdentity(token) {
+async function fetchIdentity(base, token) {
   const headers = token ? { "X-API-Key": token } : {};
-  const res = await fetch("/me", { headers });
+  const res = await fetch(`${base}/me`, { headers });
   if (!res.ok) throw new Error(`/me ${res.status}`);
   return res.json();
 }
 
-async function fetchTopics() {
-  const res = await fetch("/firehose/topics");
+async function fetchTopics(base) {
+  const res = await fetch(`${base}/firehose/topics`);
   if (!res.ok) throw new Error(`/firehose/topics ${res.status}`);
   return res.json();
 }
@@ -45,6 +51,8 @@ export default function App() {
   const [status, setStatus] = useState("disconnected");
   const [messages, setMessages] = useState([]);
   const [count, setCount] = useState(0);
+  const [endpoint, setEndpoint] = useState(() => loadEndpoint());
+  const [endpointDraft, setEndpointDraft] = useState(endpoint);
   const wsRef = useRef(null);
   const callbackHandled = useRef(false);
 
@@ -55,7 +63,7 @@ export default function App() {
   const refreshIdentity = useCallback(async () => {
     try {
       const accessToken = await validAccessToken();
-      const next = await fetchIdentity(accessToken);
+      const next = await fetchIdentity(endpoint, accessToken);
       setIdentity(next);
       // keep the selection on a topic the identity may consume
       if (next.allowed && next.user && next.user !== "anonymous") {
@@ -68,31 +76,38 @@ export default function App() {
     } catch {
       setIdentity({ user: "unknown", allowed: null, topics: [] });
     }
-  }, []);
+  }, [endpoint]);
 
+  const loadTopics = useCallback(async () => {
+    try {
+      const list = await fetchTopics(endpoint);
+      setTopics(list);
+      setTopic((current) => current || list[0] || "");
+    } catch (e) {
+      setStatus(`topics unavailable: ${e.message}`);
+    }
+  }, [endpoint]);
+
+  // oauth redirect handling; runs once
   useEffect(() => {
     if (callbackHandled.current) return;
     callbackHandled.current = true;
 
     const url = new URL(window.location.href);
-    if (url.pathname === "/callback") {
-      handleCallback()
-        .then(() => {
-          window.history.replaceState({}, "", "/");
-          return refreshIdentity();
-        })
-        .catch((e) => setStatus(`login failed: ${e.message}`));
-    } else {
-      refreshIdentity();
-    }
-
-    fetchTopics()
-      .then((list) => {
-        setTopics(list);
-        setTopic((current) => current || list[0] || "");
+    if (url.pathname !== "/callback") return;
+    handleCallback()
+      .then(() => {
+        window.history.replaceState({}, "", "/");
+        refreshIdentity();
       })
-      .catch((e) => setStatus(`topics unavailable: ${e.message}`));
-  }, [refreshIdentity]);
+      .catch((e) => setStatus(`login failed: ${e.message}`));
+  }, []);
+
+  // (re)load identity + topics on mount and whenever the endpoint changes
+  useEffect(() => {
+    refreshIdentity();
+    loadTopics();
+  }, [refreshIdentity, loadTopics]);
 
   // revalidate the token when the tab regains focus; the access token
   // may have been refreshed or revoked elsewhere
@@ -122,9 +137,8 @@ export default function App() {
       setIdentity({ user: "anonymous", allowed: true, topics });
     }
 
-    const proto = location.protocol === "https:" ? "wss://" : "ws://";
     const query = params.size ? `?${params}` : "";
-    const url = `${proto}${location.host}/firehose/${topic}${query}`;
+    const url = `${wsOrigin(endpoint)}/firehose/${topic}${query}`;
     setStatus("connecting...");
 
     const ws = new WebSocket(url);
@@ -153,6 +167,44 @@ export default function App() {
     clearTokens();
     refreshIdentity();
   }
+
+  function commitEndpoint(value) {
+    const next = saveEndpoint(value);
+    setEndpoint(next);
+    setEndpointDraft(next);
+    setStatus("disconnected");
+  }
+
+  const knownPreset = ENDPOINT_PRESETS.some((p) => p.value === endpoint);
+  const selectOptions = knownPreset
+    ? ENDPOINT_PRESETS
+    : [...ENDPOINT_PRESETS, { label: endpoint, value: endpoint }];
+
+  const endpointControls = (
+    <>
+      <select
+        className="rounded border border-neutral-600 bg-neutral-800 px-2 py-1.5"
+        value={endpoint}
+        onChange={(e) => commitEndpoint(e.target.value)}
+        disabled={connected}
+      >
+        {selectOptions.map((p) => (
+          <option key={p.value || "proxy"} value={p.value}>
+            {p.label}
+          </option>
+        ))}
+      </select>
+      <input
+        className="w-72 rounded border border-neutral-600 bg-neutral-800 px-2 py-1.5 disabled:opacity-40"
+        value={endpointDraft}
+        placeholder="https://firehose.example.com"
+        onChange={(e) => setEndpointDraft(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && commitEndpoint(endpointDraft)}
+        onBlur={() => commitEndpoint(endpointDraft)}
+        disabled={connected}
+      />
+    </>
+  );
 
   return (
     <main className="min-h-screen bg-neutral-900 p-8 font-mono text-sm text-neutral-200">
@@ -193,6 +245,13 @@ export default function App() {
           ))}
         </div>
       )}
+
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <label className="flex items-center gap-2">
+          endpoint:
+          {endpointControls}
+        </label>
+      </div>
 
       <div className="mb-3 flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-2">
