@@ -81,7 +81,12 @@ async def firehose(websocket: WebSocket, topic: str) -> None:
             FIREHOSE_BYTES.labels(topic=topic, type=conn_type).inc(
                 len(payload.encode("utf-8"))
             )
-            if inbox is None:
+            if inbox is not None:
+                # fan-out: this connection sends its own inbox copy
+                await state.connection_manager.send_personal_message(
+                    message=payload, websocket=websocket
+                )
+            else:
                 await state.connection_manager.broadcast(
                     message=payload, group=stream.group
                 )
