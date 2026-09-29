@@ -38,7 +38,38 @@
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "definition": "label_values(event_queue_messages_consumed_total, queue)",
+        "definition": "label_values(event_queue_messages_consumed_total, job)",
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "name": "job",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(event_queue_messages_consumed_total, job)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(event_queue_messages_consumed_total{job=~\"$job\"}, queue)",
         "hide": 0,
         "includeAll": true,
         "multi": true,
@@ -46,7 +77,38 @@
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(event_queue_messages_consumed_total, queue)",
+          "query": "label_values(event_queue_messages_consumed_total{job=~\"$job\"}, queue)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(event_queue_get_seconds_bucket{job=~\"$job\", queue=~\"$queue\"}, op)",
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "name": "op",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(event_queue_get_seconds_bucket{job=~\"$job\", queue=~\"$queue\"}, op)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 2,
@@ -152,7 +214,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (queue) (rate(event_queue_messages_produced_total{queue=~\"$queue\"}[5m]))",
+          "expr": "sum by (queue) (rate(event_queue_messages_produced_total{queue=~\"$queue\", job=~\"$job\"}[5m]))",
           "instant": false,
           "legendFormat": "produced {{queue}}",
           "range": true,
@@ -164,7 +226,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (queue) (rate(event_queue_messages_consumed_total{queue=~\"$queue\"}[5m]))",
+          "expr": "sum by (queue) (rate(event_queue_messages_consumed_total{queue=~\"$queue\", job=~\"$job\"}[5m]))",
           "instant": false,
           "legendFormat": "consumed {{queue}}",
           "range": true,
@@ -261,7 +323,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by (le, op) (rate(event_queue_get_seconds_bucket{queue=~\"$queue\"}[15m])))",
+          "expr": "histogram_quantile(0.99, sum by (le, op) (rate(event_queue_get_seconds_bucket{queue=~\"$queue\", job=~\"$job\", op=~\"$op\"}[15m])))",
           "instant": false,
           "legendFormat": "P99 {{op}}",
           "range": true,
@@ -273,7 +335,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by (le, op) (rate(event_queue_get_seconds_bucket{queue=~\"$queue\"}[15m])))",
+          "expr": "histogram_quantile(0.90, sum by (le, op) (rate(event_queue_get_seconds_bucket{queue=~\"$queue\", job=~\"$job\", op=~\"$op\"}[15m])))",
           "instant": false,
           "legendFormat": "P90 {{op}}",
           "range": true,
@@ -285,7 +347,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by (le, op) (rate(event_queue_get_seconds_bucket{queue=~\"$queue\"}[15m])))",
+          "expr": "histogram_quantile(0.50, sum by (le, op) (rate(event_queue_get_seconds_bucket{queue=~\"$queue\", job=~\"$job\", op=~\"$op\"}[15m])))",
           "instant": false,
           "legendFormat": "P50 {{op}}",
           "range": true,
@@ -382,7 +444,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (queue, outcome) (rate(event_queue_get_many_outcomes_total{queue=~\"$queue\"}[5m]))",
+          "expr": "sum by (queue, outcome) (rate(event_queue_get_many_outcomes_total{queue=~\"$queue\", job=~\"$job\"}[5m]))",
           "instant": false,
           "legendFormat": "{{queue}} {{outcome}}",
           "range": true,
@@ -395,5 +457,5 @@
   ],
   "title": "app-metrics-queue",
   "uid": "app-metrics-queue",
-  "version": 2
+  "version": 3
 }
