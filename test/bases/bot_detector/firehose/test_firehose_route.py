@@ -18,13 +18,15 @@ N = 3
 class FakeConsumer(QueueConsumer[ScrapedStruct]):
     def __init__(self, group: str):
         self.group = group
+        self.started = False
+        self.stopped = False
         self.messages: list[ScrapedStruct | Exception] = []
 
     async def start(self) -> None:
-        return None
+        self.started = True
 
     async def stop(self) -> None:
-        return None
+        self.stopped = True
 
     async def get_one(self):
         # like the real kafka consumer: block until a message exists
@@ -64,6 +66,7 @@ class FakeWebSocket:
         self.client = None
         self.accepted = False
         self.closed: tuple | None = None
+        self._incoming: asyncio.Queue = asyncio.Queue()
 
     async def accept(self) -> None:
         self.accepted = True
@@ -73,6 +76,14 @@ class FakeWebSocket:
 
     async def close(self, code: int | None = None, reason: str | None = None) -> None:
         self.closed = (code, reason)
+
+    def client_disconnect(self, code: int = 1001) -> None:
+        """Simulate the ASGI server delivering a client disconnect."""
+        self._incoming.put_nowait({"type": "websocket.disconnect", "code": code})
+
+    async def receive(self) -> dict:
+        # like the ASGI websocket: blocks until a client event
+        return await self._incoming.get()
 
 
 def make_state() -> tuple[SimpleNamespace, FakeConsumer]:
@@ -129,6 +140,28 @@ async def test_unknown_topic_closes_with_4404():
 
     assert ws.closed == (4404, "unknown topic")
     assert ws.accepted is False
+
+
+@pytest.mark.asyncio
+async def test_idle_disconnect_releases_stream_and_consumer():
+    state, consumer = make_state()
+    ws = FakeWebSocket(state=state)
+
+    task = asyncio.create_task(firehose(websocket=ws, topic=TOPIC))
+    try:
+        await wait_for(lambda: ws.accepted)
+
+        # client vanishes while no messages flow: the handler must wake
+        # on the disconnect (not stay parked on the empty inbox), clean
+        # up, and release the shared stream
+        ws.client_disconnect()
+        await asyncio.wait_for(task, timeout=2)
+
+        assert consumer.stopped is True
+        assert state.connection_manager.count(group=consumer.group) == 0
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
 
 
 def _messages() -> list[ScrapedStruct]:
