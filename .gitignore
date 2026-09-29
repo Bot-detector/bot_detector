@@ -186,5 +186,3 @@ _infra/_firehose_frontend/dist/
 _infra/_mysql/docker-entrypoint-initdb.d/99_*.sql
 
 
-# local grafana dashboards
-grafana/
