@@ -11,6 +11,7 @@ from bot_detector.event_queue.adapters.kafka import (
 )
 from bot_detector.event_queue.structs import PlayerBannedStruct
 from bot_detector.worker.core import WorkerRunner
+from bot_detector.worker_ban_migration.metrics import start_metrics_server
 from bot_detector.worker_ban_migration.settings import Settings
 from bot_detector.worker_ban_migration.worker import BanMigrationWorker
 
@@ -21,6 +22,7 @@ KAFKA_SETTINGS = KafkaSettings()
 
 
 async def main():
+    start_metrics_server(port=SETTINGS.METRICS_PORT)
     session_factory, async_engine = db.get_session_factory(SETTINGS=DBSettings())
     stop_event = asyncio.Event()
     tasks = []

@@ -1,17 +1,21 @@
-import os
+import logging
 
 from prometheus_client import Counter, start_http_server
 
-if os.environ.get("ENVIRONMENT") != "test":
-    start_http_server(8000)
+logger = logging.getLogger(__name__)
 
-# Prometheus metrics
+
+def start_metrics_server(port: int) -> None:
+    start_http_server(port)
+    logger.info(f"metrics server started on port {port}")
+
+
 accounts_migrated_counter = Counter(
-    name="ban_migration_accounts_migrated",
+    name="worker_ban_migration_accounts_migrated",
     documentation="Number of banned accounts whose reports were migrated",
 )
 
 rows_migrated_counter = Counter(
-    name="ban_migration_rows_migrated",
+    name="worker_ban_migration_rows_migrated",
     documentation="Number of report_archive rows inserted by the ban migration worker",
 )

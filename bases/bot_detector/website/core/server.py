@@ -1,6 +1,6 @@
 import pathlib
+from contextlib import asynccontextmanager
 
-import prometheus_client
 from bot_detector.website import api
 from bot_detector.website.core import Settings
 from bot_detector.website.core.fastapi.middelware import (
@@ -12,6 +12,7 @@ from fastapi.middleware import Middleware
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from prometheus_client import start_http_server
 
 
 def init_routers(_app: FastAPI) -> None:
@@ -33,12 +34,19 @@ def make_middleware() -> list[Middleware]:
     return middleware
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    start_http_server(port=Settings().METRICS_PORT)
+    yield
+
+
 def create_app() -> FastAPI:
     _app = FastAPI(
         title="Bot-Detector-Web",
         description="Bot-Detector-Web",
         version=Settings().RELEASE_VERSION,
         middleware=make_middleware(),
+        lifespan=lifespan,
     )
     init_routers(_app=_app)
     current_dir = pathlib.Path(__file__).parent
@@ -50,8 +58,6 @@ def create_app() -> FastAPI:
 
 # uvicorn bases.bot_detector.website.core.server:app --port 5000 --reload
 app = create_app()
-
-prometheus_client.start_http_server(8000)
 
 
 @app.get("/")

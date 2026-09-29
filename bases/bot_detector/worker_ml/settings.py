@@ -9,3 +9,4 @@ class Settings(BaseSettings):
     MODEL_NAME: str = Field(default=...)
     CONSUME_PLAYER_SCRAPED: bool = False
     CONSUME_DATA_TO_PREDICT: bool = True
+    METRICS_PORT: int = 8000

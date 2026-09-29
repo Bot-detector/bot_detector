@@ -36,7 +36,7 @@ def _mock_session_factory() -> MagicMock:
 @pytest.mark.asyncio
 async def test_insert_batch_increments_inserted_counter():
     batch = [_build_report(), _build_report()]
-    before = _sample("report_worker_reports_inserted_total") or 0
+    before = _sample("worker_report_reports_inserted_total") or 0
 
     await insert_batch(
         report_repo=AsyncMock(),
@@ -44,13 +44,13 @@ async def test_insert_batch_increments_inserted_counter():
         session_factory=_mock_session_factory(),
     )
 
-    assert (_sample("report_worker_reports_inserted_total") or 0) == before + 2
+    assert (_sample("worker_report_reports_inserted_total") or 0) == before + 2
 
 
 @pytest.mark.asyncio
 async def test_handle_counts_dropped_invalid_reports():
     batch = [_build_report(version=1), _build_report(version=2)]
-    before = _sample("report_worker_reports_dropped_total") or 0
+    before = _sample("worker_report_reports_dropped_total") or 0
 
     worker = ReportWorker(
         worker_id=0,
@@ -59,4 +59,4 @@ async def test_handle_counts_dropped_invalid_reports():
     )
     await worker.handle(batch)
 
-    assert (_sample("report_worker_reports_dropped_total") or 0) == before + 1
+    assert (_sample("worker_report_reports_dropped_total") or 0) == before + 1

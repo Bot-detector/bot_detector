@@ -22,6 +22,7 @@ from bot_detector.worker_ml.metrics import (
     batches_consumed_counter,
     messages_requeued_counter,
     predictions_inserted_counter,
+    start_metrics_server,
 )
 from bot_detector.worker_ml.settings import Settings
 from bot_detector.worker_ml.settings import Settings as MLSettings
@@ -425,6 +426,7 @@ async def main_data_to_predict(
 
 
 async def main():
+    start_metrics_server(port=MLSettings().METRICS_PORT)
     ## database
     session_factory, engine = get_session_factory(SETTINGS=DBSettings())
 

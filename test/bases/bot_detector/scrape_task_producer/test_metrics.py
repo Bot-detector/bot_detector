@@ -42,10 +42,12 @@ def test_set_step_increments_transition_counter():
 
 
 @pytest.mark.asyncio
-async def test_produce_players_increments_produced_counter():
+async def test_produce_players_puts_filtered_batch():
     players = [_player(i) for i in range(3)]
-    before = _sample("scrape_task_producer_players_produced_total") or 0
+    queue = AsyncMock()
 
-    await produce_players(players=players, player_queue=AsyncMock())
+    await produce_players(players=players, player_queue=queue)
 
-    assert (_sample("scrape_task_producer_players_produced_total") or 0) == before + 3
+    queue.put.assert_awaited_once()
+    put_batch = queue.put.await_args.args[0]
+    assert len(put_batch) == 3

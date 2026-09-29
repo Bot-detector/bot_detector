@@ -1,7 +1,6 @@
-import os
-from unittest.mock import AsyncMock, MagicMock
-from datetime import datetime, timedelta
 import asyncio
+from datetime import datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from bot_detector.event_queue.structs import NotFoundStruct
@@ -10,8 +9,6 @@ from bot_detector.runemetrics_api.core import RuneMetricsError, RuneMetricsRespo
 from bot_detector.runemetrics_scraper import core
 from bot_detector.structs import MetaData, PlayerStruct
 from pydantic import BaseModel, ValidationError
-
-os.environ["ENVIRONMENT"] = "test"
 
 
 class DummyError(BaseModel):

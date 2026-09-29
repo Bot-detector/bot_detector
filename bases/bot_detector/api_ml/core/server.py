@@ -42,6 +42,7 @@ def make_middleware() -> list[Middleware]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    start_wsgi_server(port=SETTINGS.METRICS_PORT)
     for name, uri in SETTINGS.MODEL_URIS.items():
         logger.info(f"Loading model: {name} from {uri}")
         model = mlflow.pyfunc.load_model(uri)
@@ -69,9 +70,6 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
-
-
-start_wsgi_server(port=8000)
 
 
 @app.get("/")

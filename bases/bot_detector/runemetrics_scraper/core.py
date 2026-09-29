@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import os
 from datetime import datetime
 
 import aiohttp
@@ -23,76 +22,23 @@ from bot_detector.proxy_manager import Settings as ProxySettings
 from bot_detector.retry_tracker import RetryTracker
 from bot_detector.runemetrics_api import RuneMetrics, RuneMetricsResponse
 from bot_detector.runemetrics_api.exceptions import UnexpectedRedirection
+from bot_detector.runemetrics_scraper.metrics import (
+    error_counter,
+    latency_histogram,
+    player_update_errors,
+    retry_counter,
+    retry_delay_histogram,
+    retry_histogram,
+    start_metrics_server,
+    success_counter,
+    total_counter,
+)
+from bot_detector.runemetrics_scraper.settings import Settings as ScraperSettings
 from bot_detector.structs import MetaData, PlayerStruct
 from osrs.utils import RateLimiter
-from prometheus_client import Counter, Histogram, start_http_server
 from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
-
-if os.environ.get("ENVIRONMENT") != "test":
-    start_http_server(8000)
-
-# Prometheus metrics
-total_counter = Counter(
-    name="rune_metrics_request",
-    documentation="Count of request player stats fetches",
-    labelnames=["proxy"],
-)
-success_counter = Counter(
-    name="rune_metrics_success",
-    documentation="Successful RuneMetrics requests",
-    labelnames=["proxy"],
-)
-error_counter = Counter(
-    name="rune_metrics_errors",
-    documentation="Errors in RuneMetrics requests",
-    labelnames=["proxy"],
-)
-latency_histogram = Histogram(
-    name="rune_metrics_latency",
-    documentation="Latency of RuneMetrics requests",
-    labelnames=["proxy"],
-    buckets=(
-        0.05,
-        0.075,
-        0.1,
-        0.25,
-        0.5,
-        0.75,
-        1.0,
-        2.5,
-        5.0,
-        7.5,
-        10.0,
-        20.0,
-        30.0,
-    ),
-)
-
-player_update_errors = Counter(
-    "player_update_errors_total",
-    "Count of errors during player update by error type",
-    ["error_type"],
-)
-
-retry_counter = Counter(
-    name="rune_metrics_retry_count",
-    documentation="Cumulative count of retry attempts",
-    labelnames=["proxy"],
-)
-retry_histogram = Histogram(
-    name="rune_metrics_retry_consecutive_failures",
-    documentation="Distribution of consecutive failure counts",
-    labelnames=["proxy"],
-    buckets=(1, 2, 3, 5, 10, 15, 20, 30, 50),
-)
-retry_delay_histogram = Histogram(
-    name="rune_metrics_retry_backoff_seconds",
-    documentation="Distribution of backoff delays applied",
-    labelnames=["proxy"],
-    buckets=(10, 20, 40, 80, 120, 160, 200, 250, 300),
-)
 
 
 async def get_proxy(
@@ -326,6 +272,7 @@ async def work(
 
 
 async def main():
+    start_metrics_server(port=ScraperSettings().METRICS_PORT)
     proxy_manager = ProxyManager(api_key=ProxySettings().PROXY_API_KEY)
     proxies = await proxy_manager.fetch_proxies()
 

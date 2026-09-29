@@ -1,29 +1,34 @@
-import os
+import logging
 
 from prometheus_client import Counter, start_http_server
 
-if os.environ.get("ENVIRONMENT") != "test":
-    start_http_server(8000)
+logger = logging.getLogger(__name__)
+
+
+def start_metrics_server(port: int) -> None:
+    start_http_server(port)
+    logger.info(f"metrics server started on port {port}")
+
 
 batches_consumed_counter = Counter(
-    name="ml_worker_batches_consumed",
+    name="worker_ml_batches_consumed",
     documentation="Batches consumed from kafka by the ml worker",
     labelnames=["loop"],
 )
 
 predictions_inserted_counter = Counter(
-    name="ml_worker_predictions_inserted",
+    name="worker_ml_predictions_inserted",
     documentation="Number of predictions inserted into the database",
 )
 
 api_errors_counter = Counter(
-    name="ml_worker_api_errors",
+    name="worker_ml_api_errors",
     documentation="Errors from the ml api during prediction",
     labelnames=["loop"],
 )
 
 messages_requeued_counter = Counter(
-    name="ml_worker_messages_requeued",
+    name="worker_ml_messages_requeued",
     documentation="Messages requeued after failed processing",
     labelnames=["loop"],
 )

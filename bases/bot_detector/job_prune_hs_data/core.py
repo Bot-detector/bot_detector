@@ -4,6 +4,10 @@ import logging
 import sqlalchemy as sqla
 from bot_detector.database import Settings as DBSettings
 from bot_detector.database import get_session_factory
+from bot_detector.job_prune_hs_data.metrics import (
+    rows_deleted_counter,
+    start_metrics_server,
+)
 from pydantic_settings import BaseSettings
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -12,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 class Settings(BaseSettings):
     LIMIT: int = 10000
+    METRICS_PORT: int = 8000
 
 
 def create_temp_table():
@@ -87,6 +92,8 @@ async def prune(async_session: async_sessionmaker[AsyncSession]):
                     await session.execute(sql_delete_hdd)
                     result = await session.scalars(sql_row_count)
                     rows_deleted = result.first()
+                    if rows_deleted is not None:
+                        rows_deleted_counter.inc(rows_deleted)
                     logger.info(f"Deleted {rows_deleted} records")
 
         except Exception as e:
@@ -95,6 +102,7 @@ async def prune(async_session: async_sessionmaker[AsyncSession]):
 
 
 async def main():
+    start_metrics_server(port=Settings().METRICS_PORT)
     async_session, async_engine = get_session_factory(SETTINGS=DBSettings())
     await prune(async_session)
 
