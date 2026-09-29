@@ -897,7 +897,7 @@
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.99, sum by (le) (rate(worker_handle_seconds_bucket[15m])))",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(worker_handle_seconds_bucket{worker=~\"$worker\"}[15m])))",
               "instant": false,
               "legendFormat": "P99",
               "range": true,
@@ -909,7 +909,7 @@
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.90, sum by (le) (rate(worker_handle_seconds_bucket[15m])))",
+              "expr": "histogram_quantile(0.90, sum by (le) (rate(worker_handle_seconds_bucket{worker=~\"$worker\"}[15m])))",
               "instant": false,
               "legendFormat": "P90",
               "range": true,
@@ -921,7 +921,7 @@
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.50, sum by (le) (rate(worker_handle_seconds_bucket[15m])))",
+              "expr": "histogram_quantile(0.50, sum by (le) (rate(worker_handle_seconds_bucket{worker=~\"$worker\"}[15m])))",
               "instant": false,
               "legendFormat": "P50",
               "range": true,
@@ -1018,7 +1018,7 @@
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "sum by (worker, kind) (rate(worker_errors_total[5m]))",
+              "expr": "sum by (worker, kind) (rate(worker_errors_total{worker=~\"$worker\"}[5m]))",
               "instant": false,
               "legendFormat": "{{worker}} {{kind}}",
               "range": true,
@@ -1115,7 +1115,7 @@
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "sum by (worker) (rate(worker_batches_consumed_total[5m]))",
+              "expr": "sum by (worker) (rate(worker_batches_consumed_total{worker=~\"$worker\"}[5m]))",
               "instant": false,
               "legendFormat": "batches {{worker}}",
               "range": true,
@@ -1127,7 +1127,7 @@
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "sum by (worker) (rate(worker_messages_requeued_total[5m]))",
+              "expr": "sum by (worker) (rate(worker_messages_requeued_total{worker=~\"$worker\"}[5m]))",
               "instant": false,
               "legendFormat": "requeued {{worker}}",
               "range": true,
@@ -1631,7 +1631,39 @@
   "schemaVersion": 39,
   "tags": [],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(worker_handle_seconds_bucket, worker)",
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "name": "worker",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(worker_handle_seconds_bucket, worker)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
   },
   "time": {
     "from": "now-2d",
@@ -1641,6 +1673,6 @@
   "timezone": "utc",
   "title": "application-metrics",
   "uid": "ffsz5sjmxxhj4f",
-  "version": 9,
+  "version": 10,
   "weekStart": ""
 }
