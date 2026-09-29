@@ -2,7 +2,7 @@ import time
 
 import pytest
 from bot_detector.event_queue.structs import ReportsToInsertStruct
-from bot_detector.firehose.app.group_stream.adapter import (
+from bot_detector.firehose.app.exchange.delay import (
     FUTURE_LIMIT_S,
     DelayAdapter,
     message_ts,

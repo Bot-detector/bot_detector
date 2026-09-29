@@ -8,7 +8,8 @@ from bot_detector.event_queue.structs import ScrapedStruct
 from bot_detector.firehose.api.firehose import firehose
 from bot_detector.firehose.app.auth.auth import ANONYMOUS, AuthUser
 from bot_detector.firehose.app.connection_manager import ConnectionManager
-from bot_detector.firehose.app.consumer_manager import ConsumerManager
+from bot_detector.firehose.app.exchange import Exchange
+from bot_detector.firehose.app.queue_manager import QueueManager
 from bot_detector.firehose.core.config import Settings
 
 TOPIC = "players.scraped"
@@ -90,11 +91,13 @@ def make_state() -> tuple[SimpleNamespace, FakeConsumer]:
     repo = FakeQueueRepo()
     consumer = FakeConsumer(group=f"fh-anonymous-{TOPIC}")
     repo.consumers[consumer.group] = consumer  # create_consumer reuses this
+    exchange = Exchange()
     state = SimpleNamespace(
         settings=Settings(),
         queue_repo=repo,
+        exchange=exchange,
+        queue_manager=QueueManager(queue_repo=repo, exchange=exchange),
         auth_repo=FakeAuthRepo(),
-        consumer_manager=ConsumerManager(queue_repo=repo),
         connection_manager=ConnectionManager(),
         http_session=None,
         discord_oauth=None,
