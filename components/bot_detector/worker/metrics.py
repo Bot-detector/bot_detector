@@ -6,12 +6,6 @@ BATCHES_CONSUMED = Counter(
     labelnames=["worker"],
 )
 
-MESSAGES_CONSUMED = Counter(
-    name="worker_messages_consumed",
-    documentation="Messages consumed from the queue by WorkerRunner",
-    labelnames=["worker"],
-)
-
 MESSAGES_REQUEUED = Counter(
     name="worker_messages_requeued",
     documentation="Messages requeued after failed or partial handling",

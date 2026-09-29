@@ -12,7 +12,6 @@ from bot_detector.worker.metrics import (
     BATCHES_CONSUMED,
     ERRORS,
     HANDLE_LATENCY,
-    MESSAGES_CONSUMED,
     MESSAGES_REQUEUED,
 )
 from pydantic import BaseModel
@@ -142,7 +141,6 @@ class WorkerRunner(Generic[T]):
 
                 logger.info(f"Consumed {len(batch)} messages")
                 BATCHES_CONSUMED.labels(worker=self._name).inc()
-                MESSAGES_CONSUMED.labels(worker=self._name).inc(len(batch))
 
                 with HANDLE_LATENCY.labels(worker=self._name).time():
                     result = await self._worker.handle(batch)
