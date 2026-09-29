@@ -1,4 +1,4 @@
-from typing import Generic, Optional, TypeVar
+from typing import Generic, Literal, Optional, TypeVar
 
 from pydantic import BaseModel
 
@@ -7,9 +7,24 @@ from .interface import (
     QueueBackendProducerProtocol,
     QueueBackendProtocol,
 )
-from .metrics import GET_LATENCY, MESSAGES_CONSUMED, MESSAGES_PRODUCED
+from .metrics import (
+    GET_LATENCY,
+    GET_MANY_OUTCOMES,
+    MESSAGES_CONSUMED,
+    MESSAGES_PRODUCED,
+)
 
 T = TypeVar("T", bound=BaseModel)
+
+
+def _get_many_outcome(size: int, count: int) -> Literal["full", "partial", "empty"]:
+    # kafka get_many can overshoot count when records span partitions,
+    # so >= count is still a full batch
+    if size <= 0:
+        return "empty"
+    if size < count:
+        return "partial"
+    return "full"
 
 
 class QueueProducer(Generic[T]):
@@ -83,6 +98,8 @@ class QueueConsumer(Generic[T]):
             result = await self._backend.get_many(count)
         if isinstance(result, Exception):
             return result
+        outcome = _get_many_outcome(size=len(result), count=count)
+        GET_MANY_OUTCOMES.labels(queue=self._name, outcome=outcome).inc()
         MESSAGES_CONSUMED.labels(queue=self._name).inc(len(result))
         return result
 
