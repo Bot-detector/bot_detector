@@ -7,6 +7,7 @@ from .interface import (
     QueueBackendProducerProtocol,
     QueueBackendProtocol,
 )
+from .metrics import GET_LATENCY, MESSAGES_CONSUMED, MESSAGES_PRODUCED
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -16,6 +17,11 @@ class QueueProducer(Generic[T]):
     High-level Queue class used by the application.
     It relies on Dependency Injection to get the specific backend.
 
+    Args:
+        backend: the queue backend adapter.
+        name: identity used for metrics labels (defaults to model name
+            when created via QueueFactory).
+
     Example:
         config = InMemoryConfig(maxsize=50)
         adapter = InMemoryProducerAdapter(PlayerScraped, config=config)
@@ -23,8 +29,9 @@ class QueueProducer(Generic[T]):
         await queue.put()
     """
 
-    def __init__(self, backend: QueueBackendProducerProtocol):
+    def __init__(self, backend: QueueBackendProducerProtocol, name: str = "unknown"):
         self._backend = backend
+        self._name = name
 
     async def start(self):
         await self._backend.start()
@@ -33,7 +40,10 @@ class QueueProducer(Generic[T]):
         await self._backend.stop()
 
     async def put(self, message: list[T]) -> Optional[Exception]:
-        return await self._backend.put(message)
+        result = await self._backend.put(message)
+        if result is None:
+            MESSAGES_PRODUCED.labels(queue=self._name).inc(len(message))
+        return result
 
 
 class QueueConsumer(Generic[T]):
@@ -49,8 +59,9 @@ class QueueConsumer(Generic[T]):
         await queue.get_many()
     """
 
-    def __init__(self, backend: QueueBackendConsumerProtocol):
+    def __init__(self, backend: QueueBackendConsumerProtocol, name: str = "unknown"):
         self._backend = backend
+        self._name = name
 
     async def start(self):
         await self._backend.start()
@@ -59,10 +70,21 @@ class QueueConsumer(Generic[T]):
         await self._backend.stop()
 
     async def get_one(self) -> Optional[T] | Exception:
-        return await self._backend.get_one()
+        with GET_LATENCY.labels(queue=self._name, op="get_one").time():
+            result = await self._backend.get_one()
+        if isinstance(result, Exception):
+            return result
+        if result is not None:
+            MESSAGES_CONSUMED.labels(queue=self._name).inc()
+        return result
 
     async def get_many(self, count: int) -> list[T] | Exception:
-        return await self._backend.get_many(count)
+        with GET_LATENCY.labels(queue=self._name, op="get_many").time():
+            result = await self._backend.get_many(count)
+        if isinstance(result, Exception):
+            return result
+        MESSAGES_CONSUMED.labels(queue=self._name).inc(len(result))
+        return result
 
     async def commit(self) -> Optional[Exception]:
         return await self._backend.commit()
@@ -82,5 +104,6 @@ class Queue(QueueConsumer[T], QueueProducer[T]):
         await queue.get_many()
     """
 
-    def __init__(self, backend: QueueBackendProtocol):
+    def __init__(self, backend: QueueBackendProtocol, name: str = "unknown"):
         self._backend = backend
+        self._name = name

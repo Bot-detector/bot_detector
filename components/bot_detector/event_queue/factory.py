@@ -2,8 +2,6 @@ from typing import Any, Literal, Type, TypeVar
 
 from bot_detector.event_queue.adapters.kafka import KafkaLagProbe
 from bot_detector.event_queue.adapters.memory import MemoryLagProbe
-from bot_detector.event_queue.lag_probe import LagProbeProtocol
-
 from bot_detector.event_queue.core import (
     Queue,
     QueueBackendConsumerProtocol,
@@ -12,6 +10,7 @@ from bot_detector.event_queue.core import (
     QueueConsumer,
     QueueProducer,
 )
+from bot_detector.event_queue.lag_probe import LagProbeProtocol
 from pydantic import BaseModel
 
 T = TypeVar("T", bound=BaseModel)
@@ -107,11 +106,11 @@ class QueueFactory:
 
         match queue_type:
             case "queue" if isinstance(adapter, QueueBackendProtocol):
-                queue = Queue[model](adapter)
+                queue = Queue[model](adapter, name=model.__name__)
             case "producer" if isinstance(adapter, QueueBackendProducerProtocol):
-                queue = QueueProducer[model](adapter)
+                queue = QueueProducer[model](adapter, name=model.__name__)
             case "consumer" if isinstance(adapter, QueueBackendConsumerProtocol):
-                queue = QueueConsumer[model](adapter)
+                queue = QueueConsumer[model](adapter, name=model.__name__)
             case _:
                 return ValueError(f"Unknown queue_type: {queue_type}")
         return queue
