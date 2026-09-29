@@ -64,10 +64,29 @@ async def firehose(websocket: WebSocket, topic: str) -> None:
     )
     try:
         while True:
-            if inbox is not None:
-                message = await inbox.queue.get()
-            else:
-                message = await stream.get()
+            # race the next message against the client: an idle client
+            # that disconnects delivers a websocket.disconnect on
+            # receive(), which must end this handler - a parked get()
+            # alone would leak the connection, the inbox and the stream
+            # refcount (and with it the kafka consumer)
+            get_task = asyncio.create_task(
+                inbox.queue.get() if inbox is not None else stream.get()
+            )
+            recv_task = asyncio.create_task(websocket.receive())
+            done, pending = await asyncio.wait(
+                {get_task, recv_task}, return_when=asyncio.FIRST_COMPLETED
+            )
+            for task in pending:
+                task.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
+            if recv_task in done:
+                event = recv_task.result()
+                if event.get("type") == "websocket.disconnect":
+                    raise WebSocketDisconnect(code=event.get("code", 1000))
+                if get_task not in done:
+                    # stray client frame (ping/text); keep waiting
+                    continue
+            message = get_task.result()
             if message is None:
                 continue
             if isinstance(message, Exception):
