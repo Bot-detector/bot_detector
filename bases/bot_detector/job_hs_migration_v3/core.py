@@ -15,6 +15,7 @@ from bot_detector.event_queue.adapters.kafka import (
 from bot_detector.event_queue.core import QueueProducer
 from bot_detector.event_queue.factory import QueueFactory
 from bot_detector.event_queue.structs import ScrapedStruct
+from bot_detector.job_hs_migration_v3.metrics import start_metrics_server
 from bot_detector.structs import (
     HighscoreBaseStruct,
     MetaData,
@@ -31,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 class Settings(BaseSettings):
     LIMIT: int = 10000
+    METRICS_PORT: int = 8000
 
 
 async def get_latest_player_id(
@@ -185,6 +187,7 @@ async def producer_send(
 
 
 async def main():
+    start_metrics_server(port=Settings().METRICS_PORT)
     async_session, async_engine = get_session_factory(SETTINGS=DBSettings())
     b_server = KafkaSettings().bootstrap_servers
 

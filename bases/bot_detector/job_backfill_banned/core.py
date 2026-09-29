@@ -13,6 +13,7 @@ from bot_detector.event_queue.core import QueueProducer
 from bot_detector.event_queue.factory import QueueFactory, create_lag_probe
 from bot_detector.event_queue.lag_probe import LagProbeProtocol
 from bot_detector.event_queue.structs import PlayerBannedStruct
+from bot_detector.job_backfill_banned.metrics import start_metrics_server
 from bot_detector.structs._metadata import MetaData
 from pydantic_settings import BaseSettings
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -24,6 +25,7 @@ class Settings(BaseSettings):
     BATCH_SIZE: int = 10_000
     MAX_LAG: int = 100_000
     LAG_SLEEP_SECONDS: int = 10
+    METRICS_PORT: int = 8000
 
 
 def _select_banned_players() -> sqla.TextClause:
@@ -133,6 +135,7 @@ async def backfill(
 
 
 async def main():
+    start_metrics_server(port=Settings().METRICS_PORT)
     session_factory, async_engine = get_session_factory(SETTINGS=DBSettings())
     settings = Settings()
 
