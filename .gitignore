@@ -185,4 +185,9 @@ _infra/_firehose_frontend/dist/
 # local mysql init (personal firehose allowlist, not for git)
 _infra/_mysql/docker-entrypoint-initdb.d/99_*.sql
 
+# perf harness artifacts (development/perf, dumped to cwd)
+profile.html
+profile.txt
+profile.json
+
 
