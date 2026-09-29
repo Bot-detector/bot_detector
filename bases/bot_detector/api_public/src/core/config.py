@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     POOL_RECYCLE: int = Field(default=60)
     POOL_TIMEOUT: int = Field(default=60)
     KAFKA_MAX_ASYNC_CALLS: int = Field(default=100)
+    METRICS_PORT: int = Field(default=8000)
 
 
 SETTINGS = Settings()

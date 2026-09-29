@@ -2,6 +2,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from bot_detector.api_public.src import api
+from bot_detector.api_public.src.core.config import SETTINGS
 from bot_detector.api_public.src.core.fastapi.middleware import (
     LoggingMiddleware,
     PrometheusMiddleware,
@@ -53,6 +54,7 @@ def make_middleware() -> list[Middleware]:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("startup initiated")
+    start_http_server(port=SETTINGS.METRICS_PORT)
     queue = QueueFactory.create_queue(
         model=ReportsToInsertStruct,
         queue_type="producer",
@@ -87,9 +89,6 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
-
-
-start_http_server(8000)
 
 
 @app.get("/")

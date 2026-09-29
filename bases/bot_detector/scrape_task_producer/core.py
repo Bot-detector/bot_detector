@@ -20,7 +20,7 @@ from bot_detector.scrape_task_producer.metrics import (
     done_for_day_counter,
     lag_throttle_counter,
     new_day_reset_counter,
-    players_produced_counter,
+    start_metrics_server,
     step_transition_counter,
 )
 from bot_detector.structs import MetaData, PlayerStruct
@@ -40,6 +40,7 @@ def _force_log() -> None:
 class Settings(BaseSettings):
     LIMIT: int = 10_000
     MAX_LAG: int = 100_000
+    METRICS_PORT: int = 8000
 
 
 @dataclass
@@ -111,7 +112,6 @@ async def produce_players(
     error = await player_queue.put(player_structs)
     if isinstance(error, Exception):
         raise error
-    players_produced_counter.inc(len(player_structs))
 
 
 def _reduce_days(fetch_params: FetchParams) -> FetchParams:
@@ -273,6 +273,7 @@ async def process_players(
 
 
 async def main():
+    start_metrics_server(port=Settings().METRICS_PORT)
     async_session, async_engine = get_session_factory(SETTINGS=DBSettings())
 
     bootstrap_servers = KafkaSettings().bootstrap_servers

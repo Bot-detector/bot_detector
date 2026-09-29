@@ -12,7 +12,6 @@ from bot_detector.worker_hiscore import adapter
 from bot_detector.worker_hiscore.metrics import (
     players_updated_counter,
     rows_inserted_counter,
-    to_predict_produced_counter,
 )
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -78,6 +77,5 @@ class HiscoreWorker(Worker[ScrapedStruct]):
         to_predict_batch = [adapter.transform_scraped_struct(r) for r in batch]
         to_predict_batch = [d for d in to_predict_batch if d is not None]
         await self._data_to_predict_producer.put(to_predict_batch)
-        to_predict_produced_counter.inc(len(to_predict_batch))
         logger.info(f"[{self._id}] processed {len(to_predict_batch)} scrapes")
         return []

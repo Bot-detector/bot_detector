@@ -30,6 +30,7 @@ from bot_detector.structs import (
     PlayerStruct,
 )
 from pydantic import ValidationError
+from pydantic_settings import BaseSettings
 
 from .metrics import (
     error_counter,
@@ -38,11 +39,16 @@ from .metrics import (
     retry_counter,
     retry_delay_histogram,
     retry_histogram,
+    start_metrics_server,
     success_counter,
     total_counter,
 )
 
 logger = logging.getLogger(__name__)
+
+
+class Settings(BaseSettings):
+    METRICS_PORT: int = 8000
 
 
 async def produce_player_to_scrape(
@@ -333,6 +339,7 @@ async def work(
 
 
 async def main():
+    start_metrics_server(port=Settings().METRICS_PORT)
     proxy_manager = ProxyManager(api_key=ProxySettings().PROXY_API_KEY)  # type: ignore
     proxies = await proxy_manager.fetch_proxies()
 

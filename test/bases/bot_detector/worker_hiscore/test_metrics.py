@@ -45,8 +45,8 @@ def _mock_session_factory() -> MagicMock:
 @pytest.mark.asyncio
 async def test_insert_batch_increments_counters():
     batch = [_build_scraped_struct(), _build_scraped_struct()]
-    players_before = _sample("highscore_worker_players_updated_total") or 0
-    rows_before = _sample("highscore_worker_rows_inserted_total") or 0
+    players_before = _sample("worker_hiscore_players_updated_total") or 0
+    rows_before = _sample("worker_hiscore_rows_inserted_total") or 0
 
     await insert_batch(
         session_factory=_mock_session_factory(),
@@ -55,24 +55,24 @@ async def test_insert_batch_increments_counters():
         player_repo=AsyncMock(),
     )
 
-    assert (
-        _sample("highscore_worker_players_updated_total") or 0
-    ) == players_before + 2
-    assert (_sample("highscore_worker_rows_inserted_total") or 0) == rows_before + 2
+    assert (_sample("worker_hiscore_players_updated_total") or 0) == players_before + 2
+    assert (_sample("worker_hiscore_rows_inserted_total") or 0) == rows_before + 2
 
 
 @pytest.mark.asyncio
-async def test_handle_increments_to_predict_counter():
+async def test_handle_puts_to_predict_batch():
     batch = [_build_scraped_struct()]
-    before = _sample("highscore_worker_to_predict_produced_total") or 0
+    producer = AsyncMock()
 
     worker = HiscoreWorker(
         worker_id=0,
         session_factory=_mock_session_factory(),
         highscore_repo=AsyncMock(),
         player_repo=AsyncMock(),
-        data_to_predict_producer=AsyncMock(),
+        data_to_predict_producer=producer,
     )
     await worker.handle(batch)
 
-    assert (_sample("highscore_worker_to_predict_produced_total") or 0) == before + 1
+    producer.put.assert_awaited_once()
+    put_batch = producer.put.await_args.args[0]
+    assert len(put_batch) == 1

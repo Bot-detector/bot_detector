@@ -1,14 +1,14 @@
-import os
+import logging
 
 from prometheus_client import Counter, start_http_server
 
-if os.environ.get("ENVIRONMENT") != "test":
-    start_http_server(8000)
+logger = logging.getLogger(__name__)
 
-players_produced_counter = Counter(
-    name="scrape_task_producer_players_produced",
-    documentation="Number of players produced to players.to_scrape",
-)
+
+def start_metrics_server(port: int) -> None:
+    start_http_server(port)
+    logger.info(f"metrics server started on port {port}")
+
 
 lag_throttle_counter = Counter(
     name="scrape_task_producer_lag_throttles",

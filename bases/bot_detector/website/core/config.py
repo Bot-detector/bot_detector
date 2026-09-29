@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     RELEASE_VERSION: str = Field(default="0.1")
     PATREON_CLIENT_ID: str = Field(default="")
     PATREON_CLIENT_SECRET: str = Field(default="")
+    METRICS_PORT: int = Field(default=8000)
 
 
 BD_API = BotDetector(token=Settings().BD_TOKEN)
