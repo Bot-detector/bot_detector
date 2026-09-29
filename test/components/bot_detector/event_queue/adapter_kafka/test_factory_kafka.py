@@ -38,6 +38,7 @@ async def test_queue_factory_creates_kafka_queue():
 
     assert isinstance(queue, Queue)
     assert isinstance(queue._backend, AIOKafkaAdapter)
+    assert queue._name == "players"
 
     queue._backend.start = AsyncMock()
     queue._backend.stop = AsyncMock()

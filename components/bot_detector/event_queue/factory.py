@@ -88,6 +88,13 @@ def create_lag_probe(
             return ValueError(f"Unknown backend_type: {backend_type}")
 
 
+def _queue_name(model: Type[T], config: Any) -> str:
+    """Identity used for metrics labels: the topic when the backend has
+    one (kafka), otherwise the model name (memory)."""
+    topic = getattr(config, "topic", None)
+    return topic if isinstance(topic, str) and topic else model.__name__
+
+
 class QueueFactory:
     @staticmethod
     def create_queue(
@@ -104,13 +111,14 @@ class QueueFactory:
             case _:
                 return ValueError(f"Unknown backend_type: {backend_type}")
 
+        name = _queue_name(model=model, config=config)
         match queue_type:
             case "queue" if isinstance(adapter, QueueBackendProtocol):
-                queue = Queue[model](adapter, name=model.__name__)
+                queue = Queue[model](adapter, name=name)
             case "producer" if isinstance(adapter, QueueBackendProducerProtocol):
-                queue = QueueProducer[model](adapter, name=model.__name__)
+                queue = QueueProducer[model](adapter, name=name)
             case "consumer" if isinstance(adapter, QueueBackendConsumerProtocol):
-                queue = QueueConsumer[model](adapter, name=model.__name__)
+                queue = QueueConsumer[model](adapter, name=name)
             case _:
                 return ValueError(f"Unknown queue_type: {queue_type}")
         return queue
