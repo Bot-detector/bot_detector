@@ -47,11 +47,3 @@ class ConnectionManager:
         self, message: str, websocket: ConnectionLike
     ) -> None:
         await websocket.send_text(message)
-
-    async def broadcast(self, message: str, group: str) -> None:
-        for connection in list(self.active_connections.get(group, [])):
-            try:
-                await connection.send_text(message)
-            except Exception:
-                logger.warning("broadcast failed, dropping connection")
-                self.disconnect(connection)

@@ -64,20 +64,19 @@ async def test_anonymous_stream_fans_out_to_each_subscriber():
 
 
 @pytest.mark.asyncio
-async def test_keyed_stream_delivers_once_and_subscribes_none():
+async def test_keyed_stream_fans_out_like_anonymous():
     stream, consumer = make_stream(anonymous=False)
-    assert stream.subscribe() is None
+
+    inbox_a = stream.subscribe(name="tab-1")
+    inbox_b = stream.subscribe(name="tab-2")
+    assert inbox_a is not None
+    assert inbox_b is not None
 
     message = ScrapedStruct.model_construct()
     consumer.messages.append(message)
 
-    first = await asyncio.wait_for(stream.get(), timeout=2)
-    assert first is message
-
-    # delivered exactly once: the queue is empty now, so the next get
-    # parks until the timeout
-    with pytest.raises(asyncio.TimeoutError):
-        await asyncio.wait_for(stream.get(), timeout=0.2)
+    assert await asyncio.wait_for(inbox_a.queue.get(), timeout=2) is message
+    assert await asyncio.wait_for(inbox_b.queue.get(), timeout=2) is message
 
     await stream.stop()
 
@@ -146,7 +145,6 @@ async def test_unsubscribe_stops_delivery():
     assert inbox is not None
 
     stream.unsubscribe(inbox)
-    stream.unsubscribe(None)
 
     consumer.messages.append(ScrapedStruct.model_construct())
     await asyncio.sleep(0.05)

@@ -135,13 +135,15 @@ async def test_pump_delivers_messages_and_errors_as_values():
     stream = manager.get(user=user, topic=topic)
     assert isinstance(stream, GroupStream)
     consumer = repo.consumers[stream.group]
+    inbox = stream.subscribe()
 
     message = ScrapedStruct.model_construct()
     error = RuntimeError("kafka down")
     consumer.messages.extend([message, error])
 
-    first = await asyncio.wait_for(stream.get(), timeout=2)
-    second = await asyncio.wait_for(stream.get(), timeout=2)
+    assert inbox is not None
+    first = await asyncio.wait_for(inbox.queue.get(), timeout=2)
+    second = await asyncio.wait_for(inbox.queue.get(), timeout=2)
 
     assert first is message
     assert second is error
