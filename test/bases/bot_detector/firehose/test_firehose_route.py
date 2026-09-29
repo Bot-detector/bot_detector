@@ -6,7 +6,11 @@ import pytest
 from bot_detector.event_queue.core import QueueConsumer
 from bot_detector.event_queue.structs import ScrapedStruct
 from bot_detector.firehose.api.firehose import firehose
-from bot_detector.firehose.app.auth.auth import ANONYMOUS, AuthUser
+from bot_detector.firehose.app.auth.auth import (
+    ANONYMOUS,
+    AuthUser,
+    firehose_permission,
+)
 from bot_detector.firehose.app.connection_manager import ConnectionManager
 from bot_detector.firehose.app.consumer_manager import ConsumerManager
 from bot_detector.firehose.core.config import Settings
@@ -40,7 +44,9 @@ class FakeQueueRepo:
         self.consumers: dict[str, FakeConsumer] = {}
 
     def resolve_consumer_group(self, user: AuthUser, topic: str) -> str:
-        return f"fh-anonymous-{topic}"
+        if user.name == "anonymous":
+            return f"fh-anonymous-{topic}"
+        return f"fh-{topic}-{user.name.removeprefix('discord_')}"
 
     def create_consumer(
         self, user: AuthUser, topic: str
@@ -53,16 +59,25 @@ class FakeQueueRepo:
 
 class FakeAuthRepo:
     async def authenticate(self, api_key: str | None, topic: str) -> AuthUser:
+        if api_key == "keyed-token":
+            return AuthUser(
+                name="discord_42", scopes=[firehose_permission(topic=topic)]
+            )
         return ANONYMOUS
 
 
 class FakeWebSocket:
-    def __init__(self, state):
+    def __init__(
+        self,
+        state,
+        headers: dict[str, str] | None = None,
+        anonymous: bool = True,
+    ):
         self.sent: list[str] = []
         self.state = SimpleNamespace()
         self.app = SimpleNamespace(state=SimpleNamespace(firehose=state))
-        self.query_params = {"anonymous": "1"}
-        self.headers: dict[str, str] = {}
+        self.query_params = {"anonymous": "1"} if anonymous else {}
+        self.headers = headers or {}
         self.client = None
         self.accepted = False
         self.closed: tuple | None = None
@@ -140,6 +155,28 @@ async def test_unknown_topic_closes_with_4404():
 
     assert ws.closed == (4404, "unknown topic")
     assert ws.accepted is False
+
+
+@pytest.mark.asyncio
+async def test_keyed_connection_receives_fan_out_messages():
+    state, _ = make_state()
+    ws = FakeWebSocket(
+        state=state, headers={"x-api-key": "keyed-token"}, anonymous=False
+    )
+
+    task = asyncio.create_task(firehose(websocket=ws, topic=TOPIC))
+    try:
+        assert await asyncio.wait_for(asyncio.shield(_accepted(ws)), timeout=5)
+        consumer = state.queue_repo.consumers[f"fh-{TOPIC}-42"]
+        consumer.messages = _messages()
+
+        await wait_for(lambda: len(ws.sent) >= N)
+
+        got = [json.loads(m)["player_data"]["id"] for m in ws.sent]
+        assert got == list(range(N))
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
 
 
 @pytest.mark.asyncio

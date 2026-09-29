@@ -1,7 +1,6 @@
 from typing import Protocol, runtime_checkable
 
 from bot_detector.firehose.app.group_stream.structs import Inbox
-from pydantic import BaseModel
 
 
 @runtime_checkable
@@ -14,10 +13,8 @@ class GroupStreamProtocol(Protocol):
     type: str
     count: int
 
-    def subscribe(self, name: str | None = None) -> Inbox | None: ...
+    def subscribe(self, name: str | None = None) -> Inbox: ...
 
-    def unsubscribe(self, inbox: Inbox | None) -> None: ...
-
-    async def get(self) -> BaseModel | Exception: ...
+    def unsubscribe(self, inbox: Inbox) -> None: ...
 
     async def stop(self) -> None: ...

@@ -19,8 +19,8 @@ SHORT_ID_CHARS = 8
 class GroupStream:
     """One shared kafka consumer fanned out to connections.
 
-    Anonymous streams fan out: every subscriber (one per websocket
-    connection) gets a copy of each message through its own inbox.
+    Every subscriber (one per websocket connection, anonymous or keyed)
+    gets a copy of each message through its own inbox.
 
     - while at least one inbox has space, a full inbox always appends,
       evicting its oldest message, so a slow connection re-syncs to the
@@ -28,10 +28,6 @@ class GroupStream:
     - while every inbox is full nobody is consuming; the pump waits
       instead of destroying messages (kafka retains the stream until a
       connection catches up)
-
-    Keyed streams compete: connections share one queue and each message
-    is delivered exactly once, to whichever connection asks first (the
-    api layer broadcasts it to the group's connections).
     """
 
     def __init__(
@@ -48,20 +44,16 @@ class GroupStream:
         self.type = stream_type(anonymous=anonymous)
         self.count = 0
         self._consumer = consumer
-        self._fanout = anonymous
-        self._queue: asyncio.Queue = asyncio.Queue(maxsize=QUEUE_MAX_SIZE)
         self._subscribers: list[Inbox] = []
         self._loop = loop
         self._task = loop.create_task(self._pump())
 
-    def subscribe(self, name: str | None = None) -> Inbox | None:
-        """Register a per-connection inbox; None for compete streams.
+    def subscribe(self, name: str | None = None) -> Inbox:
+        """Register a per-connection inbox.
 
         Unnamed subscribers get a short uuid, enough to tell eviction
         log lines apart.
         """
-        if not self._fanout:
-            return None
         inbox = Inbox(
             name=name or uuid.uuid4().hex[-SHORT_ID_CHARS:],
             queue=asyncio.Queue(maxsize=QUEUE_MAX_SIZE),
@@ -69,21 +61,15 @@ class GroupStream:
         self._subscribers.append(inbox)
         return inbox
 
-    def unsubscribe(self, inbox: Inbox | None) -> None:
-        if inbox is not None and inbox in self._subscribers:
+    def unsubscribe(self, inbox: Inbox) -> None:
+        if inbox in self._subscribers:
             self._subscribers.remove(inbox)
-
-    async def get(self) -> BaseModel | Exception:
-        return await self._queue.get()
 
     async def _hold(self, message: BaseModel | Exception | None) -> bool:
         """Gate between kafka and the queues; False drops the message."""
         return True
 
     async def _deliver(self, message: BaseModel | Exception | None) -> None:
-        if not self._fanout:
-            await self._queue.put(message)
-            return
         # every inbox full = nobody consuming; wait rather than destroy
         # messages (kafka retains the stream until a connection catches up)
         while self._subscribers and all(

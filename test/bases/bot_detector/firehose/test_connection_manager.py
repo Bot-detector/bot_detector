@@ -36,29 +36,16 @@ async def test_connect_accepts_and_groups(manager: ConnectionManager):
 
 
 @pytest.mark.asyncio
-async def test_broadcast_reaches_only_same_group(manager: ConnectionManager):
-    ws_anon = FakeWebSocket()
-    ws_keyed = FakeWebSocket()
-    await manager.connect(websocket=ws_anon, group="firehose-anonymous")
-    await manager.connect(websocket=ws_keyed, group="firehose-keyed")
+async def test_send_personal_message_targets_one_connection(manager: ConnectionManager):
+    ws_a = FakeWebSocket()
+    ws_b = FakeWebSocket()
+    await manager.connect(websocket=ws_a, group="firehose-anonymous")
+    await manager.connect(websocket=ws_b, group="firehose-anonymous")
 
-    await manager.broadcast(message="hello", group="firehose-anonymous")
+    await manager.send_personal_message(message="hello", websocket=ws_b)
 
-    assert ws_anon.sent == ["hello"]
-    assert ws_keyed.sent == []
-
-
-@pytest.mark.asyncio
-async def test_broadcast_drops_failing_connections(manager: ConnectionManager):
-    ws_good = FakeWebSocket()
-    ws_bad = FakeWebSocket(fail_send=True)
-    await manager.connect(websocket=ws_good, group="g")
-    await manager.connect(websocket=ws_bad, group="g")
-
-    await manager.broadcast(message="hello", group="g")
-
-    assert ws_good.sent == ["hello"]
-    assert manager.count(group="g") == 1
+    assert ws_a.sent == []
+    assert ws_b.sent == ["hello"]
 
 
 @pytest.mark.asyncio

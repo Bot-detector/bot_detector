@@ -19,12 +19,12 @@ FIREHOSE_CONNECTIONS = Gauge(
 )
 FIREHOSE_MESSAGES = Counter(
     "firehose_messages_total",
-    "messages delivered to a consumer group",
+    "messages delivered to connections",
     ["topic", "type"],
 )
 FIREHOSE_BYTES = Counter(
     "firehose_bytes_total",
-    "message payload bytes delivered to a consumer group",
+    "message payload bytes delivered to connections",
     ["topic", "type"],
 )
 FIREHOSE_DROPPED = Counter(

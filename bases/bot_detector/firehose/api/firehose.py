@@ -50,10 +50,9 @@ async def firehose(websocket: WebSocket, topic: str) -> None:
         return
 
     conn_type = stream_type(anonymous=stream.anonymous)
-    # anonymous streams fan out: this connection gets its own inbox and a
-    # copy of every message; keyed streams compete on the shared queue
-    # and rebroadcast to the group's connections. the client address
-    # names the inbox for eviction logs
+    # every connection (anonymous or keyed) gets its own inbox and a
+    # copy of each message; the client address names the inbox for
+    # eviction logs
     client = websocket.client
     client_name = f"{client.host}:{client.port}" if client else None
     inbox = stream.subscribe(name=client_name)
@@ -69,9 +68,7 @@ async def firehose(websocket: WebSocket, topic: str) -> None:
             # receive(), which must end this handler - a parked get()
             # alone would leak the connection, the inbox and the stream
             # refcount (and with it the kafka consumer)
-            get_task = asyncio.create_task(
-                inbox.queue.get() if inbox is not None else stream.get()
-            )
+            get_task = asyncio.create_task(inbox.queue.get())
             recv_task = asyncio.create_task(websocket.receive())
             done, pending = await asyncio.wait(
                 {get_task, recv_task}, return_when=asyncio.FIRST_COMPLETED
@@ -100,15 +97,9 @@ async def firehose(websocket: WebSocket, topic: str) -> None:
             FIREHOSE_BYTES.labels(topic=topic, type=conn_type).inc(
                 len(payload.encode("utf-8"))
             )
-            if inbox is not None:
-                # fan-out: this connection sends its own inbox copy
-                await state.connection_manager.send_personal_message(
-                    message=payload, websocket=websocket
-                )
-            else:
-                await state.connection_manager.broadcast(
-                    message=payload, group=stream.group
-                )
+            await state.connection_manager.send_personal_message(
+                message=payload, websocket=websocket
+            )
     except WebSocketDisconnect:
         logger.info("client disconnected")
     except Exception:
