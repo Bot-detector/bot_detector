@@ -6,6 +6,7 @@ from bot_detector.event_queue.core.event_queue import (
     Queue,
     QueueConsumer,
     QueueProducer,
+    _get_many_outcome,
 )
 from bot_detector.event_queue.factory import QueueFactory
 from prometheus_client import REGISTRY
@@ -39,6 +40,24 @@ class ExplodingConsumerBackend:
 
     async def get_many(self, count: int) -> list[MetricsMessage] | Exception:
         return RuntimeError("backend down")
+
+    async def commit(self) -> Optional[Exception]:
+        return None
+
+
+class StaticBatchBackend:
+    def __init__(self, batch: list[MetricsMessage] | Exception):
+        self.batch = batch
+
+    async def start(self) -> None: ...
+
+    async def stop(self) -> None: ...
+
+    async def get_one(self) -> Optional[MetricsMessage] | Exception:
+        return None
+
+    async def get_many(self, count: int) -> list[MetricsMessage] | Exception:
+        return self.batch
 
     async def commit(self) -> Optional[Exception]:
         return None
@@ -203,3 +222,96 @@ async def test_factory_labels_metrics_with_model_name():
     assert consumed == 1
 
     await queue.stop()
+
+
+@pytest.mark.parametrize(
+    "size,count,expected",
+    [
+        (0, 10, "empty"),
+        (1, 10, "partial"),
+        (9, 10, "partial"),
+        (10, 10, "full"),
+        (11, 10, "full"),
+    ],
+)
+def test_get_many_outcome_classification(size, count, expected):
+    assert _get_many_outcome(size=size, count=count) == expected
+
+
+@pytest.mark.asyncio
+async def test_get_many_full_batch_counts_outcome_full():
+    batch = [MetricsMessage(value=i) for i in range(5)]
+    consumer = QueueConsumer[MetricsMessage](
+        backend=StaticBatchBackend(batch=batch), name="metrics-outcome-full"
+    )
+    await consumer.start()
+
+    result = await consumer.get_many(5)
+
+    assert result == batch
+    outcome = _sample(
+        "event_queue_get_many_outcomes_total",
+        {"queue": "metrics-outcome-full", "outcome": "full"},
+    )
+    assert outcome == 1
+
+    await consumer.stop()
+
+
+@pytest.mark.asyncio
+async def test_get_many_short_batch_counts_outcome_partial():
+    batch = [MetricsMessage(value=i) for i in range(3)]
+    consumer = QueueConsumer[MetricsMessage](
+        backend=StaticBatchBackend(batch=batch), name="metrics-outcome-partial"
+    )
+    await consumer.start()
+
+    result = await consumer.get_many(10)
+
+    assert result == batch
+    outcome = _sample(
+        "event_queue_get_many_outcomes_total",
+        {"queue": "metrics-outcome-partial", "outcome": "partial"},
+    )
+    assert outcome == 1
+
+    await consumer.stop()
+
+
+@pytest.mark.asyncio
+async def test_get_many_empty_batch_counts_outcome_empty():
+    consumer = QueueConsumer[MetricsMessage](
+        backend=StaticBatchBackend(batch=[]), name="metrics-outcome-empty"
+    )
+    await consumer.start()
+
+    result = await consumer.get_many(10)
+
+    assert result == []
+    outcome = _sample(
+        "event_queue_get_many_outcomes_total",
+        {"queue": "metrics-outcome-empty", "outcome": "empty"},
+    )
+    assert outcome == 1
+
+    await consumer.stop()
+
+
+@pytest.mark.asyncio
+async def test_get_many_error_does_not_count_outcome():
+    consumer = QueueConsumer[MetricsMessage](
+        backend=StaticBatchBackend(batch=RuntimeError("backend down")),
+        name="metrics-outcome-error",
+    )
+    await consumer.start()
+
+    result = await consumer.get_many(10)
+
+    assert isinstance(result, Exception)
+    outcomes = _sample(
+        "event_queue_get_many_outcomes_total",
+        {"queue": "metrics-outcome-error", "outcome": "empty"},
+    )
+    assert outcomes is None
+
+    await consumer.stop()

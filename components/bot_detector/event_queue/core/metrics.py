@@ -12,6 +12,15 @@ MESSAGES_CONSUMED = Counter(
     labelnames=["queue"],
 )
 
+GET_MANY_OUTCOMES = Counter(
+    name="event_queue_get_many_outcomes",
+    documentation=(
+        "Outcome of get_many calls: full (got requested count), "
+        "partial (short, consume timeout hit), empty (nothing available)"
+    ),
+    labelnames=["queue", "outcome"],
+)
+
 GET_LATENCY = Histogram(
     name="event_queue_get_seconds",
     documentation="Latency of event queue get_one/get_many calls",
@@ -31,5 +40,8 @@ GET_LATENCY = Histogram(
         2.5,
         5.0,
         10.0,
+        15.0,
+        20.0,
+        30.0,
     ),
 )
