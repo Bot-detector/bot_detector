@@ -1,57 +1,98 @@
+import asyncio
 import logging
-from typing import Any, Protocol
+import uuid
+from dataclasses import dataclass
+from typing import Protocol
 
 logger = logging.getLogger(__name__)
 
+# a send that cannot complete within this window marks the connection
+# dead: the caller must close it, never send on it again (a cancelled
+# send can leave a partial frame on the wire)
+SEND_TIMEOUT_S = 2.0
 
-class ConnectionLike(Protocol):
+
+class WebsocketLike(Protocol):
     """Minimal contract the manager needs from a websocket."""
-
-    @property
-    def state(self) -> Any: ...
 
     async def accept(self) -> None: ...
 
     async def send_text(self, data: str) -> None: ...
 
+    async def close(self, code: int = 1000, reason: str | None = None) -> None: ...
+
+
+@dataclass
+class Connection:
+    """A registered websocket and the consumer group it joined."""
+
+    id: str
+    websocket: WebsocketLike
+    group: str
+
 
 class ConnectionManager:
-    """Tracks active websocket connections, grouped by consumer group.
+    """The interface between the firehose and websockets.
 
-    Broadcasts go only to connections sharing the same group, so a keyed
-    client's replayed stream does not flood anonymous clients.
+    Owns the connection registry (id -> websocket, grouped by consumer
+    group) and every socket operation: accept, bounded send, close.
+    Callers never touch the websocket itself; a failed or timed-out send
+    raises, and the caller closes the connection via `close`.
     """
 
     def __init__(self) -> None:
-        self.active_connections: dict[str, list[ConnectionLike]] = {}
+        self._connections: dict[str, Connection] = {}
 
-    async def connect(self, websocket: ConnectionLike, group: str) -> None:
+    async def connect(self, websocket: WebsocketLike, group: str) -> str:
+        """Accept the socket, register it and return its connection id."""
         await websocket.accept()
-        websocket.state.group = group
-        self.active_connections.setdefault(group, []).append(websocket)
+        conn_id = uuid.uuid4().hex
+        self._connections[conn_id] = Connection(
+            id=conn_id, websocket=websocket, group=group
+        )
+        return conn_id
 
-    def disconnect(self, websocket: ConnectionLike) -> None:
-        group = getattr(websocket.state, "group", None)
-        if group is None:
+    def disconnect(self, conn_id: str) -> None:
+        """Forget a connection without touching the socket."""
+        self._connections.pop(conn_id, None)
+
+    async def send(self, conn_id: str, payload: str) -> None:
+        """Send to one connection; raises when it is gone or too slow.
+
+        A timeout cancels the in-flight send: the socket is unusable
+        afterwards, so the caller must close it (kick), never retry.
+        """
+        connection = self._connections.get(conn_id)
+        if connection is None:
+            raise ConnectionGoneError(conn_id)
+        await asyncio.wait_for(
+            connection.websocket.send_text(payload), timeout=SEND_TIMEOUT_S
+        )
+
+    async def close(self, conn_id: str, code: int, reason: str) -> None:
+        """Close the socket and drop the registration (idempotent)."""
+        connection = self._connections.pop(conn_id, None)
+        if connection is None:
             return
-        connections = self.active_connections.get(group, [])
-        if websocket in connections:
-            connections.remove(websocket)
-        if not connections:
-            self.active_connections.pop(group, None)
+        try:
+            await connection.websocket.close(code=code, reason=reason)
+        except Exception:
+            logger.debug(f"close failed for connection={conn_id}")
+
+    def group(self, conn_id: str) -> str | None:
+        connection = self._connections.get(conn_id)
+        return connection.group if connection else None
 
     def count(self, group: str) -> int:
-        return len(self.active_connections.get(group, []))
+        return sum(1 for c in self._connections.values() if c.group == group)
 
-    async def send_personal_message(
-        self, message: str, websocket: ConnectionLike
-    ) -> None:
-        await websocket.send_text(message)
+    def has_connections(self, group: str) -> bool:
+        return self.count(group) > 0
 
-    async def broadcast(self, message: str, group: str) -> None:
-        for connection in list(self.active_connections.get(group, [])):
-            try:
-                await connection.send_text(message)
-            except Exception:
-                logger.warning("broadcast failed, dropping connection")
-                self.disconnect(connection)
+
+class ConnectionGoneError(Exception):
+    """The connection id is not registered (already disconnected)."""
+
+    def __init__(self, conn_id: str):
+        self.conn_id = conn_id
+        super().__init__(f"connection gone: {conn_id}")

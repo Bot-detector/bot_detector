@@ -2,18 +2,20 @@ import asyncio
 import logging
 
 from bot_detector.firehose.app.consumer import ALLOWED_TOPICS
-from bot_detector.firehose.app.group_stream import serialize
+from bot_detector.firehose.app.exchange import InboxClosed, KICK_CODE, KICK_REASON
 from bot_detector.firehose.app.metrics import (
     FIREHOSE_BYTES,
     FIREHOSE_CONNECTIONS,
     FIREHOSE_MESSAGES,
-    stream_type,
 )
 from bot_detector.firehose.app.state import FirehoseState
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 router = APIRouter(tags=["Firehose"])
 logger = logging.getLogger(__name__)
+
+# extra wait before pulling the next message after a poison payload
+POISON_BACKOFF_S = 0.5
 
 
 @router.get("/firehose/topics", summary="Available firehose topics")
@@ -43,78 +45,75 @@ async def firehose(websocket: WebSocket, topic: str) -> None:
         await websocket.close(code=4401, reason="invalid api key")
         return
 
-    stream = state.consumer_manager.get(user=user, topic=topic)
-    if isinstance(stream, Exception):
-        logger.error(f"failed to create consumer: {stream}")
+    queue = state.queue_manager.get(user=user, topic=topic)
+    if isinstance(queue, Exception):
+        logger.error(f"failed to create consumer: {queue}")
         await websocket.close(code=1011, reason="internal error")
         return
 
-    conn_type = stream_type(anonymous=stream.anonymous)
-    # anonymous streams fan out: this connection gets its own inbox and a
-    # copy of every message; keyed streams compete on the shared queue
-    # and rebroadcast to the group's connections. the client address
-    # names the inbox for eviction logs
-    client = websocket.client
-    client_name = f"{client.host}:{client.port}" if client else None
-    inbox = stream.subscribe(name=client_name)
-    await state.connection_manager.connect(websocket=websocket, group=stream.group)
-    FIREHOSE_CONNECTIONS.labels(topic=topic, type=conn_type).inc()
+    conn_id = await state.connection_manager.connect(
+        websocket=websocket, group=queue.group
+    )
+    inbox = state.exchange.subscribe(
+        topic=topic,
+        group=queue.group,
+        conn_id=conn_id,
+        user=user,
+    )
+    FIREHOSE_CONNECTIONS.labels(topic=topic, type=queue.type).inc()
     logger.info(
-        f"client connected topic={topic} group={stream.group} ({client_name=}, connections={state.connection_manager.count(group=stream.group)})"
+        f"client connected topic={topic} group={queue.group} "
+        f"connection={conn_id} "
+        f"(connections={state.connection_manager.count(group=queue.group)})"
     )
     try:
+        # one long-lived receive task: get_message races it so an idle
+        # client disconnect ends the loop immediately
+        recv_task = asyncio.create_task(websocket.receive())
         while True:
-            # race the next message against the client: an idle client
-            # that disconnects delivers a websocket.disconnect on
-            # receive(), which must end this handler - a parked get()
-            # alone would leak the connection, the inbox and the stream
-            # refcount (and with it the kafka consumer)
-            get_task = asyncio.create_task(
-                inbox.queue.get() if inbox is not None else stream.get()
-            )
-            recv_task = asyncio.create_task(websocket.receive())
-            done, pending = await asyncio.wait(
-                {get_task, recv_task}, return_when=asyncio.FIRST_COMPLETED
-            )
-            for task in pending:
-                task.cancel()
-            await asyncio.gather(*pending, return_exceptions=True)
-            if recv_task in done:
-                event = recv_task.result()
-                if event.get("type") == "websocket.disconnect":
-                    raise WebSocketDisconnect(code=event.get("code", 1000))
-                if get_task not in done:
-                    # stray client frame (ping/text); keep waiting
-                    continue
-            message = get_task.result()
+            message = await inbox.get_message(disconnect=recv_task)
+            if isinstance(message, InboxClosed):
+                # too slow: the exchange kicked this inbox; close and
+                # unsubscribe
+                await state.connection_manager.close(
+                    conn_id, code=KICK_CODE, reason=KICK_REASON
+                )
+                break
+            if isinstance(message, dict):
+                # ASGI event from the client
+                if message.get("type") == "websocket.disconnect":
+                    raise WebSocketDisconnect(code=message.get("code", 1000))
+                # stray client frame (ping/text); keep waiting
+                continue
             if message is None:
                 continue
             if isinstance(message, Exception):
                 # skip poison messages / transient consumer errors
                 # (backoff guards against a tight error loop)
                 logger.warning(f"skipping message: {message}")
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(POISON_BACKOFF_S)
                 continue
-            payload = serialize(message)
-            FIREHOSE_MESSAGES.labels(topic=topic, type=conn_type).inc()
-            FIREHOSE_BYTES.labels(topic=topic, type=conn_type).inc(
-                len(payload.encode("utf-8"))
+            try:
+                # the manager is the only socket interface: a send that
+                # fails or times out leaves the socket unusable, so it
+                # is closed, never retried
+                await state.connection_manager.send(conn_id, payload=message)
+            except Exception:
+                await state.connection_manager.close(
+                    conn_id, code=KICK_CODE, reason="send timeout"
+                )
+                break
+            FIREHOSE_MESSAGES.labels(topic=topic, type=queue.type).inc()
+            FIREHOSE_BYTES.labels(topic=topic, type=queue.type).inc(
+                len(message.encode("utf-8"))
             )
-            if inbox is not None:
-                # fan-out: this connection sends its own inbox copy
-                await state.connection_manager.send_personal_message(
-                    message=payload, websocket=websocket
-                )
-            else:
-                await state.connection_manager.broadcast(
-                    message=payload, group=stream.group
-                )
     except WebSocketDisconnect:
         logger.info("client disconnected")
     except Exception:
         logger.exception("stream aborted")
     finally:
-        FIREHOSE_CONNECTIONS.labels(topic=topic, type=conn_type).dec()
-        stream.unsubscribe(inbox)
-        state.connection_manager.disconnect(websocket=websocket)
-        await state.consumer_manager.release(user=user, topic=topic)
+        recv_task.cancel()
+        FIREHOSE_CONNECTIONS.labels(topic=topic, type=queue.type).dec()
+        state.exchange.unsubscribe(conn_id)
+        state.connection_manager.disconnect(conn_id)
+        await state.queue_manager.release(user=user, topic=topic)

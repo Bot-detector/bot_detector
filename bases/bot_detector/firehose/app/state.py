@@ -5,7 +5,8 @@ from bot_detector.firehose.app.auth.auth import ApiKeyAuthRepo
 from bot_detector.firehose.app.auth.discord import DiscordOAuth
 from bot_detector.firehose.app.connection_manager import ConnectionManager
 from bot_detector.firehose.app.consumer import QueueRepo
-from bot_detector.firehose.app.consumer_manager import ConsumerManager
+from bot_detector.firehose.app.exchange import Exchange
+from bot_detector.firehose.app.queue_manager import QueueManager
 from bot_detector.firehose.core.config import Settings
 
 
@@ -15,8 +16,9 @@ class FirehoseState:
 
     settings: Settings
     queue_repo: QueueRepo
+    exchange: Exchange
+    queue_manager: QueueManager
     auth_repo: ApiKeyAuthRepo
-    consumer_manager: ConsumerManager
     connection_manager: ConnectionManager
     http_session: ClientSession | None = None
     discord_oauth: DiscordOAuth | None = None
