@@ -191,6 +191,7 @@ async def test_factory_labels_metrics_with_model_name():
         config=InMemoryConfig(maxsize=10),
     )
     assert not isinstance(queue, Exception)
+    assert queue._name == "OtherMessage"
     await queue.start()
 
     await queue.put([OtherMessage(value=1)])
