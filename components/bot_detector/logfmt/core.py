@@ -1,6 +1,6 @@
-import json
 import logging
 
+import orjson
 from pydantic_settings import BaseSettings
 
 
@@ -27,7 +27,7 @@ class JsonFormatter(logging.Formatter):
         if record.exc_info:
             log_record["exception"] = self.formatException(record.exc_info)
 
-        return json.dumps(log_record, default=str)
+        return orjson.dumps(log_record, default=str).decode()
 
 
 class IgnoreSQLWarnings(logging.Filter):
