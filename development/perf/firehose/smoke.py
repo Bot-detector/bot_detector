@@ -43,6 +43,13 @@ def _fetch_metrics(metrics_port: int) -> str:
         return resp.read().decode()
 
 
+def _fetch_debug(port: int) -> dict:
+    with urllib.request.urlopen(
+        f"http://127.0.0.1:{port}/sim/debug", timeout=10
+    ) as resp:
+        return json.loads(resp.read().decode())
+
+
 def _sum_metric(text: str, name: str) -> float:
     total = 0.0
     for line in text.splitlines():
@@ -142,7 +149,12 @@ def _build_checks(results: dict, metrics: dict[str, float]) -> list[dict]:
 
 
 async def run_smoke(
-    port: int = 5099, metrics_port: int = 8099, duration: float = 25.0
+    port: int = 5099,
+    metrics_port: int = 8099,
+    duration: float = 25.0,
+    seed: int = 0,
+    error_pct: float = 0.02,
+    poison_pct: float = 0.1,
 ) -> dict:
     env = {
         **os.environ,
@@ -150,10 +162,14 @@ async def run_smoke(
         "SIM_POOL": "200",
         "SIM_PORT": str(port),
         "SIM_METRICS_PORT": str(metrics_port),
-        # fault rates sized so the routes' 0.5s error backoff stays well
-        # below the message inflow: ~0.04 paused seconds per second
-        "SIM_ERROR_EVERY": "4999",
-        "SIM_POISON_EVERY": "997",
+        # fault pcts sized so the routes' 0.5s error backoff stays well
+        # below the message inflow: ~0.04 paused seconds per second;
+        # kick grace below the run duration so stalled clients are
+        # actually kicked (and counted) inside the window
+        "SIM_SEED": str(seed),
+        "SIM_ERROR_PCT": str(error_pct),
+        "SIM_POISON_PCT": str(poison_pct),
+        "KICK_GRACE_S": "5",
         "SIM_VERBOSE": "",
     }
     proc = subprocess.Popen(  # noqa: S603
@@ -230,6 +246,26 @@ async def run_smoke(
                 )
             if results is not None:
                 checks.extend(_build_checks(results=results, metrics=metrics))
+            try:
+                debug = await asyncio.to_thread(_fetch_debug, port)
+                zombie_inboxes = debug.get("inboxes", [])
+                checks.append(
+                    {
+                        "name": "no_zombie_inboxes",
+                        "passed": len(zombie_inboxes) == 0,
+                        # every client is gone at this point; a surviving
+                        # inbox means a route hung before its cleanup
+                        "detail": f"inboxes={len(zombie_inboxes)}",
+                    }
+                )
+            except OSError as e:
+                checks.append(
+                    {
+                        "name": "no_zombie_inboxes",
+                        "passed": False,
+                        "detail": f"{type(e).__name__}: {e}",
+                    }
+                )
             checks.append(
                 {
                     "name": "bad_api_key_rejected",
@@ -280,10 +316,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--port", type=int, default=5099)
     parser.add_argument("--metrics-port", type=int, default=8099)
     parser.add_argument("--duration", type=float, default=25.0)
+    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--error-pct", type=float, default=0.02)
+    parser.add_argument("--poison-pct", type=float, default=0.1)
     args = parser.parse_args(argv)
     report = asyncio.run(
         run_smoke(
-            port=args.port, metrics_port=args.metrics_port, duration=args.duration
+            port=args.port,
+            metrics_port=args.metrics_port,
+            duration=args.duration,
+            seed=args.seed,
+            error_pct=args.error_pct,
+            poison_pct=args.poison_pct,
         )
     )
     print(json.dumps(report))

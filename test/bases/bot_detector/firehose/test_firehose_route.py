@@ -146,6 +146,31 @@ async def test_unknown_topic_closes_with_4404():
 
 
 @pytest.mark.asyncio
+async def test_stale_handshake_event_does_not_stall_delivery():
+    """uvicorn can deliver the ASGI 'websocket.connect' event to the
+    route's long-lived receive task; the route must recover (park a
+    fresh receive) and keep draining instead of spinning and
+    discarding inbox messages."""
+    state, consumer = make_state()
+    ws = FakeWebSocket(state=state)
+    # the ASGI handshake event arrives before anything else
+    ws._incoming.put_nowait({"type": "websocket.connect"})
+
+    task = asyncio.create_task(firehose(websocket=ws, topic=TOPIC))
+    try:
+        await wait_for(lambda: ws.accepted)
+        consumer.messages = _messages()
+
+        await wait_for(lambda: len(ws.sent) >= N)
+
+        got = [json.loads(m)["player_data"]["id"] for m in ws.sent]
+        assert got == list(range(N))
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+
+@pytest.mark.asyncio
 async def test_idle_disconnect_releases_stream_and_consumer():
     state, consumer = make_state()
     ws = FakeWebSocket(state=state)

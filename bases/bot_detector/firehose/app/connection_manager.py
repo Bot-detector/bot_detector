@@ -70,12 +70,25 @@ class ConnectionManager:
         )
 
     async def close(self, conn_id: str, code: int, reason: str) -> None:
-        """Close the socket and drop the registration (idempotent)."""
+        """Close the socket and drop the registration (idempotent).
+
+        Bounded: the close handshake flushes the same send buffer that
+        backpressure kicked the connection for (a peer that stopped
+        reading), so without a cap the route parks forever in close,
+        never unsubscribes, and leaks the inbox. On timeout the socket
+        is abandoned - the registration is already gone, so the route
+        can always finish its cleanup.
+        """
         connection = self._connections.pop(conn_id, None)
         if connection is None:
             return
         try:
-            await connection.websocket.close(code=code, reason=reason)
+            await asyncio.wait_for(
+                connection.websocket.close(code=code, reason=reason),
+                timeout=SEND_TIMEOUT_S,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(f"close abandoned (peer stopped reading): {conn_id}")
         except Exception:
             logger.debug(f"close failed for connection={conn_id}")
 

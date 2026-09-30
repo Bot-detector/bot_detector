@@ -12,6 +12,11 @@ class Settings(BaseSettings):
     # CORS_ORIGINS='["https://example.com"]'; ["*"] = any origin, no
     # credentials (X-API-Key header only, never cookies)
     cors_origins: list[str] = ["*"]
+    # new subscribers cannot be kicked for backpressure during this
+    # window: connect ramps fill inboxes while joiners arrive, not
+    # because a client is slow. within the grace a full inbox drops
+    # messages instead of kicking
+    kick_grace_s: float = 30.0
 
 
 SETTINGS = Settings()

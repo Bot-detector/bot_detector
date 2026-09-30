@@ -1,4 +1,5 @@
 import asyncio
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -7,7 +8,7 @@ from bot_detector.firehose.app.auth.auth import ANONYMOUS_USER, AuthUser
 from bot_detector.firehose.app.metrics import QueueType, stream_type
 from pydantic import BaseModel
 
-QUEUE_MAX_SIZE = 100
+QUEUE_MAX_SIZE = 1000
 
 
 class InboxClosed(Exception):
@@ -32,6 +33,12 @@ class Inbox:
     )
     kicked: bool = False
     kick: asyncio.Event = field(default_factory=asyncio.Event)
+    subscribed_at: float = field(default_factory=time.monotonic)
+
+    @property
+    def age_s(self) -> float:
+        """Seconds since subscribe; drives the join grace in the exchange."""
+        return time.monotonic() - self.subscribed_at
 
     @property
     def type(self) -> QueueType:
@@ -40,7 +47,7 @@ class Inbox:
 
     async def get_message(
         self, disconnect: asyncio.Task[Any] | None = None
-    ) -> str | Exception | InboxClosed | Any:
+    ) -> str | InboxClosed | Any:
         """Next payload; InboxClosed once the connection was too slow.
 
         Races the queue against the kick flag so a parked getter wakes
@@ -68,6 +75,12 @@ class Inbox:
         )
         if kick_task in done:
             return InboxClosed("consumed too slow")
+        # a queued message wins over a completed receive task: the task
+        # may merely hold a stale ASGI event (e.g. the handshake
+        # "websocket.connect"), and the message is already popped from
+        # the queue - returning it here would silently drop it
+        if get_task in done:
+            return get_task.result()
         if disconnect is not None and disconnect in done:
             return disconnect.result()
         return get_task.result()

@@ -14,9 +14,6 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 router = APIRouter(tags=["Firehose"])
 logger = logging.getLogger(__name__)
 
-# extra wait before pulling the next message after a poison payload
-POISON_BACKOFF_S = 0.5
-
 
 @router.get("/firehose/topics", summary="Available firehose topics")
 async def firehose_topics() -> list[str]:
@@ -83,15 +80,16 @@ async def firehose(websocket: WebSocket, topic: str) -> None:
                 # ASGI event from the client
                 if message.get("type") == "websocket.disconnect":
                     raise WebSocketDisconnect(code=message.get("code", 1000))
+                if message.get("type") == "websocket.connect":
+                    # uvicorn delivers the handshake event through
+                    # receive: the long-lived receive task can complete
+                    # with it before any message arrives, which would
+                    # otherwise spin this loop and discard inbox
+                    # messages. park a fresh receive and keep draining
+                    recv_task = asyncio.create_task(websocket.receive())
                 # stray client frame (ping/text); keep waiting
                 continue
             if message is None:
-                continue
-            if isinstance(message, Exception):
-                # skip poison messages / transient consumer errors
-                # (backoff guards against a tight error loop)
-                logger.warning(f"skipping message: {message}")
-                await asyncio.sleep(POISON_BACKOFF_S)
                 continue
             try:
                 # the manager is the only socket interface: a send that

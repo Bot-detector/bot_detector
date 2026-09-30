@@ -16,7 +16,7 @@ flowchart TB
         CONSUME["Exchange._consume<br>serialize once per message"]
         HOLD["DelayedExchange._hold<br>hold reports 2h<br>(reports.to_insert)"]
         DELIVER["Exchange._deliver"]
-        INBOX["inbox per connection<br>registry keyed by conn_id<br>queue(100), kick flag"]
+        INBOX["inbox per connection<br>registry keyed by conn_id<br>queue(1000), kick flag"]
 
         KT --> QR --> CMGR --> CONSUME --> HOLD --> DELIVER --> INBOX
     end
@@ -39,7 +39,7 @@ flowchart TB
 
 - First subscriber: `ConsumerManager.create` builds, registers and starts the exchange; `get` refcounts +1.
 - Last subscriber leaves: `ConsumerManager.release` drops the refcount, `delete` stops and unregisters the exchange (consumer_manager.py).
-- Slow client: a full inbox (100) sets the kick flag; the route closes the websocket (1013) and unsubscribes; the others keep streaming (`firehose_kicked_total`).
+- Slow client: a full inbox (1000) sets the kick flag; the route closes the websocket (1013) and unsubscribes; the others keep streaming (`firehose_kicked_total`). Join grace: for the first 30s of a connection (configurable, `KICK_GRACE_S`) a full inbox drops messages instead of kicking, so connect ramps cannot massacre early joiners.
 - Failing or too-slow send: the route closes the connection the same way (a cancelled send can leave a partial frame; never retry).
 - No subscribers left: the consume loop stops; kafka retains the stream until a client connects.
 - Two tabs on one user group: each gets a copy (fan-out per connection).

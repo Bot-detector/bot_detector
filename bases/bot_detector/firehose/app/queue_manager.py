@@ -17,6 +17,11 @@ TOPIC_HOLDS: dict[str, DelayAdapter] = {
     "reports.to_insert": DelayAdapter(delay_s=2 * 60 * 60),
 }
 
+# pause after a consumer error / poison payload so a tight fault loop
+# cannot spin the pump; applied once per fault, at the pump, never per
+# websocket route
+ERROR_BACKOFF_S = 0.5
+
 
 @dataclass
 class Queue:
@@ -142,12 +147,14 @@ class QueueManager:
                     continue
                 # serialize once per message here (the consume loop),
                 # not once per connection: every inbox receives the
-                # same ready payload
-                payload: str | Exception
-                if isinstance(message, BaseModel):
-                    payload = serialize(message)
-                else:
-                    payload = message
+                # same ready payload. consumer errors and poison
+                # payloads never reach the websockets: they are a pump
+                # concern - log, pause once, move on (kafka retains)
+                if not isinstance(message, BaseModel):
+                    logger.warning(f"skipping message: {message}")
+                    await asyncio.sleep(ERROR_BACKOFF_S)
+                    continue
+                payload = serialize(message)
                 # a copy for every subscriber; backpressure inside the
                 # exchange (full inbox = kick, last subscriber = wait)
                 # is not the pump's problem. exactly one yield per kafka

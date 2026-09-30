@@ -61,7 +61,7 @@ def create_app(settings: Settings) -> FastAPI:
     )
     queue_repo = QueueRepo(settings=settings)
     session_factory, _ = get_session_factory(DatabaseSettings())
-    exchange = Exchange()
+    exchange = Exchange(grace_s=settings.kick_grace_s)
     _app.state.firehose = FirehoseState(
         settings=settings,
         queue_repo=queue_repo,

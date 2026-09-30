@@ -6,7 +6,7 @@ Date: 2026-09-29. Suite: `development/perf/firehose/smoke.py` — deterministic-
 
 - 20 websocket clients, 25s: 12 fast (recv continuously), 5 slow (recv every 50ms), 3 stalled (read every 2s — far below stream rate)
 - Feed: 200 msg/s, ~1.6KiB `ScrapedStruct` JSON per message
-- Determinism: seeded-RNG payload pool (cycles player ids 0..199), counter-based fault injection (`SIM_ERROR_EVERY=4999` → `RuntimeError`, `SIM_POISON_EVERY=997` → `ValidationError`; both delivered as values the route skips with a 0.5s backoff)
+- Determinism: seeded-RNG payload pool (cycles player ids 0..199, byte-identical across runs — timestamps come from a fixed base time), seeded percentage-based fault injection (`SIM_SEED`, `SIM_ERROR_PCT=0.02` → `RuntimeError`, `SIM_POISON_PCT=0.1` → `ValidationError`; both delivered as values the route skips with a 0.5s backoff; at 200/s that is ~0.04 error/s and ~0.2 poison/s — same rates the suite was originally tuned with via the old `SIM_ERROR_EVERY=4999` / `SIM_POISON_EVERY=997`)
 - Server state verified via prometheus gauges after a settle period
 
 ## Protocol facts asserted
@@ -44,24 +44,26 @@ Stalled clients are isolated, not observable-kicked: during the connect ramp the
 1. **Pump yield bug** — 20× `asyncio.sleep(0)` per kafka message capped the pump at ~44 msg/s. Presented as "all 20 fast clients kicked with ~20 msgs each". Fixed to one yield per message.
 2. **Zero-yield bursts** — the opposite tuning (no yields across a 50-message producer burst) mass-kicked healthy clients at 5000/s.
 3. **Connect-ramp massacre** — early joiners alone face the full stream rate; inboxes fill in under a second and mass kicks follow. Led to the last-subscriber rule (`Exchange.send_or_wait`).
-4. **Error-backoff coupling** — fault rate 1-in-97 at 200/s made every route sleep 0.5s about twice per second, stalling the whole group; sized down to 1-in-4999 (~0.04 paused seconds per second).
+4. **Error-backoff coupling** — fault rate 1-in-97 at 200/s made every route sleep 0.5s about twice per second, stalling the whole group; sized down to 1-in-4999 (~0.04 paused seconds per second), now expressed as `error_pct=0.02` at 200/s (same rate).
 5. **Order-wrap false positives** — pool of 200 wraps 199→0, which looks like a reorder; wrap threshold is now parameterized (`wrap=100`).
 6. **Harness URL bug** — smoke/cli dialed hardcoded port 5099 regardless of `--port`, masked as "0 messages everywhere".
 7. **Stalled-client observability** — never-reading clients buffer client-side, create no TCP backpressure, and cannot observe kicks; see note above.
+8. **Close-hang zombie** — `ConnectionManager.close` had no timeout: on a backpressured socket the close handshake parks in the same full send buffer, the route never reaches cleanup, and the inbox/connection leak. Fixed with a bounded close (abandon + warn). See `findings.jsonl`.
+9. **Open: single-victim starvation** — roughly one slow client per run receives 0 messages and no close frame while the server reports healthy pump rate and an emptied inbox; data vanishes between ASGI send success and client receive. Stack-level (uvicorn websockets impl / legacy client), under investigation — see `findings.jsonl`.
 
 ## Determinism scorecard (vs DST)
 
 | DST pillar | Status |
 |---|---|
-| Seeded PRNG driving data | done (payload pool) |
-| Deterministic fault injection | partial (counter-based, not seed-replayable) |
+| Seeded PRNG driving data | done (payload pool, byte-identical per seed) |
+| Deterministic fault injection | done (seeded pct schedule: same seed → same error/poison stream) |
 | Protocol-level assertions | done (close codes, ordering, handshake rejections) |
 | Cleanup/state invariants | done (gauges return to zero, no tracebacks) |
 | Logical clock (fast-forward) | not done — wall clock |
 | Single-process controlled scheduler | not done — server + clients in separate OS processes |
-| Seed replay of failures | not done |
+| Seed replay of failures | partial — feed and injection replay per seed; end-to-end still scheduling-dependent |
 
-Upgrading to full DST would mean: PRNG-seeded fault schedule, the whole fleet in one process under a deterministic scheduler, and a virtual clock. Current suite is repeatable in distribution, not bit-exact per seed.
+Upgrading to full DST would mean the whole fleet in one process under a deterministic scheduler and a virtual clock; the seeded payload pool and fault schedule (events.py, payloads.py) already cover the data side. Current suite is seed-replayable on the feed, bit-exact neither per delivery nor per connection.
 
 ## Verdict
 

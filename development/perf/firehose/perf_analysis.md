@@ -25,7 +25,8 @@ Details:
   ~468.6/s per client.
 - throughput (2000/s): the 19 kicked clients received exactly 23 msgs each; one survivor
   absorbed 47,220 msgs (1,888.8/s) with p50 gap 0.19 ms.
-- errors (500/s, `SIM_ERROR_EVERY=4997`, `SIM_POISON_EVERY=997`): kicked clients received
+- errors (500/s, faults on: `--error-pct 0.02 --poison-pct 0.1`, matching the original
+  `SIM_ERROR_EVERY=4997` / `SIM_POISON_EVERY=997` rates): kicked clients received
   209-212 msgs; sole survivor 11,275 msgs, p99 gap 11.6 ms.
 - mixed (500/s, 12 fast / 5 slow@50 ms / 3 stalled): healthy clients show exact parity
   (167 msgs each, p50 gap ~50.6 ms, p99 ~51.4 ms); stalled clients received 0 msgs.
@@ -77,10 +78,10 @@ were isolated during the ramp with 0 msgs delivered.
 
 Every Exception value fans out to ALL inboxes, and the route sleeps 0.5 s per error. A
 group-wide pause therefore costs `error_rate x 0.5s`. Sizing rule for the sim: keep
-`error_rate x 0.5s` well below inflow (smoke uses `error_every=4999` at 200/s, ~0.04
-error/s). The errors scenario (`error_every=4997` at 500/s) measured 612/s aggregate vs
-3,458/s clean, but the ramp massacre (19/20 kicked) confounds the comparison; treat it as
-an upper bound of degradation.
+`error_rate x 0.5s` well below inflow (smoke uses `error_pct=0.02` at 200/s, ~0.04
+error/s). The errors scenario (`error_pct=0.02` at 500/s, ~0.1 error/s) measured 612/s
+aggregate vs 3,458/s clean, but the ramp massacre (19/20 kicked) confounds the
+comparison; treat it as an upper bound of degradation.
 
 ### F7 - Open anomaly: baseline kick at parity
 
@@ -125,9 +126,9 @@ uv run python -m development.perf.firehose run --n 20 --duration 25 --rate 500 \
 uv run python -m development.perf.firehose run --n 20 --duration 25 --rate 2000 \
     --port 5110 --metrics-port 8110 --verbose
 
-# errors
-SIM_ERROR_EVERY=4997 SIM_POISON_EVERY=997 \
-    uv run python -m development.perf.firehose run --n 20 --duration 25 --rate 500 \
+# errors (seeded, pct-based fault injection; replays with the same seed)
+uv run python -m development.perf.firehose run --n 20 --duration 25 --rate 500 \
+    --seed 0 --error-pct 0.02 --poison-pct 0.1 \
     --port 5110 --metrics-port 8110 --verbose
 
 # mixed (serve in one shell, clients in another)

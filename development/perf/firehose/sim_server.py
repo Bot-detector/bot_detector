@@ -39,14 +39,17 @@ from prometheus_client import (  # noqa: E402
 )
 
 from .dashboard import DASHBOARD_HTML  # noqa: E402
+from .events import EventSchedule  # noqa: E402
 from .fake_kafka import FakeKafkaConsumer  # noqa: E402
+from .payloads import PayloadConfig  # noqa: E402
 
 CONSUMERS: dict[str, FakeKafkaConsumer] = {}
 CONFIG = {
     "rate_s": 5000,
     "pool_size": 2000,
-    "error_every": int(os.environ.get("SIM_ERROR_EVERY", "0") or 0),
-    "poison_every": int(os.environ.get("SIM_POISON_EVERY", "0") or 0),
+    "seed": int(os.environ.get("SIM_SEED", "0") or 0),
+    "error_pct": float(os.environ.get("SIM_ERROR_PCT", "0") or 0),
+    "poison_pct": float(os.environ.get("SIM_POISON_PCT", "0") or 0),
 }
 
 
@@ -56,17 +59,22 @@ def create_consumer(self: QueueRepo, user: AuthUser, topic: str):
         print(
             f"[sim] first client for group={group}; starting feed "
             f"(rate={CONFIG['rate_s']}/s, pool={CONFIG['pool_size']}, "
-            f"error_every={CONFIG['error_every']}, "
-            f"poison_every={CONFIG['poison_every']})",
+            f"seed={CONFIG['seed']}, error_pct={CONFIG['error_pct']}, "
+            f"poison_pct={CONFIG['poison_pct']})",
             flush=True,
         )
         CONSUMERS[group] = FakeKafkaConsumer(
             topic=topic,
             group=group,
             rate_s=CONFIG["rate_s"],
-            pool_size=CONFIG["pool_size"],
-            error_every=CONFIG["error_every"],
-            poison_every=CONFIG["poison_every"],
+            payload_config=PayloadConfig(
+                seed=CONFIG["seed"], pool_size=CONFIG["pool_size"]
+            ),
+            events=EventSchedule(
+                seed=CONFIG["seed"],
+                error_pct=CONFIG["error_pct"],
+                poison_pct=CONFIG["poison_pct"],
+            ),
         )
     return CONSUMERS[group]
 
@@ -86,6 +94,60 @@ def add_sim_routes(app) -> None:
         return Response(
             content=generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST
         )
+
+    @app.get("/sim/debug", include_in_schema=False)
+    async def sim_debug() -> dict:
+        """Introspection for debugging stalled routes: exchange inbox
+        states plus where every asyncio task is parked."""
+        exchange = app.state.firehose.exchange
+        consumers = [
+            {
+                "group": group,
+                "qsize": c._queue.qsize(),
+                "produced": c.produced_total,
+                "consumed": c.consumed_total,
+                "errors": c.errors_returned,
+                "poisons": c.poison_returned,
+                "producer_task": repr(c._task)[:60] if c._task else None,
+                "producer_done": c._task.done() if c._task else None,
+            }
+            for group, c in CONSUMERS.items()
+        ]
+        inboxes = []
+        for conn_id, inbox in exchange._inboxes.items():
+            inboxes.append(
+                {
+                    "conn_id": conn_id[:8],
+                    "group": inbox.group,
+                    "kicked": inbox.kicked,
+                    "qsize": inbox.queue.qsize(),
+                    "age_s": round(inbox.age_s, 1),
+                }
+            )
+        tasks = []
+
+        def await_chain(coro) -> str:
+            parts: list[str] = []
+            while coro is not None and len(parts) < 60:
+                frame = getattr(coro, "cr_frame", None)
+                if frame is not None:
+                    name = frame.f_code.co_name
+                    path = frame.f_code.co_filename.split("/")[-1]
+                    parts.append(f"{path}:{name}:{frame.f_lineno}")
+                else:
+                    parts.append(f"<{type(coro).__name__}>")
+                coro = getattr(coro, "cr_await", None)
+            return " -> ".join(parts[-6:])
+
+        for task in asyncio.all_tasks():
+            coro = task.get_coro()
+            chain = await_chain(coro)
+            tasks.append({"task": repr(coro)[:80], "await_chain": chain})
+        return {
+            "consumers": consumers,
+            "inboxes": inboxes,
+            "tasks": tasks,
+        }
 
 
 async def report() -> None:

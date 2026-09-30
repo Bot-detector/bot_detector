@@ -58,17 +58,23 @@ MVP simplification: offsets are auto-committed (`enable_auto_commit=True`), deco
 Every connection gets an `Inbox` registered under its `conn_id`:
 
 ```python
-asyncio.Queue(maxsize=100)
+asyncio.Queue(maxsize=1000)
 ```
 
 The queue absorbs temporary speed differences between the pump and the client.
 
 ## Slow client policy
 
-When an inbox reaches 100 messages:
+**Join grace**: for the first 30s after subscribe (`Settings.kick_grace_s`, env
+`KICK_GRACE_S`), a full inbox drops
+messages instead of kicking - connect ramps fill inboxes while joiners arrive, not
+because a client is slow. The pump never waits on a grace-full inbox, so one ramping
+client cannot stall the group.
+
+When an inbox reaches 1000 messages past the grace window:
 
 1. The pump is **not** blocked (`Exchange.send` never blocks, never raises).
-2. The inbox is kicked: `kicked` flag set, kick event fired, removed from `get_subscribers` (`firehose_kicked_total`).
+2. The inbox is kicked: `kicked` flag set, kick event fired, removed from `get_subscribers` (`firehose_kicked_total`, kick log carries `qsize` and subscriber `age_s`).
 3. The route sees `InboxClosed("consumed too slow")` from `inbox.get_message()`.
 4. The route closes the socket (1013 "inbox full") via the ConnectionManager and unsubscribes.
 5. The remaining connections keep streaming.
@@ -77,7 +83,7 @@ A failing or too-slow `ConnectionManager.send` (2s bound) closes the socket the 
 
 Fast clients determine throughput; slow clients get dropped.
 
-**Last-subscriber exception**: a full inbox with other subscribers still connected kicks the slow one; the sole subscriber is never kicked for backpressure - the pump waits instead (`Exchange.send_or_wait`). Nobody else is held back, and kafka retains the stream. This also protects connect ramps: the first joiner is always the last subscriber.
+**Last-subscriber exception**: a full inbox with other subscribers still connected kicks the slow one; the sole subscriber is never kicked for backpressure - the pump waits instead (`Exchange.send_or_wait`). Nobody else is held back, and kafka retains the stream. Within the join grace a multi-subscriber full inbox drops instead of kicking (see above).
 
 ## No clients
 
@@ -94,7 +100,7 @@ Provides:
 
 * Kafka-backed persistence while nobody is connected
 * fan-out to all currently subscribed connections
-* bounded per-connection buffering (100)
+* bounded per-connection buffering (1000)
 * slow-client eviction (kick)
 * no WebSocket backpressure on Kafka
 * ordering preserved within a consumer group
@@ -122,7 +128,7 @@ T2  pump: get_subscribers == [conn_a]
 T3  client B connects
     same queue, same pump; both inboxes get copies
 
-T4  B stops reading; B's inbox hits 100
+T4  B stops reading; B's inbox hits 1000 (past the join grace)
     kick: B flagged, removed from get_subscribers
 
 T5  route B: get_message → InboxClosed

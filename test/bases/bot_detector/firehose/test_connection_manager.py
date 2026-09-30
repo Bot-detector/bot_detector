@@ -9,11 +9,12 @@ from bot_detector.firehose.app.connection_manager import (
 
 
 class FakeWebSocket:
-    def __init__(self, hang_send: bool = False):
+    def __init__(self, hang_send: bool = False, hang_close: bool = False):
         self.accepted = False
         self.sent: list[str] = []
         self.closed: tuple | None = None
         self._hang_send = hang_send
+        self._hang_close = hang_close
 
     async def accept(self) -> None:
         self.accepted = True
@@ -25,6 +26,10 @@ class FakeWebSocket:
         self.sent.append(data)
 
     async def close(self, code: int = 1000, reason: str | None = None) -> None:
+        if self._hang_close:
+            # parks longer than SEND_TIMEOUT_S: a close handshake
+            # flushing a send buffer the peer stopped reading
+            await asyncio.sleep(SEND_TIMEOUT_S + 5)
         self.closed = (code, reason)
 
 
@@ -88,6 +93,23 @@ async def test_close_is_idempotent(manager: ConnectionManager):
     await manager.close(conn_id, code=1000, reason="bye")
 
     assert ws.closed == (1000, "bye")
+    assert manager.count(group="g") == 0
+
+
+@pytest.mark.asyncio
+async def test_close_is_bounded_when_the_peer_stops_reading(
+    manager: ConnectionManager,
+):
+    ws = FakeWebSocket(hang_close=True)
+    conn_id = await manager.connect(websocket=ws, group="g")
+
+    t0 = asyncio.get_running_loop().time()
+    # must not raise and must not park past SEND_TIMEOUT_S: a hung
+    # close would keep the route from its cleanup forever
+    await manager.close(conn_id, code=1013, reason="inbox full")
+    elapsed = asyncio.get_running_loop().time() - t0
+
+    assert elapsed < SEND_TIMEOUT_S + 1
     assert manager.count(group="g") == 0
 
 

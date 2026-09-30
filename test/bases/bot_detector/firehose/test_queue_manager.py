@@ -6,7 +6,7 @@ from bot_detector.event_queue.structs import ScrapedStruct
 from bot_detector.firehose.app.auth.auth import AuthUser
 from bot_detector.firehose.app.exchange import Exchange
 from bot_detector.firehose.app.exchange.structs import serialize
-from bot_detector.firehose.app.queue_manager import Queue, QueueManager, TOPIC_HOLDS
+from bot_detector.firehose.app.queue_manager import TOPIC_HOLDS, Queue, QueueManager
 from prometheus_client import REGISTRY
 
 TOPIC = "players.scraped"
@@ -84,6 +84,28 @@ async def test_create_builds_registers_and_starts():
 
 
 @pytest.mark.asyncio
+async def test_create_revives_a_pump_that_stopped_itself():
+    manager, repo, _ = make_manager()
+    user = AuthUser(name="system-one")
+
+    queue = manager.create(user=user, topic=TOPIC)
+    await asyncio.sleep(0)
+    # the pump exits on its own when the subscriber list empties
+    old_task = queue.task
+    assert old_task is not None
+    old_task.cancel()
+    await asyncio.gather(old_task, return_exceptions=True)
+
+    revived = manager.create(user=user, topic=TOPIC)
+
+    assert revived is queue
+    assert revived.task is not None
+    assert revived.task is not old_task
+    assert revived.task.done() is False
+    await manager.delete(user=user, topic=TOPIC)
+
+
+@pytest.mark.asyncio
 async def test_delete_stops_and_unregisters():
     manager, repo, _ = make_manager()
     user = AuthUser(name="system-one")
@@ -133,15 +155,36 @@ async def test_consume_delivers_to_exchange_inboxes():
     consumer = repo.consumers[queue.group]
 
     message = ScrapedStruct.model_construct()
+    consumer.messages.extend([message])
+
+    delivered = await asyncio.wait_for(inbox.queue.get(), timeout=2)
+
+    # the pump serializes models once before fanning out
+    assert delivered == serialize(message)
+
+    await manager.release(user=user, topic=TOPIC)
+
+
+@pytest.mark.asyncio
+async def test_consume_never_fans_out_faults_to_inboxes():
+    manager, repo, exchange = make_manager()
+    user = AuthUser(name="system-one")
+
+    queue = manager.get(user=user, topic=TOPIC)
+    assert isinstance(queue, Queue)
+    inbox = exchange.subscribe(topic=TOPIC, group=queue.group, conn_id="t1", user=user)
+    consumer = repo.consumers[queue.group]
+
     error = RuntimeError("kafka down")
-    consumer.messages.extend([message, error])
+    message = ScrapedStruct.model_construct()
+    # a fault followed by a good message: the fault must vanish at the
+    # pump, the good message must still arrive
+    consumer.messages.extend([error, message])
 
-    first = await asyncio.wait_for(inbox.queue.get(), timeout=2)
-    second = await asyncio.wait_for(inbox.queue.get(), timeout=2)
+    delivered = await asyncio.wait_for(inbox.queue.get(), timeout=2)
 
-    # the pump serializes models once; errors pass through as values
-    assert first == serialize(message)
-    assert second is error
+    assert delivered == serialize(message)
+    assert inbox.queue.qsize() == 0
 
     await manager.release(user=user, topic=TOPIC)
 

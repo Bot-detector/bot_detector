@@ -5,6 +5,9 @@ Usage (from the repo root):
   uv run --with pyinstrument python -m development.perf.firehose run \
       --n 20 --duration 50 --rate 20000 --profile-s 40
 
+  # replayable run: seeded payloads + seeded pct-based error/poison events
+  python -m development.perf.firehose run --seed 42 --error-pct 0.5 --poison-pct 1
+
   # or piece by piece
   uv run --with pyinstrument python -m development.perf.firehose serve --rate 20000
   uv run python -m development.perf.firehose clients --n 20 --duration 50
@@ -32,6 +35,7 @@ DEFAULT_RATE = 5000
 DEFAULT_POOL = 2000
 DEFAULT_N = 20
 DEFAULT_DURATION = 50
+DEFAULT_SEED = 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -44,6 +48,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     serve.add_argument(
         "--pool", type=int, default=DEFAULT_POOL, help="distinct payloads pre-generated"
+    )
+    serve.add_argument(
+        "--seed",
+        type=int,
+        default=DEFAULT_SEED,
+        help="RNG seed for payload pool + injected events (replayable)",
+    )
+    serve.add_argument(
+        "--error-pct",
+        type=float,
+        default=0.0,
+        help="%% of consumed messages returned as transient errors",
+    )
+    serve.add_argument(
+        "--poison-pct",
+        type=float,
+        default=0.0,
+        help="%% of consumed messages returned as poison (ValidationError)",
     )
     serve.add_argument("--port", type=int, default=DEFAULT_PORT)
     serve.add_argument("--metrics-port", type=int, default=DEFAULT_METRICS_PORT)
@@ -76,6 +98,9 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--slow-ms", type=float, default=0)
     run.add_argument("--rate", type=int, default=DEFAULT_RATE)
     run.add_argument("--pool", type=int, default=DEFAULT_POOL)
+    run.add_argument("--seed", type=int, default=DEFAULT_SEED)
+    run.add_argument("--error-pct", type=float, default=0.0)
+    run.add_argument("--poison-pct", type=float, default=0.0)
     run.add_argument("--port", type=int, default=DEFAULT_PORT)
     run.add_argument("--metrics-port", type=int, default=DEFAULT_METRICS_PORT)
     run.add_argument("--profile-s", type=int, default=0)
@@ -100,6 +125,9 @@ async def cmd_run(args: argparse.Namespace) -> int:
         **os.environ,
         "SIM_RATE_S": str(args.rate),
         "SIM_POOL": str(args.pool),
+        "SIM_SEED": str(args.seed),
+        "SIM_ERROR_PCT": str(args.error_pct),
+        "SIM_POISON_PCT": str(args.poison_pct),
         "SIM_PORT": str(args.port),
         "SIM_METRICS_PORT": str(args.metrics_port),
         "SIM_PROFILE_S": str(args.profile_s),
@@ -160,6 +188,9 @@ async def cmd_run(args: argparse.Namespace) -> int:
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.cmd == "serve":
+        os.environ["SIM_SEED"] = str(args.seed)
+        os.environ["SIM_ERROR_PCT"] = str(args.error_pct)
+        os.environ["SIM_POISON_PCT"] = str(args.poison_pct)
         from . import sim_server
 
         sim_server.serve(
