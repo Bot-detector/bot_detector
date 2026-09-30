@@ -3,7 +3,7 @@ import logging
 
 from bot_detector.firehose.app.auth.auth import AuthUser
 from bot_detector.firehose.app.exchange.structs import Inbox, InboxClosed
-from bot_detector.firehose.app.metrics import FIREHOSE_KICKED
+from bot_detector.firehose.app.metrics import FIREHOSE_DROPPED, FIREHOSE_KICKED
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +82,10 @@ class Exchange:
         except asyncio.QueueFull:
             if inbox.age_s >= self._grace_s:
                 self._kick(inbox)
+            else:
+                # ramping joiner: drop instead of kick; make the silent
+                # loss visible
+                FIREHOSE_DROPPED.labels(topic=inbox.topic, type=inbox.type).inc()
 
     async def send_or_wait(
         self, conn_id: str, topic: str, group: str, message: str
@@ -110,7 +114,12 @@ class Exchange:
                 if len(self.get_subscribers(topic=topic, group=group)) > 1:
                     if inbox.age_s >= self._grace_s:
                         self._kick(inbox)
-                    return  # grace: drop; nobody waits on a ramping inbox
+                    else:
+                        # grace: drop; nobody waits on a ramping inbox
+                        FIREHOSE_DROPPED.labels(
+                            topic=inbox.topic, type=inbox.type
+                        ).inc()
+                    return
                 await asyncio.sleep(0.05)
 
     def _kick(self, inbox: Inbox) -> None:

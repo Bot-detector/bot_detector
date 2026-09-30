@@ -35,6 +35,11 @@ FIREHOSE_KICKED = Counter(
     "connections kicked because their inbox was full",
     ["topic", "type"],
 )
+FIREHOSE_DROPPED = Counter(
+    "firehose_dropped_total",
+    "messages dropped instead of kicking (join grace)",
+    ["topic", "type"],
+)
 
 
 def stream_type(anonymous: bool) -> QueueType:

@@ -92,6 +92,41 @@ async def test_send_within_grace_drops_instead_of_kicking():
 
 
 @pytest.mark.asyncio
+async def test_send_within_grace_counts_the_dropped_message():
+    exchange, inbox = make_exchange_with_inbox()
+    label = {"topic": TOPIC, "type": "anonymous"}
+    before = REGISTRY.get_sample_value("firehose_dropped_total", label) or 0
+
+    for i in range(QUEUE_MAX_SIZE):
+        exchange.send(conn_id="c1", topic=TOPIC, group=GROUP, message=str(i))
+    exchange.send(conn_id="c1", topic=TOPIC, group=GROUP, message="over")
+
+    after = REGISTRY.get_sample_value("firehose_dropped_total", label) or 0
+
+    # the grace keeps the connection but silently loses the message:
+    # the loss must be observable
+    assert inbox.kicked is False
+    assert after == before + 1
+
+
+@pytest.mark.asyncio
+async def test_kicking_does_not_count_as_a_grace_drop():
+    exchange, inbox = make_exchange_with_inbox(grace_s=0.0)
+    label = {"topic": TOPIC, "type": "anonymous"}
+    before = REGISTRY.get_sample_value("firehose_dropped_total", label) or 0
+
+    for i in range(QUEUE_MAX_SIZE):
+        exchange.send(conn_id="c1", topic=TOPIC, group=GROUP, message=str(i))
+    # past the grace the full inbox is kicked, not grace-dropped
+    exchange.send(conn_id="c1", topic=TOPIC, group=GROUP, message="over")
+
+    after = REGISTRY.get_sample_value("firehose_dropped_total", label) or 0
+
+    assert inbox.kicked is True
+    assert after == before
+
+
+@pytest.mark.asyncio
 async def test_get_message_returns_messages_then_inbox_closed():
     exchange, inbox = make_exchange_with_inbox(grace_s=0.0)
     exchange.send(conn_id="c1", topic=TOPIC, group=GROUP, message="a")
@@ -157,6 +192,29 @@ async def test_send_or_wait_within_grace_drops_instead_of_kicking():
     assert inbox_b.kicked is False
     assert inbox_a.queue.qsize() == QUEUE_MAX_SIZE
     assert exchange.get_subscribers(topic=TOPIC, group=GROUP) == ["a", "b"]
+
+
+@pytest.mark.asyncio
+async def test_send_or_wait_within_grace_counts_the_dropped_message():
+    exchange = Exchange()
+    exchange.subscribe(topic=TOPIC, group=GROUP, conn_id="a", user=ANONYMOUS)
+    exchange.subscribe(topic=TOPIC, group=GROUP, conn_id="b", user=ANONYMOUS)
+    inbox_a = exchange.get_inbox("a")
+    assert isinstance(inbox_a, Inbox)
+    label = {"topic": TOPIC, "type": "anonymous"}
+    before = REGISTRY.get_sample_value("firehose_dropped_total", label) or 0
+
+    for i in range(QUEUE_MAX_SIZE):
+        exchange.send(conn_id="a", topic=TOPIC, group=GROUP, message=str(i))
+    await asyncio.wait_for(
+        exchange.send_or_wait(conn_id="a", topic=TOPIC, group=GROUP, message="over"),
+        timeout=1,
+    )
+
+    after = REGISTRY.get_sample_value("firehose_dropped_total", label) or 0
+
+    assert inbox_a.kicked is False
+    assert after == before + 1
 
 
 @pytest.mark.asyncio
