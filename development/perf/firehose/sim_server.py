@@ -193,9 +193,10 @@ def serve(
     verbose: bool = False,
 ) -> None:
     if not verbose:
-        # app logs (connects, evictions) flood the terminal; the counts
-        # are on the dashboard instead
-        logging.getLogger("bot_detector").setLevel(logging.ERROR)
+        # WARNING+ (kicks, skipped poison) stays in the logs and TO_FILE:
+        # it is operational signal, not chatter. verbose only adds the
+        # INFO churn (connects, queue lifecycle)
+        logging.getLogger("bot_detector").setLevel(logging.WARNING)
     CONFIG.update(rate_s=rate_s, pool_size=pool_size)
     app = create_app(settings=Settings(port=port, metrics_port=metrics_port))
     add_sim_routes(app)
