@@ -70,7 +70,12 @@ async def test_send_unknown_id_raises(manager: ConnectionManager):
 @pytest.mark.asyncio
 async def test_send_timeout_raises_and_socket_must_be_closed(
     manager: ConnectionManager,
+    monkeypatch: pytest.MonkeyPatch,
 ):
+    # shrink the bound: the timeout path is what matters, not the wait
+    monkeypatch.setattr(
+        "bot_detector.firehose.app.connection_manager.SEND_TIMEOUT_S", 0.05
+    )
     ws = FakeWebSocket(hang_send=True)
     conn_id = await manager.connect(websocket=ws, group="g")
 
@@ -99,7 +104,11 @@ async def test_close_is_idempotent(manager: ConnectionManager):
 @pytest.mark.asyncio
 async def test_close_is_bounded_when_the_peer_stops_reading(
     manager: ConnectionManager,
+    monkeypatch: pytest.MonkeyPatch,
 ):
+    monkeypatch.setattr(
+        "bot_detector.firehose.app.connection_manager.SEND_TIMEOUT_S", 0.05
+    )
     ws = FakeWebSocket(hang_close=True)
     conn_id = await manager.connect(websocket=ws, group="g")
 
@@ -109,7 +118,7 @@ async def test_close_is_bounded_when_the_peer_stops_reading(
     await manager.close(conn_id, code=1013, reason="inbox full")
     elapsed = asyncio.get_running_loop().time() - t0
 
-    assert elapsed < SEND_TIMEOUT_S + 1
+    assert elapsed < 1.0
     assert manager.count(group="g") == 0
 
 
