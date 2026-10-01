@@ -10,6 +10,12 @@ services:
   firehose:
     environment:
       KICK_GRACE_S: "5" # short grace so the stalled client kicks fast
+      DISCORD_API_BASE_OVERRIDE: http://firehose_smoke:9000
+      PYTHONPATH: /app/patch
+    volumes:
+      # monkey patch: sitecustomize points DISCORD_API_BASE at the stub
+      # served by the smoke runner (this file's patch/ dir)
+      - ./_infra/_smoke/firehose/patch:/app/patch:ro
 
   firehose_smoke:
     container_name: firehose_smoke
