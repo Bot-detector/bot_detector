@@ -68,6 +68,6 @@ allow-direct-references = true
 # (import-untyped, no py.typed markers)
 namespace_packages = true
 explicit_package_bases = true
-mypy_path = ["components", "bases"]
+mypy_path = ["components", "bases", "development/dst/src"]
 # other bricks have pre-existing errors; extend as they get cleaned up
 files = ["bases/bot_detector/firehose"]
