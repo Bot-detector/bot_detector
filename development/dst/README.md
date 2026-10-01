@@ -115,6 +115,56 @@ assert result.done
 assert result.value.backlog > 0
 ```
 
+## Scenarios
+
+### firehose - the real app, steady state
+
+The production pump, exchange, and websocket routes on the clock.
+Baseline for parity and capacity:
+
+```sh
+uv run python -m dst.main dst.scenarios.firehose \
+    --kw duration_s=60 --kw feed_rate_s=500 --kw n_clients=5 --json-pretty
+```
+
+### join_storm - staggered joins into a hot feed
+
+Clients join one by one while the feed already runs at 1000 msg/s and
+each client drains only 500 msg/s. Shows the join grace (drops) and
+the kick rule (the pump protects a lone subscriber, two or more can
+take kicks), and the resulting kick wave:
+
+```sh
+uv run python -m dst.main dst.scenarios.join_storm \
+    --kw duration_s=75 --kw feed_rate_s=1000 --kw n_clients=5 \
+    --kw join_interval_s=15 --kw client_slow_s=0.002 --kw client_buffer=500 \
+    --kw kick_grace_s=10 --json-pretty
+```
+
+Expected shape: clients 0 and 1 take kicks around t=20 (grace over,
+two subscribers), client 2 follows around t=45, later joiners ride out
+the window as the lone survivor. Every victim still received real
+service before the kick.
+
+### keyed - per-user isolation from the anonymous crowd
+
+Fast keyed clients (`key-<user>` tokens via a patched
+`auth_repo.authenticate`) on their own consumer groups, next to a slow
+anonymous fleet on the shared group. Proves the keyed users see their
+full stream (no drops, no kicks) while the anonymous group degrades:
+
+```sh
+uv run python -m dst.main dst.scenarios.keyed \
+    --kw duration_s=40 --kw feed_rate_s=200 --kw n_keyed=2 \
+    --kw n_anonymous=3 --kw anonymous_slow_s=0.02 --kw kick_grace_s=10 \
+    --json-pretty
+```
+
+Expected shape: keyed clients receive exactly the produced count of
+their group with close 1000. Anonymous clients take kicks at the grace
+edge, and the last survivor wins protection from the sole-subscriber
+rule.
+
 ## Writing a scenario
 
 1. Create a module under `development/dst/src/dst/scenarios/`.

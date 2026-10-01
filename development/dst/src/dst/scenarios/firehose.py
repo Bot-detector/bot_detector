@@ -123,12 +123,22 @@ class FakeWebSocket:
     TCP peer applies.
     """
 
-    def __init__(self, app: Any, *, buffer_size: int = 1000, name: str = "ws"):
+    def __init__(
+        self,
+        app: Any,
+        *,
+        buffer_size: int = 1000,
+        name: str = "ws",
+        api_key: str | None = None,
+        force_anonymous: bool = True,
+    ):
         self.app = app
         self.name = name
         self.outbox: asyncio.Queue[str] = asyncio.Queue(maxsize=buffer_size)
-        self.query_params: dict[str, str] = {"anonymous": "1"}
-        self.headers: dict[str, str] = {}
+        self.query_params: dict[str, str] = (
+            {"anonymous": "1"} if force_anonymous else {}
+        )
+        self.headers: dict[str, str] = {"x-api-key": api_key} if api_key else {}
         self.close_frame: dict[str, Any] | None = None
         self.sent_count = 0
         self._connect_delivered = False
