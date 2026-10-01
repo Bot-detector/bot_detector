@@ -60,6 +60,36 @@ restart-%: ## Restart a docker service by name, eg make restart-api_public
 	$(DOCKER_ENV) docker compose build $*
 	$(DOCKER_ENV) docker compose up -d $*
 
+smoke-firehose: ## run the firehose container smoke test (real kafka + real websockets)
+	$(DOCKER_ENV) docker compose -f docker-compose.yml -f docker-compose-smoke.yml \
+		--profile smoke up -d --build kafka kafka_setup mysql mysql_setup firehose
+	$(DOCKER_ENV) docker compose -f docker-compose.yml -f docker-compose-smoke.yml \
+		--profile smoke run --build --rm firehose_smoke; \
+	status=$$?; \
+	$(DOCKER_ENV) docker compose -f docker-compose.yml -f docker-compose-smoke.yml \
+		--profile smoke down --volumes; \
+	exit $$status
+
+smoke-firehose-hunt: ## run the F2 starvation hunt against the real stack
+	$(DOCKER_ENV) docker compose -f docker-compose.yml -f docker-compose-smoke.yml \
+		--profile smoke up -d --build kafka kafka_setup mysql mysql_setup firehose
+	$(DOCKER_ENV) docker compose -f docker-compose.yml -f docker-compose-smoke.yml \
+		--profile smoke run --build --rm -e SMOKE_MODE=hunt firehose_smoke; \
+	status=$$?; \
+	$(DOCKER_ENV) docker compose -f docker-compose.yml -f docker-compose-smoke.yml \
+		--profile smoke down --volumes; \
+	exit $$status
+
+smoke-firehose-resilience: ## bounce kafka + restart firehose mid-stream (real aiokafka reconnect)
+	$(DOCKER_ENV) docker compose -f docker-compose.yml -f docker-compose-smoke.yml \
+		--profile smoke up -d --build kafka kafka_setup mysql mysql_setup firehose
+	$(DOCKER_ENV) docker compose -f docker-compose.yml -f docker-compose-smoke.yml \
+		--profile smoke run --build --rm -e SMOKE_MODE=resilience firehose_smoke; \
+	status=$$?; \
+	$(DOCKER_ENV) docker compose -f docker-compose.yml -f docker-compose-smoke.yml \
+		--profile smoke down --volumes; \
+	exit $$status
+
 setup:
 	uv sync
 

@@ -1,0 +1,45 @@
+# smoke profile: runs the firehose container against real kafka with a
+# deterministic seed, then a mixed real-websocket fleet asserts the
+# protocol. run with:
+#   make smoke-firehose
+services:
+  kafka_setup:
+    environment:
+      RESET_TOPICS: "true" # fresh 1000-message seed on every smoke run
+
+  firehose:
+    environment:
+      KICK_GRACE_S: "5" # short grace so the stalled client kicks fast
+      DISCORD_API_BASE_OVERRIDE: http://firehose_smoke:9000
+      PYTHONPATH: /app/patch
+    volumes:
+      # monkey patch: sitecustomize points DISCORD_API_BASE at the stub
+      # served by the smoke runner (this file's patch/ dir)
+      - ./_infra/_smoke/firehose/patch:/app/patch:ro
+
+  firehose_smoke:
+    container_name: firehose_smoke
+    build:
+      context: ./_infra
+      dockerfile: _smoke/firehose/Dockerfile
+    init: true
+    networks:
+      - botdetector-network
+    environment:
+      KAFKA_BROKER: kafka:9092
+      WS_URL: ws://firehose:5000/firehose/players.scraped?anonymous=1
+      METRICS_URL: http://firehose:8000/metrics
+      EXPECTED_MESSAGES: "1000" # SEED_PLAYERS x SEED_SCRAPES_PER_PLAYER
+      KICK_WAIT_S: "30"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kafka_setup:
+        condition: service_completed_successfully
+      firehose:
+        condition: service_healthy
+    volumes:
+      # resilience mode restarts kafka/firehose from inside the runner
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    profiles:
+      - smoke

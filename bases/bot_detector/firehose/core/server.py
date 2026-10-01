@@ -11,7 +11,8 @@ from bot_detector.firehose.app.auth.auth import ApiKeyAuthRepo
 from bot_detector.firehose.app.auth.discord import DiscordOAuth
 from bot_detector.firehose.app.connection_manager import ConnectionManager
 from bot_detector.firehose.app.consumer import QueueRepo
-from bot_detector.firehose.app.consumer_manager import ConsumerManager
+from bot_detector.firehose.app.exchange import Exchange
+from bot_detector.firehose.app.queue_manager import QueueManager
 from bot_detector.firehose.app.state import FirehoseState
 from bot_detector.firehose.core.config import SETTINGS, Settings
 from fastapi import FastAPI
@@ -38,7 +39,7 @@ async def lifespan(_app: FastAPI):
     yield
     metrics_server.shutdown()
     metrics_thread.join()
-    await state.consumer_manager.shutdown()
+    await state.queue_manager.shutdown()
     await state.http_session.close()
     logger.info("shutdown complete")
 
@@ -60,11 +61,13 @@ def create_app(settings: Settings) -> FastAPI:
     )
     queue_repo = QueueRepo(settings=settings)
     session_factory, _ = get_session_factory(DatabaseSettings())
+    exchange = Exchange(grace_s=settings.kick_grace_s)
     _app.state.firehose = FirehoseState(
         settings=settings,
         queue_repo=queue_repo,
+        exchange=exchange,
+        queue_manager=QueueManager(queue_repo=queue_repo, exchange=exchange),
         auth_repo=ApiKeyAuthRepo(session_factory=session_factory),
-        consumer_manager=ConsumerManager(queue_repo=queue_repo),
         connection_manager=ConnectionManager(),
     )
     init_routers(_app=_app)

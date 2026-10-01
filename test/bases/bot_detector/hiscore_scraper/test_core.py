@@ -140,6 +140,11 @@ async def test_work_refreshes_proxies_on_proxy_error(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(
         core, "scrape_player", AsyncMock(return_value=(None, proxy_error))
     )
+    # the backoff sleep and the rotate cooldown are not what this test
+    # verifies: patch them out so the proxy-error branch
+    # (rotate_proxies) runs without real delays
+    monkeypatch.setattr(core, "handle_retry", AsyncMock())
+    monkeypatch.setattr(core, "ROTATE_COOLDOWN_S", 0.0)
     monkeypatch.setattr(core, "produce_player_to_scrape", AsyncMock(return_value=None))
     monkeypatch.setattr(
         core,

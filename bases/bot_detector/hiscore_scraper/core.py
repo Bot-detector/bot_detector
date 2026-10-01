@@ -46,6 +46,10 @@ from .metrics import (
 
 logger = logging.getLogger(__name__)
 
+# cooldown after rotating proxies: give the fresh pool a moment before
+# the next scrape attempt
+ROTATE_COOLDOWN_S = 10.0
+
 
 class Settings(BaseSettings):
     METRICS_PORT: int = 8000
@@ -301,7 +305,7 @@ async def work(
                     if scrape_error.status == 407:
                         logger.warning(f"{log_prefix}: Rotating proxies.")
                         await proxy_manager.rotate_proxies()
-                        await asyncio.sleep(10)
+                        await asyncio.sleep(ROTATE_COOLDOWN_S)
 
                 logger.warning(f"{log_prefix}: {scrape_error=}")
                 error_counter.labels(proxy=_proxy).inc()

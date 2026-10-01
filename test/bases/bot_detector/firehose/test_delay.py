@@ -2,7 +2,7 @@ import time
 
 import pytest
 from bot_detector.event_queue.structs import ReportsToInsertStruct
-from bot_detector.firehose.app.group_stream.adapter import (
+from bot_detector.firehose.app.exchange.delay import (
     FUTURE_LIMIT_S,
     DelayAdapter,
     message_ts,
@@ -44,17 +44,32 @@ async def test_hold_emits_old_message_immediately():
 
 @pytest.mark.asyncio
 async def test_hold_sleeps_for_fresh_message():
-    delay_s = 2 * 60 * 60
+    delay_s = 1.0
     adapter = DelayAdapter(delay_s=delay_s)
-    # eligible 5s from now
-    ts = int(time.time()) - delay_s + 5
-    message = make_report(ts=ts)
+    # eligible 0.05s from now: hold must sleep until eligibility -
+    # neither the full delay nor zero (float ts via model_construct
+    # keeps the eligibility point exact instead of +-1s int truncation)
+    eligible_in_s = 0.05
+    ts = time.time() - delay_s + eligible_in_s
+    message = ReportsToInsertStruct.model_construct(
+        metadata={"version": 1, "source": "test"},
+        report=ParsedDetection.model_construct(
+            region_id=0,
+            x_coord=0,
+            y_coord=0,
+            z_coord=0,
+            ts=ts,
+            equipment={},
+            reporter_id=1,
+            reported_id=2,
+        ),
+    )
 
     start = time.monotonic()
     assert await adapter.hold(message=message) is True
     elapsed = time.monotonic() - start
 
-    assert 4 <= elapsed <= 6
+    assert 0.03 <= elapsed <= delay_s
 
 
 @pytest.mark.asyncio

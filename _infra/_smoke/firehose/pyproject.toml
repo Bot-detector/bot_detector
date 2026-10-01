@@ -1,0 +1,11 @@
+[project]
+name = "firehose-smoke"
+version = "0.1.0"
+description = "Real-stack smoke test for the firehose container"
+requires-python = ">=3.12"
+dependencies = [
+    "websockets==15.0.1",
+    "kafka-python==2.2.15",
+    "pymysql==1.1.1",
+    "docker==7.2.0",
+]
