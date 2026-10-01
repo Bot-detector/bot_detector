@@ -53,6 +53,7 @@ class KafkaConfig(BaseModel):
     payload_bytes: int = Field(default=1024, ge=1)
     parse_cost_s: float = Field(default=0.0, ge=0.0)
     max_queue: int = Field(default=100_000, gt=0)
+    start_delay_s: float = Field(default=0.0, ge=0.0)
     faults: KafkaFaults = Field(default_factory=KafkaFaults)
 
 
@@ -173,10 +174,19 @@ class FakeKafka:
         ]
 
     async def _produce(self) -> None:
-        per_tick = max(1, int(self.config.rate_s * TICK_S))
+        if self.config.start_delay_s > 0.0:
+            # the broker has nothing to deliver yet (e.g. a topic whose
+            # upstream only starts releasing after a window)
+            await asyncio.sleep(self.config.start_delay_s)
+        # fractional carry keeps rates below 100/s accurate: 10/s is
+        # one message every ten ticks, not one message per tick
+        carry = 0.0
         offset = 0
         while True:
-            for _ in range(per_tick):
+            carry += self.config.rate_s * TICK_S
+            count = int(carry)
+            carry -= count
+            for _ in range(count):
                 await self._queue.put((offset, self._payload_factory(offset)))
                 offset += 1
                 self.produced_total += 1

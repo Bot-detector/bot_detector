@@ -165,6 +165,26 @@ their group with close 1000. Anonymous clients take kicks at the grace
 edge, and the last survivor wins protection from the sole-subscriber
 rule.
 
+### reports_delay - the 2h emission delay over a full day
+
+The reports.to_insert topic with the product's real DelayAdapter. The
+broker produces fresh reports from t=0, each ts generated on the spot
+and jittered 0..300s into the past. The adapter locks on the first
+message, so the first ~2h are silent; then the stream flows 2h behind
+arrivals, and at the end the last ~2h sit in kafka:
+
+```sh
+uv run python -m dst.main dst.scenarios.reports_delay \
+    --start 2000000000 --json-pretty
+```
+
+Defaults are the full shape: 24h window, 10 msg/s, 7200s delay, 300s
+jitter. About a minute of wall time. `--start` must equal the epoch
+base (default `2000000000`) because the hold compares report.ts
+against the patched `time.time()`. Expected shape: first delivery at
+~delay minus jitter, broker backlog at the end within a few percent of
+delay x rate, `unstreamed_hours` about 2.
+
 ## Writing a scenario
 
 1. Create a module under `development/dst/src/dst/scenarios/`.

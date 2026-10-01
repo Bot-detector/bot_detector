@@ -207,13 +207,22 @@ _GROUPS: dict[str, FakeKafka] = {}
 
 
 def _make_consumer_patch(
-    machine: VirtualMachine, kafka_config: KafkaConfig, pool: list[bytes]
+    machine: VirtualMachine,
+    kafka_config: KafkaConfig,
+    pool: list[bytes] | None = None,
+    *,
+    payload_factory: "Callable[[int], bytes] | None" = None,
 ) -> Callable[..., Any]:
     """Build the QueueRepo.create_consumer replacement.
 
-    One FakeKafka per (topic, consumer group), payloads cycled from
-    the seeded pool - exactly the seam perf's sim_server patched.
+    One FakeKafka per (topic, consumer group). Payloads come either
+    from a pre-built pool (cycled by offset) or from a factory called
+    per offset at production time.
     """
+    if payload_factory is None:
+        if pool is None:
+            raise ValueError("need pool or payload_factory")
+        payload_factory = lambda offset: pool[offset % len(pool)]  # noqa: E731
 
     def create_consumer(self: QueueRepo, user: Any, topic: str) -> Any:
         group = self.resolve_consumer_group(user=user, topic=topic)
@@ -222,7 +231,7 @@ def _make_consumer_patch(
                 machine,
                 kafka_config,
                 io_system="kafka",
-                payload_factory=lambda offset: pool[offset % len(pool)],
+                payload_factory=payload_factory,
             )
         return FakeKafkaQueueConsumer(_GROUPS[group], model=TOPIC_MODELS[topic])
 
