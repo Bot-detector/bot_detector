@@ -178,6 +178,11 @@ class FirehoseScenarioConfig(BaseModel):
     client_slow_s: float = Field(default=0.0, ge=0.0)
     client_buffer: int = Field(default=1000, gt=0)
     kick_grace_s: float = Field(default=30.0, gt=0.0)
+    # broker outage window: get_one fails with a broker_down error for
+    # [outage_at_s, outage_at_s + outage_duration_s), exercising the
+    # pump's backoff path against a prolonged outage
+    outage_at_s: float = Field(default=0.0, ge=0.0)
+    outage_duration_s: float = Field(default=0.0, ge=0.0)
 
 
 class FirehoseClientReport(BaseModel):
@@ -326,6 +331,18 @@ async def main(**kwargs) -> FirehoseReport:
                 ),
                 name=f"drain-{i}",
             )
+
+        if config.outage_duration_s > 0.0 and config.outage_at_s > 0.0:
+
+            async def broker_outage() -> None:
+                await asyncio.sleep(config.outage_at_s)
+                for kafka in _GROUPS.values():
+                    kafka.set_down(True)
+                await asyncio.sleep(config.outage_duration_s)
+                for kafka in _GROUPS.values():
+                    kafka.set_down(False)
+
+            asyncio.create_task(broker_outage(), name="broker-outage")
 
         await asyncio.sleep(config.duration_s)
 

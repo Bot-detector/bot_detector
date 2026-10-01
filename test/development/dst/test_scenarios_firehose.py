@@ -107,3 +107,35 @@ def test_repeated_runs_do_not_leak_connections():
 def test_invalid_config_rejected(kwargs):
     with pytest.raises(ValidationError):
         asyncio.run(fh.main(**kwargs))
+
+
+def test_broker_outage_pauses_the_pump_then_recovers():
+    # a cpu-capped pump (1000/s) under a faster feed (2000/s) cannot
+    # drain the outage backlog within the window, so the deficit shows
+    common = {
+        "duration_s": 20,
+        "feed_rate_s": 2000,
+        "pool_size": 100,
+        "n_clients": 2,
+        "parse_cost_s": 0.001,
+    }
+    baseline = run(**common)
+    outage = run(**common, outage_at_s=5, outage_duration_s=8)
+
+    # the pump backoffs through the outage: fewer deliveries than the
+    # clean run, but it recovers and keeps streaming after it
+    assert outage.messages_delivered < baseline.messages_delivered
+    assert outage.messages_delivered > 0
+    assert outage.kicked == 0  # an outage is a pump concern, not a kick
+
+
+def test_broker_outage_replays_identically():
+    kwargs = {
+        "duration_s": 20,
+        "feed_rate_s": 200,
+        "pool_size": 100,
+        "n_clients": 2,
+        "outage_at_s": 5,
+        "outage_duration_s": 8,
+    }
+    assert run(**kwargs) == run(**kwargs)

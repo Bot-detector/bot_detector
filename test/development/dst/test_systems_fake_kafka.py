@@ -239,3 +239,25 @@ def test_unstopped_producer_is_reported():
     assert result.done
     assert len(result.pending_tasks) == 1
     assert "sim-kafka-producer" in result.pending_tasks[0]
+
+
+def test_broker_outage_fails_without_losing_arrivals():
+    async def scenario() -> tuple[list[str], list[int]]:
+        machine = VirtualMachine(MachineConfig(io={"kafka": IoConfig(mean_ms=0.01)}))
+        kafka = FakeKafka(machine, KafkaConfig(rate_s=1000))
+        await kafka.start()
+        await kafka.get_one()  # consume the first arrival
+        kafka.set_down(True)
+        during = [await kafka.get_one() for _ in range(3)]
+        await asyncio.sleep(0.5)  # arrivals keep queueing during the outage
+        kafka.set_down(False)
+        after = [msg(await kafka.get_one()).offset for _ in range(3)]
+        await kafka.stop()
+        kinds = [m.kind for m in during if isinstance(m, FakeKafkaError)]
+        return kinds, after
+
+    result = dst.run(scenario())
+    assert result.done
+    kinds, offsets_after = result.value
+    assert kinds == ["broker_down"] * 3  # outage errors, as values
+    assert offsets_after == sorted(offsets_after)  # stream resumes in order

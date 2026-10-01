@@ -112,6 +112,7 @@ class FakeKafka:
             maxsize=config.max_queue
         )
         self._producer: asyncio.Task[None] | None = None
+        self._down = False
         self.produced_total = 0
         self.consumed_total = 0
         self.errors_returned = 0
@@ -122,6 +123,15 @@ class FakeKafka:
     def backlog(self) -> int:
         """Broker-retained surplus: produced minus consumed."""
         return max(0, self.produced_total - self.consumed_total)
+
+    def set_down(self, down: bool) -> None:
+        """Simulate a broker outage: get_one fails until set back up.
+
+        Mirrors a real broker connection error surfacing as a value from
+        the consumer, so the pump runs its backoff path for the whole
+        window. Arrivals keep queueing: nothing is lost.
+        """
+        self._down = down
 
     async def start(self) -> None:
         if self._producer is None:
@@ -145,6 +155,8 @@ class FakeKafka:
         poison, slow fetch, then the real message path (io fetch,
         cpu parse, queue handoff).
         """
+        if self._down:
+            return FakeKafkaError("broker_down", "sim broker outage")
         self.consumed_total += 1
         roll = self._rng.random() * 100.0
         faults = self.config.faults
