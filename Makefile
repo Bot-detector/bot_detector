@@ -70,6 +70,16 @@ smoke-firehose: ## run the firehose container smoke test (real kafka + real webs
 		--profile smoke down --volumes; \
 	exit $$status
 
+smoke-firehose-hunt: ## run the F2 starvation hunt against the real stack
+	$(DOCKER_ENV) docker compose -f docker-compose.yml -f docker-compose-smoke.yml \
+		--profile smoke up -d --build kafka kafka_setup mysql mysql_setup firehose
+	$(DOCKER_ENV) docker compose -f docker-compose.yml -f docker-compose-smoke.yml \
+		--profile smoke run --build --rm -e SMOKE_MODE=hunt firehose_smoke; \
+	status=$$?; \
+	$(DOCKER_ENV) docker compose -f docker-compose.yml -f docker-compose-smoke.yml \
+		--profile smoke down --volumes; \
+	exit $$status
+
 setup:
 	uv sync
 

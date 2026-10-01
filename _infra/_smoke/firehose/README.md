@@ -37,3 +37,31 @@ and the kick never fires), `START_TIMEOUT_S`, `IDLE_TIMEOUT_S`,
 
 The smoke profile overrides two product settings: `RESET_TOPICS=true`
 (fresh seed every run) and `KICK_GRACE_S=5` (fast kicks).
+
+## Hunt mode: the F2 starvation search
+
+```sh
+make smoke-firehose-hunt
+```
+
+Runs `SMOKE_MODE=hunt`: 12 clients (8 fast, 4 slow at 5-20ms per
+message) on a paced 50 msg/s feed for 60s. The F2 signature is a fast
+client far below the fast fleet's median while the server counts full
+deliveries. Slow clients lag by design and are excluded from the
+verdict. Exit 0 when no fast client starved.
+
+Status: 6 consecutive clean rounds (fast fleet in exact parity every
+time, no kicks, no victims). F2 did not reproduce under this load
+shape; the original report used 20 clients at 500 msg/s, so treat the
+defect as dormant rather than fixed.
+
+## Keyed auth: the real chain
+
+The smoke profile monkey-patches the firehose container through a
+mounted `sitecustomize.py` (PYTHONPATH): it points `DISCORD_API_BASE`
+at a stub server inside the runner container, which answers
+`/users/@me` for any Bearer token. The rest of the chain is real: the
+runner seeds `apiUser` + `apiPermissions` + `apiUserPerms` rows via
+pymysql, connects with an `x-api-key` header, and the keyed client
+must receive its own group's full stream (seed + burst) with no kick
+while the anonymous fleet shares its group.

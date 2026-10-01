@@ -25,6 +25,10 @@ import os
 import time
 import urllib.request
 
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+import pymysql
 import websockets
 from kafka import KafkaProducer
 from websockets.asyncio.client import ClientConnection
@@ -35,6 +39,14 @@ WS_URL = os.environ.get(
 )
 METRICS_URL = os.environ.get("METRICS_URL", "http://firehose:8000/metrics")
 KAFKA_BROKER = os.environ.get("KAFKA_BROKER", "kafka:9092")
+DB_HOST = os.environ.get("DB_HOST", "mysql")
+DB_USER = os.environ.get("DB_USER", "root")
+DB_PASSWORD = os.environ.get("DB_PASSWORD", "root_bot_buster")
+KEYED_TOKEN = "smoke-token-1"
+KEYED_DISCORD_ID = "900000000000000001"
+KEYED_USERNAME = f"discord_smoke{KEYED_DISCORD_ID[-3:]}"
+KEYED_PERMISSION = "firehose.players.scraped"
+STUB_PORT = 9000
 SEEDED = int(os.environ.get("EXPECTED_MESSAGES", "1000"))
 # the burst must exceed socket buffers (server send autotunes to ~4MB,
 # client receive to ~6MB) so the stalled client's send path backs up
@@ -49,10 +61,17 @@ Type = str
 
 
 class Client:
-    def __init__(self, name: str, kind: Type, slow_s: float = 0.0):
+    def __init__(
+        self,
+        name: str,
+        kind: Type,
+        slow_s: float = 0.0,
+        api_key: str | None = None,
+    ):
         self.name = name
         self.kind = kind
         self.slow_s = slow_s
+        self.api_key = api_key
         self.messages: list[str] = []
         self.close_code: int | None = None
         self.error: str | None = None
@@ -62,7 +81,10 @@ class Client:
         self._task: asyncio.Task | None = None
 
     async def connect(self) -> None:
-        self._ws = await websockets.connect(WS_URL, max_size=2**22)
+        headers = {"x-api-key": self.api_key} if self.api_key else None
+        self._ws = await websockets.connect(
+            WS_URL, max_size=2**22, additional_headers=headers
+        )
         if self.kind == "stalled":
             # connects and never reads: the inbox fills, the server kicks
             self._task = asyncio.create_task(self._park(), name=f"client-{self.name}")
@@ -144,16 +166,98 @@ def scrape_metric(metric: str) -> float:
     return total
 
 
+def start_discord_stub() -> ThreadingHTTPServer:
+    """Stub discord /users/@me: any Bearer token maps to the keyed user."""
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802
+            if self.path != "/users/@me":
+                self.send_response(404)
+                self.end_headers()
+                return
+            body = json.dumps(
+                {"id": KEYED_DISCORD_ID, "username": "smoke_user"}
+            ).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args) -> None:
+            pass
+
+    server = ThreadingHTTPServer(("0.0.0.0", STUB_PORT), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server
+
+
+def seed_keyed_user() -> None:
+    """Create the apiUser, the permission and the link the auth chain
+    reads after the stub resolves the token's discord identity."""
+    connection = pymysql.connect(
+        host=DB_HOST, user=DB_USER, password=DB_PASSWORD, database=None
+    )
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SHOW DATABASES")
+            databases = [
+                row[0]
+                for row in cursor.fetchall()
+                if row[0]
+                not in ("information_schema", "mysql", "performance_schema", "sys")
+            ]
+            if len(databases) != 1:
+                raise RuntimeError(f"expected one app database, got {databases}")
+            cursor.execute(f"USE `{databases[0]}`")
+            cursor.execute(
+                "INSERT INTO apiUser (username, token, is_active) "
+                "VALUES (%s, %s, 1) ON DUPLICATE KEY UPDATE is_active = 1",
+                (KEYED_USERNAME, "unused"),
+            )
+            cursor.execute(
+                "INSERT IGNORE INTO apiPermissions (permission) VALUES (%s)",
+                (KEYED_PERMISSION,),
+            )
+            cursor.execute(
+                "SELECT id FROM apiUser WHERE username = %s", (KEYED_USERNAME,)
+            )
+            user_row = cursor.fetchone()
+            if user_row is None:
+                raise RuntimeError("keyed apiUser missing after seed")
+            user_id = user_row[0]
+            cursor.execute(
+                "SELECT id FROM apiPermissions WHERE permission = %s",
+                (KEYED_PERMISSION,),
+            )
+            permission_row = cursor.fetchone()
+            if permission_row is None:
+                raise RuntimeError("keyed permission missing after seed")
+            permission_id = permission_row[0]
+            cursor.execute(
+                "INSERT IGNORE INTO apiUserPerms (user_id, permission_id) "
+                "VALUES (%s, %s)",
+                (user_id, permission_id),
+            )
+        connection.commit()
+    finally:
+        connection.close()
+
+
 async def main() -> dict:
     checks: dict[str, bool] = {}
     await wait_for_endpoint(START_TIMEOUT_S)
     checks["endpoint_up"] = True
+
+    start_discord_stub()
+    seed_keyed_user()
 
     fleet = [
         Client("fast-0", "fast"),
         Client("fast-1", "fast"),
         Client("slow-0", "slow", slow_s=0.005),
         Client("stalled-0", "stalled"),
+        Client("keyed-0", "fast", api_key=KEYED_TOKEN),
     ]
     for client in fleet:
         await client.connect()
@@ -221,6 +325,19 @@ async def main() -> dict:
     checks["slow_not_kicked"] = fleet[2].close_code is None
     await fleet[2].close()
 
+    # keyed client: own consumer group, must mirror the anonymous fasts
+    deadline = time.monotonic() + START_TIMEOUT_S + IDLE_TIMEOUT_S
+    keyed = fleet[4]
+    while (
+        len(keyed.messages) < TOTAL
+        and time.monotonic() < deadline
+        and keyed.error is None
+        and keyed.close_code is None
+    ):
+        await asyncio.sleep(0.2)
+    checks["keyed_full_stream"] = len(keyed.messages) == TOTAL
+    checks["keyed_not_kicked"] = keyed.close_code is None
+
     # stalled client: never reads, so the burst overflow kicks it. the
     # client itself cannot see the 1013 frame (it never reads), so it
     # just reports the connection as gone (1006); the server-side kick
@@ -264,5 +381,13 @@ def _report(checks: dict[str, bool], fleet: list[Client]) -> dict:
 
 
 if __name__ == "__main__":
-    results = asyncio.run(main())
-    raise SystemExit(0 if all(results.values()) else 1)
+    mode = os.environ.get("SMOKE_MODE", "smoke")
+    if mode == "hunt":
+        import hunt
+
+        report = asyncio.run(hunt.main())
+        ok = bool(report.get("clean"))
+    else:
+        report = asyncio.run(main())
+        ok = all(report.values())
+    raise SystemExit(0 if ok else 1)
