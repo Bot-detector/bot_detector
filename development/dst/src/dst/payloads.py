@@ -1,10 +1,10 @@
-"""Deterministic ScrapedStruct payload pool for the firehose sim.
+"""Deterministic ScrapedStruct payload pool for DST scenarios.
 
 Everything (names, xp, ban flags, timestamps) comes from one seeded
 RNG plus a fixed base time, so the same PayloadConfig builds
 byte-identical payloads across runs. No datetime.now() anywhere: the
-old pool logged the wall clock into created_at/updated_at, which made
-seeded runs non-replayable.
+pool must never log the wall clock into created_at/updated_at, which
+would make seeded runs non-replayable.
 """
 
 import logging

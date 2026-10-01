@@ -1,13 +1,11 @@
 """The real firehose app on the DST virtual clock.
 
-Same architecture as perf's sim_server (development/perf/firehose),
-rebuilt on simulated time: the production pump, Exchange, connection
-manager and websocket route all run unmodified; only the I/O seams
-are replaced:
+The production pump, Exchange, connection manager and websocket route
+all run unmodified; only the I/O seams are replaced:
 
 - kafka: QueueRepo.create_consumer is patched to a FakeKafka-backed
-  adapter (perf's FakeKafkaConsumer role). Payloads come from perf's
-  seeded pool, so a run replays byte-identically per seed.
+  adapter. Payloads come from the deterministic pool in dst.payloads,
+  so a run replays byte-identically per seed.
 - websockets: FakeWebSocket plays the uvicorn side of the ASGI
   interface (handshake event, receive(), send_text with backpressure,
   close codes). A drainer task per client models the peer reading at
@@ -39,7 +37,7 @@ from bot_detector.firehose.app.consumer.structs import TOPIC_MODELS  # noqa: E40
 from bot_detector.firehose.app.exchange.structs import Inbox  # noqa: E402
 from bot_detector.firehose.core.config import Settings  # noqa: E402
 from bot_detector.firehose.core.server import create_app  # noqa: E402
-from development.perf.firehose.payloads import (  # noqa: E402
+from dst.payloads import (  # noqa: E402
     PayloadConfig,
     build_payload_pool,
 )

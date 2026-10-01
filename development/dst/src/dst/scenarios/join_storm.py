@@ -1,10 +1,9 @@
 """Join-storm scenario: staggered connects into a hot feed.
 
-Rebuilds perf's ramp scenarios on the virtual clock: the feed runs at
-full rate while clients join one by one. The scenario exposes the
-interaction between the join grace, the kick rule (a lone subscriber
-can never be kicked for backpressure; two or more can), and inboxes
-that fill faster than their clients drain.
+The feed runs at full rate while clients join one by one. The scenario
+exposes the interaction between the join grace, the kick rule (a lone
+subscriber can never be kicked for backpressure; two or more can), and
+inboxes that fill faster than their clients drain.
 
 Expected shape with the documented command: every client joins a
 stream that already runs at 1000 msg/s and drains at only 500 msg/s,
@@ -26,7 +25,7 @@ from bot_detector.firehose.api.firehose import firehose as firehose_route  # noq
 from bot_detector.firehose.app.consumer.queue_repo import QueueRepo  # noqa: E402
 from bot_detector.firehose.core.config import Settings  # noqa: E402
 from bot_detector.firehose.core.server import create_app  # noqa: E402
-from development.perf.firehose.payloads import (  # noqa: E402
+from dst.payloads import (  # noqa: E402
     PayloadConfig,
     build_payload_pool,
 )

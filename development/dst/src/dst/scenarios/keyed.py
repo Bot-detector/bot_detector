@@ -29,7 +29,7 @@ from bot_detector.firehose.app.auth.auth import ANONYMOUS, AuthUser  # noqa: E40
 from bot_detector.firehose.app.consumer.queue_repo import QueueRepo  # noqa: E402
 from bot_detector.firehose.core.config import Settings  # noqa: E402
 from bot_detector.firehose.core.server import create_app  # noqa: E402
-from development.perf.firehose.payloads import (  # noqa: E402
+from dst.payloads import (  # noqa: E402
     PayloadConfig,
     build_payload_pool,
 )
