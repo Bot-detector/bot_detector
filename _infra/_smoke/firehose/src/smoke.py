@@ -387,6 +387,10 @@ if __name__ == "__main__":
 
         report = asyncio.run(hunt.main())
         ok = bool(report.get("clean"))
+    elif mode == "resilience":
+        import resilience
+
+        ok = all(asyncio.run(resilience.main()).values())
     else:
         report = asyncio.run(main())
         ok = all(report.values())
