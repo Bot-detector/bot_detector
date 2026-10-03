@@ -35,7 +35,7 @@ from dst.payloads import (  # noqa: E402
 )
 from pydantic import BaseModel, Field  # noqa: E402
 
-from dst import IoConfig, MachineConfig, VirtualMachine, virtual_time  # noqa: E402
+from dst import Machine, MachineConfig, NetworkConfig, virtual_time  # noqa: E402
 from dst.scenarios.firehose import (  # noqa: E402
     TOPIC,
     FirehoseClientReport,
@@ -103,10 +103,10 @@ async def main(**kwargs) -> KeyedIsolationReport:
     config = KeyedIsolationConfig(**kwargs)
     with virtual_time():
         logging.getLogger("bot_detector").setLevel(logging.WARNING)
-        machine = VirtualMachine(
+        machine = Machine(
             MachineConfig(
                 seed=config.machine_seed,
-                io={"kafka": IoConfig(mean_ms=0.01, jitter_ms=0.005)},
+                network=NetworkConfig(mean_ms=0.01, jitter_ms=0.005),
             )
         )
         kafka_config = KafkaConfig(

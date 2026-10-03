@@ -17,10 +17,19 @@ development/dst/
     ├── __init__.py
     ├── clock.py         VirtualClock: the one source of simulated time
     ├── loop.py          VirtualEventLoop: asyncio on the clock
-    ├── machine.py       VirtualMachine: cpu, io costs, fault injection
     ├── timepatch.py     virtual_time(): sync time module patch
     ├── runner.py        run(): drive a scenario, return a SimResult
     ├── main.py          CLI launcher
+    ├── units.py         KB / MB / GB byte constants
+    ├── machine/         Machine: the resource model of the box
+    │   ├── cpu.py           work accounting, cores, background load
+    │   ├── memory.py        RAM accounting and pressure
+    │   ├── network.py       latency, bandwidth, packet loss, partitions
+    │   ├── disk.py          latency and failures
+    │   ├── processes.py     gc-pause / freeze shaped stall injection
+    │   ├── randomness.py    one seeded RNG behind every draw
+    │   ├── config.py        per-subsystem config models
+    │   └── results.py       CpuGrant, IoResult, IoError
     ├── systems/         simulated outside world
     │   ├── fake_kafka.py
     │   └── fake_firehose_clients.py
@@ -38,7 +47,7 @@ runtime through `_bot_detector.pth` in the venv site-packages.
 ```mermaid
 flowchart TD
     clock["VirtualClock\n(one timeline)"] --> loop["VirtualEventLoop\nasyncio.sleep, timers, queues"]
-    clock --> machine["VirtualMachine\ncpu + io costs, faults"]
+    clock --> machine["Machine\ncpu, memory, network, disk, processes"]
     clock --> patch["virtual_time()\nsync time.monotonic / time.sleep"]
     machine --> kafka["FakeKafka\npaced feed, protocol faults"]
     kafka --> pump["firehose pump (product)"]
@@ -62,13 +71,26 @@ flowchart TD
   real socket, an unset future, or a missing simulated system can
   never proceed on a simulated timeline. The loop raises instead of
   waiting, so scenarios fail fast and name the cause.
-- **VirtualMachine** models the box. `await machine.cpu(cost)` runs
-  compute work on one serial core that handles 1.0 cpu-second per
-  virtual second. Costs queue up, so a pump that spends 0.0002s per
+- **Machine** models the box, one subsystem per resource:
+
+  ```python
+  machine = Machine(MachineConfig(seed=7, network=NetworkConfig(mean_ms=0.01)))
+  machine.clock.advance(10)            # jump the timeline
+  await machine.cpu.work(0.0002)       # one serial core, 1.0 cpu-s/s (cores config)
+  machine.cpu.set_load(0.9)            # background load: capacity becomes 10%
+  machine.memory.consume(512 * MB)     # RAM accounting; pressure = used/total
+  await machine.network.fetch(n_bytes=4096)  # latency + bandwidth + packet loss
+  machine.network.partition()          # every fetch fails until heal()
+  await machine.disk.write(n_bytes=1)  # latency, seeded failures
+  await machine.processes.pause()      # gc-pause / freeze shaped stall
+  ```
+
+  `cpu.work(cost)` queues FIFO, so a pump that spends 0.0002s per
   message sustains at most 5,000 msg/s and falls behind a faster feed.
-  `await machine.io(system)` draws a latency from a profile and can
-  fail with a seeded probability. Faults are percentage-based stalls
-  in the shape of a garbage-collection pause.
+  Network and disk failures come back as values on `IoResult`. Every
+  draw goes through one seeded RNG in a fixed order (stall -> fail ->
+  latency), and a partition consumes no draws, so any run replays
+  exactly per seed.
 - **virtual_time()** patches `time.monotonic`, `time.time`, and
   `time.sleep` onto the clock. Use it for sync code and for product
   code that reads the wall clock (timers, grace windows).
@@ -197,7 +219,7 @@ reports prove the replay. A difference names the nondeterminism.
 
 ## Rules and known traps
 
-- Construct `VirtualMachine`, `FirehoseHub`, and fakes inside the
+- Construct `Machine`, `FirehoseHub`, and fakes inside the
   scenario coroutine. They bind to the clock of the running loop.
   Outside `dst.run`, pass a clock explicitly.
 - The scenario body decides when `virtual_time()` applies. Product

@@ -47,6 +47,22 @@ class DSTIdleError(RuntimeError):
     """
 
 
+def running_clock() -> VirtualClock:
+    """The clock of the running VirtualEventLoop.
+
+    Simulated objects (Machine, FirehoseHub, ...) bind to it when
+    constructed inside a ``dst.run`` scenario instead of demanding a
+    clock argument everywhere.
+    """
+    loop = asyncio.get_running_loop()
+    if not isinstance(loop, VirtualEventLoop):
+        raise RuntimeError(
+            "no virtual clock is running; pass a clock explicitly or "
+            "construct inside dst.run's VirtualEventLoop"
+        )
+    return loop.clock
+
+
 class VirtualEventLoop(asyncio.selector_events.BaseSelectorEventLoop):
     """Selector event loop whose clock and timers are simulated.
 

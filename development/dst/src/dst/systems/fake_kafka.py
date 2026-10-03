@@ -7,9 +7,9 @@ feed, the costs and the faults all run on the virtual clock:
   second into a bounded queue; backlog (produced - consumed) is the
   broker-retained surplus a real kafka would keep.
 - ``get_one()`` is the consumer surface (QueueConsumer-protocol
-  shaped): each call pays machine costs for the message — an io fetch
-  against a named io system plus a cpu parse cost — so a consumer
-  with a slow parse path visibly falls behind the feed.
+  shaped): each call pays machine costs for the message — a network
+  fetch plus a cpu parse cost — so a consumer with a slow parse path
+  visibly falls behind the feed.
 - Faults are drawn per consumed message from one seeded RNG in a
   fixed order (error -> poison -> slow), so a run replays per seed:
   - ``error_pct``: transient broker error (retryable, values not
@@ -31,7 +31,7 @@ from collections.abc import Callable
 
 from pydantic import BaseModel, Field
 
-from ..machine import VirtualMachine
+from ..machine import Machine
 
 TICK_S = 0.01
 
@@ -79,25 +79,18 @@ class FakeKafkaError(Exception):
 class FakeKafka:
     """Rate-controlled broker stand-in with seeded fault injection.
 
-    Binds to a VirtualMachine for message costs (io fetch + cpu
-    parse). The io system must exist in the machine's config; unknown
-    systems are construction-time configuration errors, not surprises
-    mid-scenario.
+    Binds to a Machine for message costs (network fetch + cpu parse);
+    a network partition on the machine fails fetches like a broker
+    outage.
     """
 
     def __init__(
         self,
-        machine: VirtualMachine,
+        machine: Machine,
         config: KafkaConfig,
         *,
-        io_system: str = "kafka",
         payload_factory: Callable[[int], bytes] | None = None,
     ):
-        if io_system not in machine.config.io:
-            raise ValueError(
-                f"io system {io_system!r} not in machine config; "
-                f"configured: {sorted(machine.config.io)}"
-            )
         if config.faults.error_pct + config.faults.poison_pct > 100.0:
             raise ValueError(
                 f"error_pct + poison_pct must be <= 100, got "
@@ -105,7 +98,6 @@ class FakeKafka:
             )
         self.machine = machine
         self.config = config
-        self.io_system = io_system
         self._payload_factory = payload_factory or self._default_payload
         self._rng = random.Random(config.seed)
         self._queue: asyncio.Queue[tuple[int, bytes]] = asyncio.Queue(
@@ -172,11 +164,11 @@ class FakeKafka:
             self.slows_hit += 1
             await asyncio.sleep(faults.slow_s)
 
-        io = await self.machine.io(self.io_system, n_bytes=self.config.payload_bytes)
+        io = await self.machine.network.fetch(n_bytes=self.config.payload_bytes)
         if io.error is not None:
             return io.error
         if self.config.parse_cost_s > 0.0:
-            await self.machine.cpu(self.config.parse_cost_s, what="kafka-parse")
+            await self.machine.cpu.work(self.config.parse_cost_s, what="kafka-parse")
         offset, payload = await self._queue.get()
         return KafkaMessage(offset=offset, payload=payload)
 

@@ -45,9 +45,9 @@ from prometheus_client import REGISTRY  # noqa: E402
 from pydantic import BaseModel, Field, ValidationError  # noqa: E402
 
 from dst import (  # noqa: E402
-    IoConfig,
+    Machine,
     MachineConfig,
-    VirtualMachine,
+    NetworkConfig,
     virtual_time,
 )
 from dst.systems import (  # noqa: E402
@@ -210,7 +210,7 @@ _GROUPS: dict[str, FakeKafka] = {}
 
 
 def _make_consumer_patch(
-    machine: VirtualMachine,
+    machine: Machine,
     kafka_config: KafkaConfig,
     pool: list[bytes] | None = None,
     *,
@@ -231,10 +231,7 @@ def _make_consumer_patch(
         group = self.resolve_consumer_group(user=user, topic=topic)
         if group not in _GROUPS:
             _GROUPS[group] = FakeKafka(
-                machine,
-                kafka_config,
-                io_system="kafka",
-                payload_factory=payload_factory,
+                machine, kafka_config, payload_factory=payload_factory
             )
         return FakeKafkaQueueConsumer(_GROUPS[group], model=TOPIC_MODELS[topic])
 
@@ -272,10 +269,10 @@ async def main(**kwargs) -> FirehoseReport:
     config = FirehoseScenarioConfig(**kwargs)
     with virtual_time():
         logging.getLogger("bot_detector").setLevel(logging.WARNING)
-        machine = VirtualMachine(
+        machine = Machine(
             MachineConfig(
                 seed=config.machine_seed,
-                io={"kafka": IoConfig(mean_ms=0.01, jitter_ms=0.005)},
+                network=NetworkConfig(mean_ms=0.01, jitter_ms=0.005),
             )
         )
         kafka_config = KafkaConfig(

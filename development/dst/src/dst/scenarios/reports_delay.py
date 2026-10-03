@@ -42,7 +42,12 @@ from bot_detector.firehose.core.config import Settings  # noqa: E402
 from bot_detector.firehose.core.server import create_app  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
 
-from dst import IoConfig, MachineConfig, VirtualClock, VirtualMachine  # noqa: E402
+from dst import (  # noqa: E402
+    Machine,
+    MachineConfig,
+    NetworkConfig,
+    VirtualClock,
+)
 from dst import virtual_time  # noqa: E402
 from dst.scenarios.firehose import (  # noqa: E402
     FakeWebSocket,
@@ -154,10 +159,10 @@ async def main(**kwargs) -> ReportsDelayReport:
 
 
 async def _run(config: ReportsDelayConfig) -> ReportsDelayReport:
-    machine = VirtualMachine(
+    machine = Machine(
         MachineConfig(
             seed=config.machine_seed,
-            io={"kafka": IoConfig(mean_ms=0.01, jitter_ms=0.005)},
+            network=NetworkConfig(mean_ms=0.01, jitter_ms=0.005),
         )
     )
     kafka_config = KafkaConfig(

@@ -6,11 +6,11 @@ import pytest
 
 import dst as dst
 from dst import (
-    IoConfig,
+    Machine,
     MachineConfig,
+    NetworkConfig,
     SimResult,
     VirtualClock,
-    VirtualMachine,
 )
 from dst.systems import (
     FakeKafka,
@@ -20,12 +20,11 @@ from dst.systems import (
     KafkaMessage,
 )
 
-KAFKA_IO = {"kafka": IoConfig(mean_ms=1)}
 
-
-def make_machine(clock: VirtualClock | None = None, **io_kwargs) -> VirtualMachine:
-    return VirtualMachine(
-        MachineConfig(io={"kafka": IoConfig(mean_ms=1, **io_kwargs)}), clock=clock
+def make_machine(clock: VirtualClock | None = None, **network_kwargs) -> Machine:
+    return Machine(
+        MachineConfig(network=NetworkConfig(mean_ms=1, **network_kwargs)),
+        clock=clock,
     )
 
 
@@ -46,7 +45,7 @@ def msg(result: KafkaMessage | Exception) -> "KafkaMessage":
 
 def test_feed_rate_paces_consumption_in_virtual_time():
     async def scenario() -> tuple[float, int]:
-        machine = VirtualMachine(MachineConfig(io={"kafka": IoConfig(mean_ms=0.01)}))
+        machine = Machine(MachineConfig(network=NetworkConfig(mean_ms=0.01)))
         kafka = FakeKafka(machine, KafkaConfig(rate_s=100, parse_cost_s=0.0))
         await kafka.start()
         for _ in range(10):
@@ -76,7 +75,7 @@ def test_offsets_are_monotonic():
 
 def test_backlog_grows_when_consumer_is_slower_than_feed():
     async def scenario() -> tuple[int, int]:
-        machine = VirtualMachine(MachineConfig(io={"kafka": IoConfig(mean_ms=0.01)}))
+        machine = Machine(MachineConfig(network=NetworkConfig(mean_ms=0.01)))
         kafka = FakeKafka(
             machine,
             KafkaConfig(rate_s=1000, parse_cost_s=0.002),  # 500/s capacity
@@ -143,7 +142,7 @@ def test_fault_stream_replays_with_same_seed():
 
 def test_slow_fetch_triggers_app_side_timeout():
     async def scenario() -> str | None:
-        machine = VirtualMachine(MachineConfig(io={"kafka": IoConfig(mean_ms=0.01)}))
+        machine = Machine(MachineConfig(network=NetworkConfig(mean_ms=0.01)))
         kafka = FakeKafka(
             machine,
             KafkaConfig(rate_s=1000, faults=KafkaFaults(slow_pct=100.0, slow_s=5.0)),
@@ -166,7 +165,7 @@ def test_slow_fetch_triggers_app_side_timeout():
 
 def test_parse_cost_caps_consumption_below_feed_rate():
     async def scenario() -> tuple[int, int]:
-        machine = VirtualMachine(MachineConfig(io={"kafka": IoConfig(mean_ms=0.01)}))
+        machine = Machine(MachineConfig(network=NetworkConfig(mean_ms=0.01)))
         kafka = FakeKafka(
             machine,
             KafkaConfig(rate_s=10_000, parse_cost_s=0.0002),  # 5k/s cpu cap
@@ -186,24 +185,33 @@ def test_parse_cost_caps_consumption_below_feed_rate():
 
 def test_message_costs_land_on_the_machine():
     async def scenario() -> tuple[int, float]:
-        machine = VirtualMachine(MachineConfig(io={"kafka": IoConfig(mean_ms=0.01)}))
+        machine = Machine(MachineConfig(network=NetworkConfig(mean_ms=0.01)))
         kafka = FakeKafka(machine, KafkaConfig(rate_s=1000, parse_cost_s=0.001))
         await kafka.start()
         for _ in range(10):
             await kafka.get_one()
         await kafka.stop()
-        return machine.cpu_calls, machine.io_latency_s
+        return machine.cpu.calls, machine.network.latency_s
 
     result = dst.run(scenario())
-    cpu_calls, io_latency = result.value
+    cpu_calls, network_latency = result.value
     assert cpu_calls == 10
-    assert io_latency >= 10 * 0.00001  # 10 fetches at mean 0.01ms
+    assert network_latency >= 10 * 0.00001  # 10 fetches at mean 0.01ms
 
 
-def test_unknown_io_system_fails_at_construction():
-    machine = VirtualMachine(MachineConfig(), clock=VirtualClock())
-    with pytest.raises(ValueError, match="kafka"):
-        FakeKafka(machine, KafkaConfig())
+def test_network_partition_surfaces_fetch_errors():
+    async def scenario() -> list[str]:
+        machine = Machine(MachineConfig(network=NetworkConfig(mean_ms=0.01)))
+        kafka = FakeKafka(machine, KafkaConfig(rate_s=1000))
+        await kafka.start()
+        machine.network.partition()
+        out = [await kafka.get_one() for _ in range(3)]
+        await kafka.stop()
+        return [str(m) for m in out]
+
+    result = dst.run(scenario())
+    assert result.done
+    assert result.value == ["network partitioned"] * 3  # fetch errors, as values
 
 
 def test_error_plus_poison_over_100_pct_rejected():
@@ -243,7 +251,7 @@ def test_unstopped_producer_is_reported():
 
 def test_broker_outage_fails_without_losing_arrivals():
     async def scenario() -> tuple[list[str], list[int]]:
-        machine = VirtualMachine(MachineConfig(io={"kafka": IoConfig(mean_ms=0.01)}))
+        machine = Machine(MachineConfig(network=NetworkConfig(mean_ms=0.01)))
         kafka = FakeKafka(machine, KafkaConfig(rate_s=1000))
         await kafka.start()
         await kafka.get_one()  # consume the first arrival

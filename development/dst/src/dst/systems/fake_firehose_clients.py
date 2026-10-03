@@ -26,7 +26,7 @@ import asyncio
 from pydantic import BaseModel, Field
 
 from ..clock import VirtualClock
-from ..loop import VirtualEventLoop
+from ..loop import running_clock
 
 KICKED_CODE = 1013
 KICKED_REASON = "try again later"
@@ -155,20 +155,12 @@ class FirehoseHub:
     """Exchange stand-in: fanout with drop-then-kick backpressure.
 
     Binds to the running VirtualEventLoop's clock when constructed
-    inside a ``dst.run`` scenario (same convention as VirtualMachine).
+    inside a ``dst.run`` scenario (same convention as Machine).
     """
 
     def __init__(self, config: FirehoseHubConfig, clock: VirtualClock | None = None):
-        if clock is None:
-            loop = asyncio.get_running_loop()
-            if not isinstance(loop, VirtualEventLoop):
-                raise RuntimeError(
-                    "FirehoseHub needs a clock; pass one or construct it "
-                    "inside dst.run's VirtualEventLoop"
-                )
-            clock = loop.clock
         self.config = config
-        self.clock = clock
+        self.clock = clock if clock is not None else running_clock()
         self._inboxes: dict[str, tuple[FirehoseClient, _Inbox]] = {}
         self.send_total = 0
         self.delivered_total = 0

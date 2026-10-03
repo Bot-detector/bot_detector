@@ -6,7 +6,7 @@ seams. It only needs the loop swap that dst.run performs.
 
 from pydantic import BaseModel, Field
 
-from dst import IoConfig, MachineConfig, VirtualMachine
+from dst import Machine, MachineConfig, NetworkConfig
 from dst.systems import FakeKafka, KafkaConfig
 
 
@@ -30,8 +30,8 @@ class KafkaSmokeReport(BaseModel):
 async def main(**kwargs) -> KafkaSmokeReport:
     """Consume a paced fake kafka feed for duration_s of virtual time."""
     config = KafkaSmokeConfig(**kwargs)
-    machine = VirtualMachine(
-        MachineConfig(io={"kafka": IoConfig(mean_ms=0.01, jitter_ms=0.005)})
+    machine = Machine(
+        MachineConfig(network=NetworkConfig(mean_ms=0.01, jitter_ms=0.005))
     )
     kafka = FakeKafka(
         machine,
@@ -48,6 +48,6 @@ async def main(**kwargs) -> KafkaSmokeReport:
         consumed=kafka.consumed_total,
         produced=kafka.produced_total,
         backlog=kafka.backlog,
-        machine_cpu_calls=machine.cpu_calls,
-        machine_utilization=machine.utilization(),
+        machine_cpu_calls=machine.cpu.calls,
+        machine_utilization=machine.cpu.utilization(),
     )
