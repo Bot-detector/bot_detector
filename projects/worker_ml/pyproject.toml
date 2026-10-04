@@ -16,7 +16,7 @@ dependencies = [
     "sqlalchemy==2.0.44",
     "orjson==3.11.5",
     "aiokafka==0.12.0",
-    "aiohttp==3.11.11",
+    "aiohttp==3.14.3",
 ]
 
 [project.scripts]

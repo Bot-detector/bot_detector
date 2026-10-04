@@ -3,7 +3,7 @@ import logging
 from datetime import datetime
 
 import aiohttp
-from aiohttp import ClientSession
+from aiohttp import ClientSession, DummyCookieJar
 from bot_detector.event_queue.adapters.kafka import (
     KafkaConfig,
     KafkaConsumerConfig,
@@ -41,6 +41,19 @@ from pydantic import ValidationError
 logger = logging.getLogger(__name__)
 
 
+def build_session() -> ClientSession:
+    """Builds the scraper session.
+
+    Cookie-free on purpose: Jagex's edge redirects to the community page
+    (hiscores "down" page) when its tracking cookies are echoed back, so the
+    session must never send cookies.
+    """
+    return ClientSession(
+        headers={"User-Agent": "http://osrsbotdetector.com"},
+        cookie_jar=DummyCookieJar(),
+    )
+
+
 async def get_proxy(
     proxy_manager: ProxyManager,
     worker_id: int,
@@ -62,15 +75,15 @@ async def scrape_player(
     player: PlayerStruct,
     session: ClientSession,
     runemetrics_instance: RuneMetrics,
-) -> tuple[PlayerStruct | None, float | None, str | None]:
-    player_data, latency, error = None, None, None
+) -> tuple[RuneMetricsResponse | None, float | None, str | None]:
+    error = None
     try:
-        player_data, latency = await runemetrics_instance.get(
+        runemetrics_response, latency = await runemetrics_instance.get(
             player_name=player.name,
             session=session,
             return_latency=True,
         )
-        return player_data, latency, error
+        return runemetrics_response, latency, error
     except UnexpectedRedirection:
         error = f"Unexpected redirection for {player.name=}."
         # logger.error(error)
@@ -144,17 +157,18 @@ async def work(
     player_banned_producer: QueueProducer[PlayerBannedStruct],
 ):
     retry_tracker = RetryTracker(base_delay=10.0, max_delay=300.0, decay_window=300.0)
-    async with ClientSession() as session:
+    async with build_session() as session:
         while True:
             # get proxy
             proxy = await get_proxy(proxy_manager, worker_id)
-            _proxy = proxy.split("@")[1]
 
             # handle exceptions
             if proxy is None:
                 logger.error(f"[{worker_id}]: No proxy available.")
                 await asyncio.sleep(10)
                 continue
+
+            _proxy = proxy.split("@")[1]
 
             # get player from kafka
             result = await player_nf_queue.get_one()
@@ -205,6 +219,12 @@ async def work(
                             f"[{worker_id}]: Failed to commit requeued player offset: {commit_error}"
                         )
                 await handle_retry(retry_tracker, worker_id, proxy)
+                continue
+
+            if runemetrics_response is None:
+                # unreachable in practice: scrape_player always pairs a None
+                # response with an error, but keep the worker alive regardless
+                logger.error(f"[{worker_id}][{player_data.name}]: no scrape data")
                 continue
 
             # update player data
@@ -273,7 +293,7 @@ async def work(
 
 async def main():
     start_metrics_server(port=ScraperSettings().METRICS_PORT)
-    proxy_manager = ProxyManager(api_key=ProxySettings().PROXY_API_KEY)
+    proxy_manager = ProxyManager(api_key=ProxySettings().PROXY_API_KEY)  # type: ignore[call-arg]
     proxies = await proxy_manager.fetch_proxies()
 
     # initialize kafka producers and consumers
@@ -337,8 +357,8 @@ async def main():
                 worker_id=worker_id,
                 proxy_manager=proxy_manager,
                 rate_limiter=RateLimiter(
-                    calls_per_interval=ProxySettings().MAX_CALLS,
-                    interval=ProxySettings().INTERVAL,
+                    calls_per_interval=ProxySettings().MAX_CALLS,  # type: ignore[call-arg]
+                    interval=ProxySettings().INTERVAL,  # type: ignore[call-arg]
                 ),
                 player_nf_queue=player_nf_queue,
                 player_sc_producer=player_sc_producer,

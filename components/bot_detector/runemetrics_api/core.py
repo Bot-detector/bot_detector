@@ -1,5 +1,6 @@
 import logging
 import time
+from typing import Literal, overload
 
 from aiohttp import ClientSession
 from osrs.utils import RateLimiter
@@ -47,6 +48,22 @@ class RuneMetrics:
     ) -> None:
         self.proxy = proxy
         self.rate_limiter = rate_limiter
+
+    @overload
+    async def get(
+        self,
+        player_name: str,
+        session: ClientSession | None,
+        return_latency: Literal[False] = False,
+    ) -> RuneMetricsResponse: ...
+
+    @overload
+    async def get(
+        self,
+        player_name: str,
+        session: ClientSession | None,
+        return_latency: Literal[True],
+    ) -> tuple[RuneMetricsResponse, float]: ...
 
     async def get(
         self,

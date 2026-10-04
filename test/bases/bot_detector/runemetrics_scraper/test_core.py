@@ -89,7 +89,7 @@ async def test_work_commits_offset_after_successful_handle(
     player_sc_producer = AsyncMock()
     player_sc_producer.put = AsyncMock(return_value=None)
 
-    monkeypatch.setattr(core, "ClientSession", _DummySession)
+    monkeypatch.setattr(core, "build_session", lambda: _DummySession())
     monkeypatch.setattr(
         core,
         "get_proxy",
@@ -139,7 +139,7 @@ async def test_work_commits_only_after_successful_requeue(
     player_nf_queue.commit = AsyncMock(return_value=None)
     player_sc_producer = AsyncMock()
 
-    monkeypatch.setattr(core, "ClientSession", _DummySession)
+    monkeypatch.setattr(core, "build_session", lambda: _DummySession())
     monkeypatch.setattr(
         core,
         "get_proxy",
@@ -211,7 +211,7 @@ async def test_work_backoff_increases_across_consecutive_errors(
     player_nf_queue.commit = AsyncMock(return_value=None)
     player_sc_producer = AsyncMock()
 
-    monkeypatch.setattr(core, "ClientSession", _DummySession)
+    monkeypatch.setattr(core, "build_session", lambda: _DummySession())
     monkeypatch.setattr(
         core,
         "RetryTracker",
@@ -277,7 +277,7 @@ async def test_work_backoff_resets_after_success(
     player_sc_producer = AsyncMock()
     player_sc_producer.put = AsyncMock(return_value=None)
 
-    monkeypatch.setattr(core, "ClientSession", _DummySession)
+    monkeypatch.setattr(core, "build_session", lambda: _DummySession())
     monkeypatch.setattr(
         core,
         "RetryTracker",
@@ -344,7 +344,7 @@ async def test_work_validation_error_requeues_without_backoff(
     player_nf_queue.commit = AsyncMock(return_value=None)
     player_sc_producer = AsyncMock()
 
-    monkeypatch.setattr(core, "ClientSession", _DummySession)
+    monkeypatch.setattr(core, "build_session", lambda: _DummySession())
     monkeypatch.setattr(
         core,
         "get_proxy",
@@ -422,7 +422,7 @@ async def test_work_emits_banned_event_only_on_transition_into_banned(
             loggedIn=False,
         )
 
-    monkeypatch.setattr(core, "ClientSession", _DummySession)
+    monkeypatch.setattr(core, "build_session", lambda: _DummySession())
     monkeypatch.setattr(
         core,
         "get_proxy",
@@ -452,3 +452,61 @@ async def test_work_emits_banned_event_only_on_transition_into_banned(
         assert event.name == player.name
     else:
         player_banned_producer.put.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_work_survives_missing_proxy(
+    monkeypatch: pytest.MonkeyPatch,
+    player_struct: PlayerStruct,
+):
+    """No proxy available must skip the iteration, not crash the worker.
+
+    Regression: proxy.split() used to run before the None check, killing the
+    worker task with AttributeError whenever the proxy pool was empty.
+    """
+    player_message = NotFoundStruct(
+        metadata=MetaData(version=1, source="test"),
+        player_data=player_struct,
+    )
+    player_nf_queue = AsyncMock()
+    player_nf_queue.get_one = AsyncMock(return_value=player_message)
+    player_nf_queue.commit = AsyncMock(return_value=None)
+    player_sc_producer = AsyncMock()
+    player_sc_producer.put = AsyncMock(return_value=None)
+
+    monkeypatch.setattr(core, "build_session", lambda: _DummySession())
+    monkeypatch.setattr(
+        core,
+        "get_proxy",
+        AsyncMock(
+            side_effect=[
+                None,  # no proxy available on this iteration
+                "http://user@proxy",  # recovered on the next one
+                asyncio.CancelledError(),  # stop the loop
+            ]
+        ),
+    )
+    monkeypatch.setattr(
+        core,
+        "scrape_player",
+        AsyncMock(return_value=(RuneMetricsResponse(), 0.1, None)),
+    )
+    sleep_mock = AsyncMock(return_value=None)
+    monkeypatch.setattr(core.asyncio, "sleep", sleep_mock)
+
+    with pytest.raises(asyncio.CancelledError):
+        await core.work(
+            worker_id=1,
+            proxy_manager=AsyncMock(),
+            rate_limiter=AsyncMock(),
+            player_nf_queue=player_nf_queue,
+            player_sc_producer=player_sc_producer,
+            player_banned_producer=AsyncMock(),
+        )
+
+    # the None-proxy iteration slept and looped instead of raising
+    assert core.get_proxy.await_count == 3
+    sleep_mock.assert_awaited_once_with(10)
+    # the second iteration scraped normally and committed
+    player_sc_producer.put.assert_awaited_once()
+    player_nf_queue.commit.assert_awaited_once()
