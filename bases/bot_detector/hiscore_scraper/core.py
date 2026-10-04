@@ -3,7 +3,7 @@ import logging
 from datetime import date, datetime, timedelta
 
 import aiohttp
-from aiohttp import ClientSession
+from aiohttp import ClientSession, DummyCookieJar
 from bot_detector.event_queue.adapters.kafka import (
     KafkaConfig,
     KafkaConsumerConfig,
@@ -49,6 +49,19 @@ logger = logging.getLogger(__name__)
 # cooldown after rotating proxies: give the fresh pool a moment before
 # the next scrape attempt
 ROTATE_COOLDOWN_S = 10.0
+
+
+def build_session() -> ClientSession:
+    """Builds the scraper session.
+
+    Cookie-free on purpose: Jagex's edge redirects to the community page
+    (hiscores "down" page) when its tracking cookies are echoed back, so the
+    session must never send cookies.
+    """
+    return ClientSession(
+        headers={"User-Agent": "http://osrsbotdetector.com"},
+        cookie_jar=DummyCookieJar(),
+    )
 
 
 class Settings(BaseSettings):
@@ -260,9 +273,7 @@ async def work(
         interval=ProxySettings().INTERVAL,  # type: ignore
     )
 
-    async with ClientSession(
-        headers={"User-Agent": "http://osrsbotdetector.com"}
-    ) as session:
+    async with build_session() as session:
         while True:
             proxy = await get_proxy(worker_id, proxy_manager)
             if proxy is None:
