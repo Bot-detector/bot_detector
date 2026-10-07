@@ -36,3 +36,6 @@ class Err(Result):
         ValidationError,
         Exception,
     ]
+    # wall time of the fetch attempt that produced this error; 0.0 when
+    # the error was constructed without a fetch (tests, mocks)
+    latency: float = 0.0

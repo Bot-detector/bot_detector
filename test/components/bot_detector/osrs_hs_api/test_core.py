@@ -177,6 +177,64 @@ async def test_latency_is_recorded(monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.mark.asyncio
+async def test_not_found_records_latency(monkeypatch: pytest.MonkeyPatch):
+    server = await _start({"error": "not found"}, status=404)
+    _patch_url(monkeypatch, server)
+    api = HiscoreOldSchoolAPI()
+    try:
+        async with aiohttp.ClientSession() as session:
+            result = await api.get("nonexistent_player", session)
+    finally:
+        await server.close()
+
+    assert result.is_err()
+    assert isinstance(result.error, PlayerDoesNotExist)
+    assert result.latency > 0
+
+
+@pytest.mark.asyncio
+async def test_redirect_records_latency(monkeypatch: pytest.MonkeyPatch):
+    server = await _start({}, status=302)
+    _patch_url(monkeypatch, server)
+    api = HiscoreOldSchoolAPI()
+    try:
+        async with aiohttp.ClientSession() as session:
+            result = await api.get("player", session)
+    finally:
+        await server.close()
+
+    assert result.is_err()
+    assert isinstance(result.error, UnexpectedRedirection)
+    assert result.latency > 0
+
+
+@pytest.mark.asyncio
+async def test_server_error_records_latency(monkeypatch: pytest.MonkeyPatch):
+    server = await _start({"error": "boom"}, status=500)
+    _patch_url(monkeypatch, server)
+    api = HiscoreOldSchoolAPI()
+    try:
+        async with aiohttp.ClientSession() as session:
+            result = await api.get("player", session)
+    finally:
+        await server.close()
+
+    assert result.is_err()
+    assert result.latency > 0
+
+
+@pytest.mark.asyncio
+async def test_connection_error_records_latency():
+    api = HiscoreOldSchoolAPI()
+    api.url = "http://127.0.0.1:1/hiscore"
+    async with aiohttp.ClientSession() as session:
+        result = await api.get("player", session)
+
+    assert result.is_err()
+    assert result.latency > 0
+
+
+@pytest.mark.asyncio
 async def test_get_with_proxy_passes_to_session(
     monkeypatch: pytest.MonkeyPatch,
 ):
