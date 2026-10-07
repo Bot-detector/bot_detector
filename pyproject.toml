@@ -54,8 +54,7 @@ dev = [
 dev-mode-dirs = [
     "components",
     "bases",
-    "development",
-    "development/dst/src",
+    "test",
     ".",
 ]
 
