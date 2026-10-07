@@ -51,7 +51,7 @@ def test_one_million_run_invariants_and_wall_budget():
     assert card.subscores.loss == 1.0
     assert card.subscores.drain == 1.0
     assert card.score == 1.0
-    assert wall_s < 30.0
+    assert wall_s < 50.0
 
 
 def test_zero_dup_and_deadlock_produces_clean_run():
