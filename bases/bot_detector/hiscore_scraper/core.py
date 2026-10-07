@@ -34,6 +34,7 @@ from pydantic_settings import BaseSettings
 
 from .metrics import (
     error_counter,
+    fetch_outcome_latency_histogram,
     latency_histogram,
     not_found_counter,
     retry_counter,
@@ -49,6 +50,13 @@ logger = logging.getLogger(__name__)
 # cooldown after rotating proxies: give the fresh pool a moment before
 # the next scrape attempt
 ROTATE_COOLDOWN_S = 10.0
+
+
+def _proxy_label(proxy: str) -> str:
+    """Host:port of a proxy URL, without credentials."""
+    if "@" in proxy:
+        return proxy.split("@", 1)[1]
+    return proxy
 
 
 def build_session() -> ClientSession:
@@ -151,8 +159,18 @@ async def scrape_player(
 
     if isinstance(result, Ok):
         latency_histogram.labels(proxy=proxy).observe(result.latency)
+        fetch_outcome_latency_histogram.labels(
+            proxy=_proxy_label(proxy), outcome="success"
+        ).observe(result.latency)
         return result.value, None
     elif isinstance(result, Err):
+        if result.latency > 0:
+            outcome = (
+                "not_found" if isinstance(result.error, PlayerDoesNotExist) else "error"
+            )
+            fetch_outcome_latency_histogram.labels(
+                proxy=_proxy_label(proxy), outcome=outcome
+            ).observe(result.latency)
         return None, result.error
     else:
         return None, Exception("Unexpected result type from scrape_player")

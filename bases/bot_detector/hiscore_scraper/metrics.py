@@ -37,6 +37,12 @@ latency_histogram = Histogram(
     labelnames=["proxy"],
     buckets=(0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0, 20.0, 30.0),
 )
+fetch_outcome_latency_histogram = Histogram(
+    name="hiscore_scraper_fetch_outcome_latency_seconds",
+    documentation="Latency of player stats fetches by outcome (success/not_found/error)",
+    labelnames=["proxy", "outcome"],
+    buckets=(0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0, 20.0, 30.0),
+)
 
 # Retry tracking metrics
 retry_counter = Counter(
