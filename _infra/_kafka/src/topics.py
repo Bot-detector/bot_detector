@@ -36,6 +36,11 @@ TOPICS = [
         num_partitions=4,
         replication_factor=1,
     ),
+    NewTopic(
+        name="predictions.to_insert",
+        num_partitions=4,
+        replication_factor=1,
+    ),
 ]
 
 
