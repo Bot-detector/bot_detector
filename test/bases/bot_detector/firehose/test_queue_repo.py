@@ -58,6 +58,25 @@ def test_create_consumer_reports_uses_reports_struct(repo: QueueRepo):
     assert backend.config.topic == "reports.to_insert"
 
 
+def test_create_consumer_predictions_uses_predictions_struct(repo: QueueRepo):
+    consumer = repo.create_consumer(user=ANONYMOUS, topic="predictions.to_insert")
+
+    assert not isinstance(consumer, Exception)
+    backend = consumer._backend
+    assert isinstance(backend, AIOKafkaConsumerAdapter)
+    assert backend.config.topic == "predictions.to_insert"
+    assert backend.config.consumer_config is not None
+    assert (
+        backend.config.consumer_config.group_id == "fh-anonymous-predictions.to_insert"
+    )
+
+
+def test_create_consumer_unknown_topic_raises(repo: QueueRepo):
+    consumer = repo.create_consumer(user=ANONYMOUS, topic="does.not_exist")
+
+    assert isinstance(consumer, Exception)
+
+
 def test_create_consumer_anonymous_uses_shared_group_earliest(repo: QueueRepo):
     consumer = repo.create_consumer(user=ANONYMOUS, topic=TOPIC)
 

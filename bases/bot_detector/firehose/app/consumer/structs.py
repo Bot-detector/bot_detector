@@ -1,5 +1,6 @@
 from bot_detector.event_queue.structs import (
     NotFoundStruct,
+    PredictionsToInsertStruct,
     ReportsToInsertStruct,
     ScrapedStruct,
 )
@@ -24,6 +25,7 @@ TOPIC_MODELS: dict[str, type[BaseModel]] = {
     "players.scraped": ScrapedStruct,
     "players.not_found": NotFoundStruct,
     "reports.to_insert": ReportsToInsertStruct,
+    "predictions.to_insert": PredictionsToInsertStruct,
 }
 
 ALLOWED_TOPICS: list[str] = list(TOPIC_MODELS.keys())
