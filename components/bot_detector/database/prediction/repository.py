@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Sequence
 from dataclasses import asdict
 
 import sqlalchemy as sqla
@@ -45,7 +46,7 @@ class PredictionLatestRepo(PredictionLatestInterface):
     async def insert(
         self,
         async_session: AsyncSession,
-        predictions: list[PredictionCreate],
+        predictions: Sequence[PredictionCreate],
     ) -> None:
         logger.info(f"Inserting {len(predictions)} rows into prediction_latest")
 
@@ -91,7 +92,7 @@ class PredictionRepo(PredictionInterface):
     async def insert(
         self,
         async_session: AsyncSession,
-        predictions: list[PredictionCreate],
+        predictions: Sequence[PredictionCreate],
     ) -> None:
         logger.info(f"Inserting {len(predictions)} rows into prediction")
 
