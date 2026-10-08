@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 
 from bot_detector.structs import (
     PredictionCreate,
@@ -20,7 +21,7 @@ class PredictionLatestInterface(ABC):
     async def insert(
         self,
         async_session: AsyncSession,
-        predictions: list[PredictionCreate],
+        predictions: Sequence[PredictionCreate],
     ) -> None:
         raise NotImplementedError()
 
@@ -37,6 +38,6 @@ class PredictionInterface(ABC):
     async def insert(
         self,
         async_session: AsyncSession,
-        predictions: list[PredictionCreate],
+        predictions: Sequence[PredictionCreate],
     ) -> None:
         raise NotImplementedError()

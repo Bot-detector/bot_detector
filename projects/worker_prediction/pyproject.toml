@@ -3,21 +3,23 @@ requires = ["hatchling", "hatch-polylith-bricks"]
 build-backend = "hatchling.build"
 
 [project]
-name = "worker_ml"
+name = "worker_prediction"
 version = "0.1.0"
 requires-python = ">=3.10"
 
 dependencies = [
+    "asyncmy==0.2.11",
+    "cryptography==46.0.3",
     "pydantic-settings==2.7.0",
     "pydantic==2.10.4",
     "prometheus-client==0.22.0",
+    "sqlalchemy==2.0.44",
     "orjson==3.11.5",
     "aiokafka==0.12.0",
-    "aiohttp==3.14.3",
 ]
 
 [project.scripts]
-worker_ml = "bot_detector.worker_ml.core:run"
+worker_prediction = "bot_detector.worker_prediction.main:run"
 
 # This section is needed for building
 [tool.hatch.build.targets.wheel]
@@ -26,8 +28,9 @@ packages = ["bot_detector"]
 [tool.hatch.build.hooks.polylith-bricks]
 
 [tool.polylith.bricks]
-"../../bases/bot_detector/worker_ml" = "bot_detector/worker_ml"
-"../../components/bot_detector/ml_api" = "bot_detector/ml_api"
+"../../bases/bot_detector/worker_prediction" = "bot_detector/worker_prediction"
+"../../components/bot_detector/database" = "bot_detector/database"
 "../../components/bot_detector/event_queue" = "bot_detector/event_queue"
 "../../components/bot_detector/structs" = "bot_detector/structs"
 "../../components/bot_detector/logfmt" = "bot_detector/logfmt"
+"../../components/bot_detector/worker" = "bot_detector/worker"

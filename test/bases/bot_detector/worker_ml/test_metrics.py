@@ -33,7 +33,7 @@ async def test_consume_data_to_predict_increments_prediction_counters(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     batch = [DataToPredictStruct(player_id=123, data={"attack": 1})]
-    inserted_before = _sample("worker_ml_predictions_inserted_total") or 0
+    published_before = _sample("worker_ml_predictions_published_total") or 0
     batches_before = (
         _sample("worker_ml_batches_consumed_total", {"loop": "data_to_predict"}) or 0
     )
@@ -42,9 +42,10 @@ async def test_consume_data_to_predict_increments_prediction_counters(
     queue.get_many = AsyncMock(side_effect=[batch, []])
     queue.commit = AsyncMock()
 
+    predictions_queue = AsyncMock()
+
     monkeypatch_predict = AsyncMock(return_value=[_prediction()])
     monkeypatch.setattr(core, "predict", monkeypatch_predict)
-    monkeypatch.setattr(core, "insert_prediction_results", AsyncMock())
     monkeypatch.setattr(core.asyncio, "sleep", AsyncMock(side_effect=_StopLoop()))
 
     with pytest.raises(_StopLoop):
@@ -52,12 +53,14 @@ async def test_consume_data_to_predict_increments_prediction_counters(
             max_messages=10,
             data_to_predict_queue=queue,
             api=AsyncMock(),
-            session_factory=AsyncMock(),
+            predictions_queue=predictions_queue,
         )
 
     assert monkeypatch_predict.await_count == 1
     assert queue.commit.await_count == 1
-    assert (_sample("worker_ml_predictions_inserted_total") or 0) == inserted_before + 1
+    assert (
+        _sample("worker_ml_predictions_published_total") or 0
+    ) == published_before + 1
     assert (
         _sample("worker_ml_batches_consumed_total", {"loop": "data_to_predict"}) or 0
     ) == batches_before + 1
