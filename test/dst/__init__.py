@@ -9,6 +9,14 @@ code. The runner turns a scenario coroutine into a SimResult.
 """
 
 from .clock import VirtualClock
+from .faults import (
+    DbFaultConfig,
+    FaultConfig,
+    JagexFaultConfig,
+    KafkaFaultConfig,
+    bucket,
+    draw,
+)
 from .loop import DSTIdleError, VirtualEventLoop
 from .machine import (
     CpuConfig,
@@ -29,12 +37,16 @@ from .units import GB, KB, MB  # noqa: F401
 __all__ = [
     "CpuConfig",
     "CpuGrant",
+    "DbFaultConfig",
     "DSTIdleError",
     "DiskConfig",
+    "FaultConfig",
     "GB",
     "IoError",
     "IoResult",
+    "JagexFaultConfig",
     "KB",
+    "KafkaFaultConfig",
     "MB",
     "Machine",
     "MachineConfig",
@@ -44,6 +56,8 @@ __all__ = [
     "SimResult",
     "VirtualClock",
     "VirtualEventLoop",
+    "bucket",
+    "draw",
     "run",
     "virtual_time",
 ]

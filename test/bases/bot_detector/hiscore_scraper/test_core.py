@@ -245,3 +245,92 @@ async def test_scrape_player_returns_err_proxy_error():
     assert result_stats is None
     assert isinstance(result_error, aiohttp.ClientHttpProxyError)
     assert result_error.status == 407
+
+
+def _outcome_count(proxy: str, outcome: str) -> float | None:
+    from prometheus_client import REGISTRY
+
+    return REGISTRY.get_sample_value(
+        "hiscore_scraper_fetch_outcome_latency_seconds_count",
+        labels={"proxy": proxy, "outcome": outcome},
+    )
+
+
+PROXY_LABEL = "proxy.example.com:8080"
+
+
+@pytest.mark.asyncio
+async def test_scrape_player_observes_success_latency():
+    from bot_detector.osrs_hs_api.exceptions import Ok
+
+    api = AsyncMock()
+    player = PlayerStruct(id=1, name="p", created_at=datetime(2024, 1, 1))
+    api.get.return_value = Ok(value=object(), latency=0.5)
+
+    before = _outcome_count(PROXY_LABEL, "success") or 0.0
+    await core.scrape_player(
+        player=player, session=AsyncMock(), api=api, proxy="user@proxy.example.com:8080"
+    )
+
+    after = _outcome_count(PROXY_LABEL, "success")
+    assert after is not None
+    assert after == before + 1
+
+
+@pytest.mark.asyncio
+async def test_scrape_player_observes_not_found_latency():
+    from bot_detector.osrs_hs_api.exceptions import Err, PlayerDoesNotExist
+
+    api = AsyncMock()
+    player = PlayerStruct(id=1, name="p", created_at=datetime(2024, 1, 1))
+    api.get.return_value = Err(error=PlayerDoesNotExist("does not exist"), latency=2.5)
+
+    before_nf = _outcome_count(PROXY_LABEL, "not_found") or 0.0
+    before_ok = _outcome_count(PROXY_LABEL, "success") or 0.0
+    stats, error = await core.scrape_player(
+        player=player, session=AsyncMock(), api=api, proxy="user@proxy.example.com:8080"
+    )
+
+    assert stats is None
+    assert isinstance(error, PlayerDoesNotExist)
+    after_nf = _outcome_count(PROXY_LABEL, "not_found")
+    assert after_nf is not None
+    assert after_nf == before_nf + 1
+    assert (_outcome_count(PROXY_LABEL, "success") or 0.0) == before_ok
+
+
+@pytest.mark.asyncio
+async def test_scrape_player_observes_error_latency():
+    from bot_detector.osrs_hs_api.exceptions import Err
+
+    api = AsyncMock()
+    player = PlayerStruct(id=1, name="p", created_at=datetime(2024, 1, 1))
+    api.get.return_value = Err(error=RuntimeError("boom"), latency=1.2)
+
+    before = _outcome_count(PROXY_LABEL, "error") or 0.0
+    await core.scrape_player(
+        player=player, session=AsyncMock(), api=api, proxy="user@proxy.example.com:8080"
+    )
+
+    after = _outcome_count(PROXY_LABEL, "error")
+    assert after is not None
+    assert after == before + 1
+
+
+@pytest.mark.asyncio
+async def test_scrape_player_skips_zero_latency_err():
+    # legacy mocked Err without a fetch: nothing to observe
+    from bot_detector.osrs_hs_api.exceptions import Err, PlayerDoesNotExist
+
+    api = AsyncMock()
+    player = PlayerStruct(id=1, name="p", created_at=datetime(2024, 1, 1))
+    api.get.return_value = Err(error=PlayerDoesNotExist("does not exist"))
+
+    before_nf = _outcome_count(PROXY_LABEL, "not_found") or 0.0
+    before_err = _outcome_count(PROXY_LABEL, "error") or 0.0
+    await core.scrape_player(
+        player=player, session=AsyncMock(), api=api, proxy="user@proxy.example.com:8080"
+    )
+
+    assert (_outcome_count(PROXY_LABEL, "not_found") or 0.0) == before_nf
+    assert (_outcome_count(PROXY_LABEL, "error") or 0.0) == before_err

@@ -22,6 +22,9 @@ from .fake_kafka import (
     KafkaFaults,
     KafkaMessage,
 )
+from .seed import hiscores, players, reports
+from .sim_broker import SimBroker, SimBrokerConfig, SimMessage
+from .sim_db import SimDB, TableSchema
 
 __all__ = [
     "ClientReport",
@@ -36,4 +39,12 @@ __all__ = [
     "KafkaConfig",
     "KafkaFaults",
     "KafkaMessage",
+    "SimBroker",
+    "SimBrokerConfig",
+    "SimDB",
+    "SimMessage",
+    "TableSchema",
+    "hiscores",
+    "players",
+    "reports",
 ]

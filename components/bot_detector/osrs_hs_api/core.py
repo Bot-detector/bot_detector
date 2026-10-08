@@ -21,23 +21,28 @@ class HiscoreOldSchoolAPI:
         proxy: Optional[str] = None,
     ) -> Result:
         await self.rate_limiter.check()
+        start_time = time.perf_counter()
         try:
-            start_time = time.perf_counter()
             async with session.get(url=self.url, params=params, proxy=proxy) as resp:
                 if resp.history and any(r.status == 302 for r in resp.history):
                     msg = f"{resp.url} - {resp.history[0].url}"
-                    return Err(error=UnexpectedRedirection(msg))
+                    return Err(
+                        error=UnexpectedRedirection(msg),
+                        latency=time.perf_counter() - start_time,
+                    )
                 elif resp.status == 404:
                     msg = f"Player '{params['player']}' does not exist."
-                    return Err(error=PlayerDoesNotExist(msg))
+                    return Err(
+                        error=PlayerDoesNotExist(msg),
+                        latency=time.perf_counter() - start_time,
+                    )
                 elif resp.status != 200:
                     resp.raise_for_status()
 
                 result = await resp.json()
-            total_time = time.perf_counter() - start_time
-            return Ok(value=result, latency=total_time)
+            return Ok(value=result, latency=time.perf_counter() - start_time)
         except Exception as e:
-            return Err(error=e)
+            return Err(error=e, latency=time.perf_counter() - start_time)
 
     def _transform(self, result: Ok) -> Result:
         try:
