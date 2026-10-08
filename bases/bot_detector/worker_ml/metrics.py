@@ -16,9 +16,9 @@ batches_consumed_counter = Counter(
     labelnames=["loop"],
 )
 
-predictions_inserted_counter = Counter(
-    name="worker_ml_predictions_inserted",
-    documentation="Number of predictions inserted into the database",
+predictions_published_counter = Counter(
+    name="worker_ml_predictions_published",
+    documentation="Number of predictions published to kafka",
 )
 
 api_errors_counter = Counter(
