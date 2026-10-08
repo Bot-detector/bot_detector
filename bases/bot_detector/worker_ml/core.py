@@ -3,57 +3,44 @@ import logging
 import traceback
 
 import aiohttp
-from bot_detector.database import Settings as DBSettings
-from bot_detector.database import get_session_factory
-from bot_detector.database.prediction import PredictionLatestRepo, PredictionRepo
 from bot_detector.event_queue.adapters.kafka import (
     KafkaConfig,
     KafkaConsumerConfig,
     KafkaProducerConfig,
     KafkaSettings,
 )
-from bot_detector.event_queue.core import Queue
+from bot_detector.event_queue.core import Queue, QueueProducer
 from bot_detector.event_queue.factory import QueueFactory
-from bot_detector.event_queue.structs import DataToPredictStruct, ScrapedStruct
+from bot_detector.event_queue.structs import (
+    DataToPredictStruct,
+    PredictionsToInsertStruct,
+    ScrapedStruct,
+)
 from bot_detector.ml_api import InputData, MLApiClient, Prediction
-from bot_detector.structs import PredictionCreate
 from bot_detector.worker_ml.metrics import (
     api_errors_counter,
     batches_consumed_counter,
     messages_requeued_counter,
-    predictions_inserted_counter,
+    predictions_published_counter,
     start_metrics_server,
 )
 from bot_detector.worker_ml.settings import Settings
 from bot_detector.worker_ml.settings import Settings as MLSettings
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 logger = logging.getLogger(__name__)
-
-
-async def insert_prediction_results(
-    session_factory: async_sessionmaker[AsyncSession],
-    predictions: list[PredictionCreate],
-) -> None:
-    pred_repo = PredictionRepo()
-    pred_latest_repo = PredictionLatestRepo()
-    async with session_factory() as session:
-        await pred_repo.insert(session, predictions)
-        await pred_latest_repo.insert(session, predictions)
-    return
 
 
 def transform_prediction(
     player_id: int,
     prediction: Prediction,
     model_name: str,
-) -> PredictionCreate:
+) -> PredictionsToInsertStruct:
     _pred_dict: dict[str, float] = prediction.model_dump()
     _max_prob_key = max(_pred_dict, key=_pred_dict.get)  # type: ignore
     _confidence = round(_pred_dict[_max_prob_key], 4)
     _predictions = {k: round(v, 4) for k, v in prediction.model_dump().items()}
 
-    return PredictionCreate(
+    return PredictionsToInsertStruct(
         model_name=model_name,
         player_id=player_id,
         prediction=_max_prob_key,
@@ -101,7 +88,7 @@ async def consume_data_to_predict(
     max_messages: int,
     data_to_predict_queue: Queue[DataToPredictStruct],
     api: MLApiClient,
-    session_factory: async_sessionmaker[AsyncSession],
+    predictions_queue: QueueProducer[PredictionsToInsertStruct],
     model_name: str = "multi_model_v1",
 ):
     while True:
@@ -169,25 +156,22 @@ async def consume_data_to_predict(
             for b, pred in zip(_batch, _predictions)
         ]
 
-        # database call
-        try:
-            await insert_prediction_results(
-                session_factory=session_factory,
-                predictions=_predictions,
-            )
-        except Exception as e:
+        # publish prediction results to kafka
+        put_result = await predictions_queue.put(_predictions)
+        if isinstance(put_result, Exception):
             logger.error(
                 {
+                    "error": "failed to publish predictions",
+                    "reason": str(put_result),
                     "_predictions": _predictions[:3],
-                    "error": str(e),
                 }
             )
-            put_result = await data_to_predict_queue.put(_batch)
-            if isinstance(put_result, Exception):
+            requeue_result = await data_to_predict_queue.put(_batch)
+            if isinstance(requeue_result, Exception):
                 logger.error(
                     {
                         "error": "failed to requeue consumed records",
-                        "reason": str(put_result),
+                        "reason": str(requeue_result),
                     }
                 )
                 await asyncio.sleep(15)
@@ -205,7 +189,7 @@ async def consume_data_to_predict(
                 continue
             await asyncio.sleep(15)
             continue
-        predictions_inserted_counter.inc(len(_predictions))
+        predictions_published_counter.inc(len(_predictions))
         commit_result = await data_to_predict_queue.commit()
         if isinstance(commit_result, Exception):
             logger.error(
@@ -221,7 +205,7 @@ async def consume_player_scraped(
     max_messages: int,
     player_sc_queue: Queue[ScrapedStruct],
     api: MLApiClient,
-    session_factory: async_sessionmaker[AsyncSession],
+    predictions_queue: QueueProducer[PredictionsToInsertStruct],
     model_name: str = "multi_model_v1",
 ):
     while True:
@@ -307,12 +291,41 @@ async def consume_player_scraped(
                 await asyncio.sleep(15)
                 continue
 
-            # insert prediction results into mysql
-            await insert_prediction_results(
-                session_factory=session_factory,
-                predictions=combined_predictions,
-            )
-            predictions_inserted_counter.inc(len(combined_predictions))
+            # publish prediction results to kafka
+            put_result = await predictions_queue.put(combined_predictions)
+            if isinstance(put_result, Exception):
+                logger.error(
+                    {
+                        "error": "failed to publish predictions",
+                        "reason": str(put_result),
+                        "_predictions": combined_predictions[:3],
+                    }
+                )
+                requeue_result = await player_sc_queue.put(batch)
+                if isinstance(requeue_result, Exception):
+                    logger.error(
+                        {
+                            "error": "failed to requeue consumed records",
+                            "reason": str(requeue_result),
+                        }
+                    )
+                    await asyncio.sleep(15)
+                    continue
+                messages_requeued_counter.labels(loop="player_scraped").inc(len(batch))
+                commit_result = await player_sc_queue.commit()
+                if isinstance(commit_result, Exception):
+                    logger.error(
+                        {
+                            "error": "failed to commit offset after requeue",
+                            "reason": str(commit_result),
+                        }
+                    )
+                    await asyncio.sleep(15)
+                    continue
+                await asyncio.sleep(15)
+                continue
+
+            predictions_published_counter.inc(len(combined_predictions))
             commit_result = await player_sc_queue.commit()
             if isinstance(commit_result, Exception):
                 logger.error(
@@ -351,8 +364,30 @@ async def consume_player_scraped(
             await asyncio.sleep(15)
 
 
+async def main_predictions_producer() -> QueueProducer[PredictionsToInsertStruct]:
+    predictions_queue = QueueFactory.create_queue(
+        model=PredictionsToInsertStruct,
+        queue_type="producer",
+        backend_type="kafka",
+        config=KafkaConfig(
+            topic="predictions.to_insert",
+            bootstrap_servers=KafkaSettings().bootstrap_servers,
+            producer=True,
+            producer_config=KafkaProducerConfig(partition_key_fn=None),
+        ),
+    )
+    if isinstance(predictions_queue, Exception):
+        raise predictions_queue
+
+    assert isinstance(predictions_queue, QueueProducer)
+
+    await predictions_queue.start()
+    return predictions_queue
+
+
 async def main_player_scraped(
-    api: MLApiClient, session_factory: async_sessionmaker[AsyncSession]
+    api: MLApiClient,
+    predictions_queue: QueueProducer[PredictionsToInsertStruct],
 ) -> tuple[asyncio.Task, Queue]:
     player_sc_queue = QueueFactory.create_queue(
         model=ScrapedStruct,
@@ -382,7 +417,7 @@ async def main_player_scraped(
             max_messages=MLSettings().MAX_MESSAGES,
             player_sc_queue=player_sc_queue,
             api=api,
-            session_factory=session_factory,  # type: ignore
+            predictions_queue=predictions_queue,
             model_name=MLSettings().MODEL_NAME,
         )
     )
@@ -390,7 +425,8 @@ async def main_player_scraped(
 
 
 async def main_data_to_predict(
-    api: MLApiClient, session_factory: async_sessionmaker[AsyncSession]
+    api: MLApiClient,
+    predictions_queue: QueueProducer[PredictionsToInsertStruct],
 ) -> tuple[asyncio.Task, Queue]:
     data_to_predict_queue = QueueFactory.create_queue(
         model=DataToPredictStruct,
@@ -418,7 +454,7 @@ async def main_data_to_predict(
             max_messages=Settings().MAX_MESSAGES,
             data_to_predict_queue=data_to_predict_queue,
             api=api,
-            session_factory=session_factory,  # type: ignore
+            predictions_queue=predictions_queue,
             model_name=Settings().MODEL_NAME,
         )
     )
@@ -427,8 +463,9 @@ async def main_data_to_predict(
 
 async def main():
     start_metrics_server(port=MLSettings().METRICS_PORT)
-    ## database
-    session_factory, engine = get_session_factory(SETTINGS=DBSettings())
+
+    ## predictions producer
+    predictions_queue = await main_predictions_producer()
 
     ## api client
     http_session = aiohttp.ClientSession()
@@ -438,14 +475,14 @@ async def main():
     if Settings().CONSUME_PLAYER_SCRAPED:
         task_ps, player_sc_queue = await main_player_scraped(
             api=api,
-            session_factory=session_factory,
+            predictions_queue=predictions_queue,
         )
         tasks.append(task_ps)
 
     if Settings().CONSUME_DATA_TO_PREDICT:
         task_dtp, data_to_predict_queue = await main_data_to_predict(
             api=api,
-            session_factory=session_factory,
+            predictions_queue=predictions_queue,
         )
         tasks.append(task_dtp)
     await asyncio.gather(*tasks)
@@ -456,8 +493,8 @@ async def main():
     if Settings().CONSUME_DATA_TO_PREDICT:
         await data_to_predict_queue.stop()
 
+    await predictions_queue.stop()
     await http_session.close()
-    await engine.dispose()
 
 
 async def run_async():
