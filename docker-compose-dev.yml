@@ -115,7 +115,8 @@ services:
 
   # MINIO
   minio:
-    image: minio/minio
+    image: bitnamilegacy/minio:2025.7.23-debian-12-r5
+    user: "0"
     container_name: minio
     expose:
       - "9000"
@@ -125,6 +126,7 @@ services:
     environment:
       MINIO_ROOT_USER: "minio_user"
       MINIO_ROOT_PASSWORD: "minio_password"
+      MINIO_DATA_DIR: /data
     volumes:
       - ./_infra/_minio_data:/data
     healthcheck:
@@ -132,22 +134,21 @@ services:
       interval: 1s
       timeout: 10s
       retries: 5
-    command: server /data --console-address ":9001"
     networks:
       - botdetector-network
 
   # Create a bucket named "models" if it doesn't exist
   minio-create-bucket:
-    image: minio/mc
+    image: bitnamilegacy/minio:2025.7.23-debian-12-r5
     container_name: minio_create_bucket
     depends_on:
       minio:
         condition: service_healthy
     entrypoint: >
       bash -c "
-      mc alias set minio http://minio:9000 minio_user minio_password &&
-      if ! mc ls minio/models; then
-        mc mb minio/models
+      /opt/bitnami/minio-client/bin/mc alias set minio http://minio:9000 minio_user minio_password &&
+      if ! /opt/bitnami/minio-client/bin/mc ls minio/models; then
+        /opt/bitnami/minio-client/bin/mc mb minio/models
       else
         echo 'bucket already exists'
       fi
@@ -278,7 +279,7 @@ services:
       target: dev
     environment:
       - DATABASE_URL=mysql+asyncmy://ml-worker:ml_worker_pw@mysql:3306/playerdata
-      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - BOOTSTRAP_SERVERS=kafka:9092
       - BASE_URL=http://api_ml:5000
       - MAX_MESSAGES=10
       - MAX_INTERVAL_MS=5000

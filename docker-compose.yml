@@ -111,7 +111,8 @@ services:
 
   # MINIO
   minio:
-    image: minio/minio
+    image: bitnamilegacy/minio:2025.7.23-debian-12-r5
+    user: "0"
     container_name: minio
     expose:
       - "9000"
@@ -121,6 +122,7 @@ services:
     environment:
       MINIO_ROOT_USER: "minio_user"
       MINIO_ROOT_PASSWORD: "minio_password"
+      MINIO_DATA_DIR: /data
     volumes:
       - ./_infra/_minio_data:/data
     healthcheck:
@@ -128,28 +130,27 @@ services:
       interval: 1s
       timeout: 10s
       retries: 5
-    command: server /data --console-address ":9001"
     networks:
       - botdetector-network
 
   # Create a bucket named "bucket" if it doesn't exist
-  minio-create-bucket:
-    image: minio/mc
-    container_name: minio_create_bucket
-    depends_on:
-      minio:
-        condition: service_healthy
-    entrypoint: >
-      bash -c "
-      mc alias set minio http://minio:9000 minio_user minio_password &&
-      if ! mc ls minio/bucket; then
-        mc mb minio/models
-      else
-        echo 'bucket already exists'
-      fi
-      "
-    networks:
-      - botdetector-network
+  # minio-create-bucket:
+  #   image: minio/mc
+  #   container_name: minio_create_bucket
+  #   depends_on:
+  #     minio:
+  #       condition: service_healthy
+  #   entrypoint: >
+  #     bash -c "
+  #     mc alias set minio http://minio:9000 minio_user minio_password &&
+  #     if ! mc ls minio/bucket; then
+  #       mc mb minio/models
+  #     else
+  #       echo 'bucket already exists'
+  #     fi
+  #     "
+  #   networks:
+  #     - botdetector-network
 
   # COMPONENTS
   firehose:
