@@ -93,6 +93,7 @@ async def scrape_player(
         aiohttp.ConnectionTimeoutError,
         aiohttp.ClientConnectorError,
         aiohttp.ServerDisconnectedError,
+        asyncio.TimeoutError,
     ) as e:
         error = f"Client response error: {e}"
         # logger.error(error)
