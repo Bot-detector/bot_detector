@@ -1,4 +1,5 @@
 from .data_to_predict import DataToPredictStruct, HighScoreStruct
+from .name_mapper import ACTIVITY_NAME_TO_FIELD, map_highscore_keys
 from .players_banned import PlayerBannedStruct
 from .players_not_found import NotFoundStruct
 from .players_scraped import ScrapedStruct
@@ -15,4 +16,6 @@ __all__ = [
     "DataToPredictStruct",
     "PlayerBannedStruct",
     "PredictionsToInsertStruct",
+    "ACTIVITY_NAME_TO_FIELD",
+    "map_highscore_keys",
 ]
