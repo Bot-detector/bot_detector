@@ -1,17 +1,3 @@
-"""Maps Jagex hiscore display names to HighScoreStruct / InputData field names.
-
-Jagex's hiscore API returns display names such as "Abyssal Sire", "LMS - Rank"
-or "Clue Scrolls (all)". The model feature structs use snake_case fields such
-as "abyssal_sire", "lms_rank" and "cs_all". Lowercasing alone cannot bridge
-that gap, so unmapped keys were silently dropped by pydantic and every
-boss/minigame feature arrived at the ML API as 0.
-
-Skill names ("Attack", "Runecraft", ...) map 1:1 with a lowercase pass, so
-they need no table. Activity names are mapped explicitly below. Keys that
-match neither a table entry nor a struct field are left untouched and ignored
-by the pydantic models.
-"""
-
 from typing import Any
 
 # lowercase jagex activity display name -> HighScoreStruct / InputData field
