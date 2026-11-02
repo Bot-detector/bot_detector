@@ -26,6 +26,7 @@ dependencies = [
     "orjson>=3.11.8",
     "osrs==0.0.15",
     "pandas==2.3.2",
+    "pillow>=13.0.0,<14",
     "prometheus-client==0.22.0",
     "pydantic-settings==2.7.0",
     "pydantic==2.10.4",
