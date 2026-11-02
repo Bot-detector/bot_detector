@@ -14,7 +14,7 @@ dependencies = [
     "aiofiles>=25.1.0",
     "aiohttp==3.14.3",
     "aiokafka==0.12.0",
-    "asyncmy==0.2.11",
+    "asyncmy==0.2.12",
     "boto3==1.40.34",
     "cryptography==50.0.2",
     "discord-py>=2.2.2",
