@@ -15,6 +15,7 @@ from bot_detector.event_queue.structs import (
     DataToPredictStruct,
     PredictionsToInsertStruct,
     ScrapedStruct,
+    map_highscore_keys,
 )
 from bot_detector.ml_api import InputData, MLApiClient, Prediction
 from bot_detector.worker_ml.metrics import (
@@ -58,9 +59,9 @@ def transform_scraped_struct(
         skills = player.highscore_data.skills or {}
         activities = player.highscore_data.activities or {}
 
-    # normalize keys to lowercase (db has mixed casing)
-    skills = {k.lower(): v for k, v in skills.items()}
-    activities = {k.lower(): v for k, v in activities.items()}
+    # map jagex display names to struct field names (db has mixed casing)
+    skills = map_highscore_keys(skills)
+    activities = map_highscore_keys(activities)
 
     _input = {**skills, **activities}
     if sum(_input.values()) == 0:

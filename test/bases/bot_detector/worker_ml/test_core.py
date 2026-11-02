@@ -51,6 +51,26 @@ def test_sample():
     assert core is not None
 
 
+def test_transform_scraped_struct_maps_jagex_activity_names(
+    scraped_batch: list[ScrapedStruct],
+) -> None:
+    scraped = scraped_batch[0].model_copy(deep=True)
+    scraped.highscore_data.skills = {"Runecraft": 5_000_000}  # type: ignore[union-attr]
+    scraped.highscore_data.activities = {  # type: ignore[union-attr]
+        "Abyssal Sire": 1200,
+        "LMS - Rank": 2500,
+        "Soul Wars Zeal": 9000,
+    }
+
+    player, input_data = core.transform_scraped_struct(scraped)
+
+    assert player is scraped
+    assert input_data.runecraft == 5_000_000
+    assert input_data.abyssal_sire == 1200
+    assert input_data.lms_rank == 2500
+    assert input_data.soul_wars_zeal == 9000
+
+
 @pytest.mark.asyncio
 async def test_consume_data_to_predict_does_not_commit_when_requeue_fails_after_predict_error(
     monkeypatch: pytest.MonkeyPatch,
