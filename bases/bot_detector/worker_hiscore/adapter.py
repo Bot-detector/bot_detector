@@ -5,6 +5,7 @@ from bot_detector.event_queue.structs import (
     DataToPredictStruct,
     HighScoreStruct,
     ScrapedStruct,
+    map_highscore_keys,
 )
 
 logger = logging.getLogger(__name__)
@@ -12,18 +13,18 @@ logger = logging.getLogger(__name__)
 
 def clean_dict(data: dict[str, Any]) -> dict[str, Any]:
     """
-    Cleans a dictionary by converting keys to lowercase and removing entries with None values.
+    Cleans a dictionary by mapping keys to struct field names and removing entries with None values.
 
     Args:
         - data: dict with string keys and any type of values
     Returns:
-        - dict with lowercase keys and no None values
+        - dict with field names (e.g. "abyssal sire" -> "abyssal_sire") and no None values
     Raises:
         - TypeError if input is not a dictionary
     """
     if not isinstance(data, dict):
         raise TypeError("Input must be a dictionary")
-    return {k.lower(): v for k, v in data.items() if v is not None}
+    return map_highscore_keys(data)
 
 
 def transform_highscore_struct(record: ScrapedStruct) -> HighScoreStruct:
