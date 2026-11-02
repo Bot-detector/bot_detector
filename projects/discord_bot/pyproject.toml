@@ -16,7 +16,7 @@ dependencies = [
     "prometheus-client==0.22.0",
     "pydantic-settings==2.7.0",
     "pydantic==2.10.4",
-    "asyncmy==0.2.11",
+    "asyncmy==0.2.17",
     "orjson>=3.11.8",
     "aiofiles>=25.1.0",
 ]
