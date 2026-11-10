@@ -24,15 +24,11 @@ async def auth_user(websocket: WebSocket, topic: str) -> AuthUser:
     """
     await websocket.accept()
     state: FirehoseState = websocket.app.state.firehose
-    # header for systems; ?token= for browsers (a websocket cannot set
-    # headers from javascript). ?anonymous=1 forces the shared anonymous
-    # group.
+    # ?anonymous=1 forces the shared anonymous group
     force_anonymous = websocket.query_params.get("anonymous") == "1"
-    api_key = None
-    if not force_anonymous:
-        api_key = websocket.headers.get("x-api-key") or websocket.query_params.get(
-            "token"
-        )
+    header_key = websocket.headers.get("x-api-key")  # systems
+    token = websocket.query_params.get("token")  # browsers
+    api_key = None if force_anonymous else header_key or token
     user = await state.auth_repo.authenticate(api_key=api_key, topic=topic)
     if isinstance(user, Exception):
         raise WebSocketException(code=4401, reason="invalid api key")
