@@ -13,7 +13,7 @@ jobs:
     container:
       image: ghcr.io/astral-sh/uv:bookworm-slim
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: cd ${{ inputs.project_dir }} && uv lock --locked
 
   linting:
@@ -22,7 +22,7 @@ jobs:
     container:
       image: ghcr.io/astral-sh/uv:bookworm-slim
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: uvx ruff@0.15.22 check .
 
   formatting:
@@ -31,7 +31,7 @@ jobs:
     container:
       image: ghcr.io/astral-sh/uv:bookworm-slim
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: uvx ruff@0.15.22 format --check .
 
   tests:
@@ -40,6 +40,6 @@ jobs:
     container:
       image: ghcr.io/astral-sh/uv:bookworm-slim
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: |
           uv run pytest -v --durations=0 --cov --cov-report=xml
