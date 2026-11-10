@@ -46,7 +46,7 @@ def test_resolve_consumer_group_is_topic_scoped(repo: QueueRepo):
     user = AuthUser(name="system-one")
     assert repo.resolve_consumer_group(
         user=user, topic=TOPIC
-    ) != repo.resolve_consumer_group(user=user, topic="players.not_found")
+    ) != repo.resolve_consumer_group(user=user, topic="reports.to_insert")
 
 
 def test_create_consumer_reports_uses_reports_struct(repo: QueueRepo):

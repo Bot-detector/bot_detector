@@ -20,9 +20,9 @@ class FirehoseState:
     queue_manager: QueueManager
     auth_repo: ApiKeyAuthRepo
     connection_manager: ConnectionManager
-    # resolved once from settings.topic_access at startup
+    # resolved once from settings.topic_access at startup; the
+    # anonymous-visible list is ALLOWED_TOPICS minus this set
     keyed_only_topics: frozenset[str]
-    anonymous_topics: list[str]
     http_session: ClientSession | None = None
     discord_oauth: DiscordOAuth | None = None
 

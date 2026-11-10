@@ -10,12 +10,7 @@ from bot_detector.firehose.api import firehose, me
 from bot_detector.firehose.app.auth.auth import ApiKeyAuthRepo
 from bot_detector.firehose.app.auth.discord import DiscordOAuth
 from bot_detector.firehose.app.connection_manager import ConnectionManager
-from bot_detector.firehose.app.consumer import (
-    ALLOWED_TOPICS,
-    TOPIC_MODELS,
-    anonymous_topics,
-    keyed_only_topics,
-)
+from bot_detector.firehose.app.consumer import TOPIC_MODELS, keyed_only_topics
 from bot_detector.firehose.app.consumer import QueueRepo
 from bot_detector.firehose.app.exchange import Exchange
 from bot_detector.firehose.app.queue_manager import QueueManager
@@ -68,7 +63,12 @@ def create_app(settings: Settings) -> FastAPI:
     queue_repo = QueueRepo(settings=settings)
     session_factory, _ = get_session_factory(DatabaseSettings())
     exchange = Exchange(grace_s=settings.kick_grace_s)
-    # fail fast on an access map that names topics outside the catalog
+    # fail fast unless the access map covers the catalog exactly: a
+    # missing entry silently publishes the topic to anonymous callers,
+    # an unknown entry silently does nothing
+    missing = set(TOPIC_MODELS) - set(settings.topic_access)
+    if missing:
+        raise ValueError(f"TOPIC_ACCESS is missing topics: {sorted(missing)}")
     unknown = set(settings.topic_access) - set(TOPIC_MODELS)
     if unknown:
         raise ValueError(f"TOPIC_ACCESS names unknown topics: {sorted(unknown)}")
@@ -81,7 +81,6 @@ def create_app(settings: Settings) -> FastAPI:
         auth_repo=ApiKeyAuthRepo(session_factory=session_factory),
         connection_manager=ConnectionManager(),
         keyed_only_topics=keyed_only,
-        anonymous_topics=anonymous_topics(ALLOWED_TOPICS, keyed_only),
     )
     init_routers(_app=_app)
     return _app

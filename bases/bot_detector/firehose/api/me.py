@@ -57,7 +57,7 @@ async def me(request: Request, api_key: ApiKey) -> MeResponse:
         logger.info(f"credential rejected user={identity.user}")
         return MeResponse(user=identity.user, token=None, allowed=False, topics=[])
     if identity.user == ANONYMOUS_USER:
-        topics = state.anonymous_topics
+        topics = [t for t in ALLOWED_TOPICS if t not in state.keyed_only_topics]
     else:
         topics = firehose_topics(identity.scopes)
     return MeResponse(user=identity.user, token=api_key, allowed=True, topics=topics)

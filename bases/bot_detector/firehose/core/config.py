@@ -24,9 +24,16 @@ class Settings(BaseSettings):
     kick_grace_s: float = 30.0
     # anonymous access per topic; "keyed" requires a valid api key with
     # the `firehose.<topic>` scope, "public" streams to anonymous too.
-    # topics missing from the map are public. json object in env:
-    # TOPIC_ACCESS='{"reports.to_insert": "keyed"}'
-    topic_access: dict[str, TopicAccess] = {"reports.to_insert": "keyed"}
+    # the map must cover the catalog exactly (create_app refuses
+    # missing and unknown entries), and the env value replaces this
+    # default wholesale - list every topic:
+    # TOPIC_ACCESS='{"players.scraped": "public", ..., "reports.to_insert": "keyed", ...}'
+    topic_access: dict[str, TopicAccess] = {
+        "players.scraped": "public",
+        "players.not_found": "public",
+        "reports.to_insert": "keyed",
+        "predictions.to_insert": "public",
+    }
 
 
 SETTINGS = Settings()

@@ -27,10 +27,15 @@ pump waits instead. Topic access is configured per topic in
 `Settings.topic_access` (env `TOPIC_ACCESS`, json map): `"public"`
 streams to anonymous and keyed identities, `"keyed"` requires a valid
 api key with the `firehose.<topic>` scope and anonymous connects close
-4403; topics missing from the map are public. The default makes
-`reports.to_insert` keyed only, and it streams `delay_s` behind live
-(the DelayAdapter holds each message until its `report.ts` is old
-enough).
+4403. The map must cover the catalog exactly - create_app refuses
+missing and unknown entries, and the env value replaces the default
+wholesale. The default keys only `reports.to_insert`, which streams
+`delay_s` behind live (the DelayAdapter holds each message until its
+`report.ts` is old enough).
+
+Known limitation: the browser credential `?token=` appears in access
+logs (uvicorn logs the full request path); prefer the `x-api-key`
+header wherever a header is possible.
 
 ## How to test this base
 

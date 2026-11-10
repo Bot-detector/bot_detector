@@ -2,9 +2,7 @@ import asyncio
 import logging
 
 from bot_detector.firehose.app.auth.auth import ANONYMOUS_USER
-from bot_detector.firehose.app.consumer import (
-    ALLOWED_TOPICS,
-)
+from bot_detector.firehose.app.consumer import ALLOWED_TOPICS
 from bot_detector.firehose.app.exchange import InboxClosed, KICK_CODE, KICK_REASON
 from bot_detector.firehose.app.metrics import (
     FIREHOSE_BYTES,
@@ -23,11 +21,15 @@ async def firehose_topics(request: Request) -> list[str]:
     # no auth context on this endpoint: it advertises the anonymous
     # persona; keyed identities get their topics from /me
     state: FirehoseState = request.app.state.firehose
-    return state.anonymous_topics
+    return [t for t in ALLOWED_TOPICS if t not in state.keyed_only_topics]
 
 
 @router.websocket("/firehose/{topic}")
 async def firehose(websocket: WebSocket, topic: str) -> None:
+    # accept before the gates: a pre-accept close collapses into an
+    # undifferentiated http 403 on uvicorn, so the application close
+    # codes below would never reach the client
+    await websocket.accept()
     if topic not in ALLOWED_TOPICS:
         await websocket.close(code=4404, reason="unknown topic")
         return

@@ -6,7 +6,7 @@
 <title>firehose authentication</title>
 <style>
   :root {
-    --bg: #0d1117; --panel: #161b22; --line: #30363d;
+    --bg: #0d1117; --panel: #161b22; --line: #30363d; --codebg: #010409;
     --text: #e6edf3; --muted: #8b949e; --link: #58a6ff;
     --call: #58a6ff; --decision: #d29922; --close: #f85149;
     --ok: #3fb950; --data: #bc8cff; --entry: #e6edf3;
@@ -67,6 +67,25 @@
   .data     .kind { background: var(--data); }
   .entry    .kind { background: var(--entry); }
 
+  /* collapsible code excerpt inside a node */
+  details.code { flex-basis: 100%; margin-top: .3rem; }
+  details.code summary {
+    cursor: pointer; color: var(--muted); font-size: .72rem;
+    text-transform: uppercase; letter-spacing: .05em; user-select: none;
+    width: fit-content;
+  }
+  details.code summary:hover { color: var(--link); }
+  details.code pre {
+    margin: .4rem 0 0; padding: .6rem .8rem; overflow-x: auto;
+    background: var(--codebg); border: 1px solid var(--line);
+    border-radius: 6px; font-size: .78rem; line-height: 1.55;
+  }
+  details.code pre code { background: none; border: none; padding: 0; }
+  .tk-k { color: #ff7b72; }   /* keyword */
+  .tk-s { color: #a5d6ff; }   /* string */
+  .tk-c { color: #8b949e; font-style: italic; } /* comment */
+  .tk-d { color: #d2a8ff; }   /* decorator */
+
   table { border-collapse: collapse; width: 100%; font-size: .9rem; }
   th, td { border: 1px solid var(--line); padding: .45rem .7rem; text-align: left; }
   th { background: var(--panel); color: var(--muted); font-weight: 600; }
@@ -80,8 +99,9 @@
 <h1>firehose authentication</h1>
 <p class="lead">How <code>GET /firehose/{topic}</code> (websocket) decides who
 is streaming. The credential is the discord access token; there is no session.
-The tree below reads top-to-bottom like an AST: each node is a call, decision,
-data, or close outcome, and links to the source file and line it comes from.</p>
+The tree reads top-to-bottom like an AST: each node is a call, decision, data,
+or close outcome, links to the source file and line it comes from, and carries
+the code excerpt it summarizes — expand <code>code ▸</code> on a node.</p>
 
 <h2>websocket connect</h2>
 <ul class="tree">
@@ -89,19 +109,44 @@ data, or close outcome, and links to the source file and line it comes from.</p>
     <div class="node entry"><span class="kind">entry</span>
       <span class="name">firehose</span>
       <span class="sig">(websocket, topic)</span>
-      <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L30">api/firehose.py:30</a></span>
+      <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L28">api/firehose.py:28</a></span>
+      <details class="code"><summary>code ▸</summary>
+<pre><code class="src">@router.websocket("/firehose/{topic}")
+async def firehose(websocket: WebSocket, topic: str) -&gt; None:
+    # accept before the gates: a pre-accept close collapses into an
+    # undifferentiated http 403 on uvicorn, so the application close
+    # codes below would never reach the client
+    await websocket.accept()
+    if topic not in ALLOWED_TOPICS:
+        await websocket.close(code=4404, reason="unknown topic")
+        return
+    …</code></pre>
+      </details>
     </div>
     <ul>
       <li>
         <div class="node decision"><span class="kind">decision</span>
           <span class="name">topic catalog gate</span>
           <span class="sig">topic ∈ ALLOWED_TOPICS</span>
-          <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L32">api/firehose.py:32</a> · <a href="../bases/bot_detector/firehose/app/consumer/structs.py#L27">structs.py:27</a></span>
+          <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L34">api/firehose.py:34</a> · <a href="../bases/bot_detector/firehose/app/consumer/structs.py#L27">structs.py:27</a></span>
+          <details class="code"><summary>code ▸</summary>
+<pre><code class="src">TOPIC_MODELS: dict[str, type[BaseModel]] = {
+    "players.scraped": ScrapedStruct,
+    "players.not_found": NotFoundStruct,
+    "reports.to_insert": ReportsToInsertStruct,
+    "predictions.to_insert": PredictionsToInsertStruct,
+}
+
+ALLOWED_TOPICS: list[str] = list(TOPIC_MODELS.keys())</code></pre>
+          </details>
         </div>
         <ul>
           <li><div class="node close"><span class="kind">close</span>
             <span class="name">4404</span> <span class="sig">"unknown topic"</span>
-            <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L32">api/firehose.py:32</a></span>
+            <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L34">api/firehose.py:34</a></span>
+            <details class="code"><summary>code ▸</summary>
+<pre><code class="src">await websocket.close(code=4404, reason="unknown topic")</code></pre>
+            </details>
           </div></li>
         </ul>
       </li>
@@ -109,12 +154,20 @@ data, or close outcome, and links to the source file and line it comes from.</p>
         <div class="node call"><span class="kind">call</span>
           <span class="name">extract credential</span>
           <span class="sig">(header, query)</span>
-          <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L38">api/firehose.py:38</a></span>
+          <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L40">api/firehose.py:40</a></span>
+          <details class="code"><summary>code ▸</summary>
+<pre><code class="src">force_anonymous = websocket.query_params.get("anonymous") == "1"
+api_key = None
+if not force_anonymous:
+    api_key = websocket.headers.get("x-api-key") or websocket.query_params.get(
+        "token"
+    )</code></pre>
+          </details>
         </div>
         <ul>
           <li><div class="node data"><span class="kind">data</span>
             <span class="sig">?anonymous=1 → force_anonymous, no key</span>
-            <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L38">api/firehose.py:38</a></span>
+            <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L40">api/firehose.py:40</a></span>
           </div></li>
           <li><div class="node data"><span class="kind">data</span>
             <span class="sig">header <code>x-api-key</code> — for systems</span>
@@ -122,7 +175,7 @@ data, or close outcome, and links to the source file and line it comes from.</p>
           </div></li>
           <li><div class="node data"><span class="kind">data</span>
             <span class="sig">query <code>?token=</code> — for browsers (a websocket cannot set headers)</span>
-            <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L44">api/firehose.py:44</a></span>
+            <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L43">api/firehose.py:43</a></span>
           </div></li>
         </ul>
       </li>
@@ -131,6 +184,22 @@ data, or close outcome, and links to the source file and line it comes from.</p>
           <span class="name">authenticate</span>
           <span class="sig">(api_key, topic)</span>
           <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/auth.py#L118">app/auth/auth.py:118</a></span>
+          <details class="code"><summary>code ▸</summary>
+<pre><code class="src">async def authenticate(
+    self, api_key: str | None, topic: str
+) -&gt; AuthUser | Exception:
+    if not api_key:
+        return ANONYMOUS
+    identity = await self.identify(api_key=api_key)
+    if not identity.allowed or identity.user is None:
+        return InvalidApiKey("not allowlisted")
+    if (
+        firehose_permission(topic) not in identity.scopes
+        and WILDCARD_SCOPE not in identity.scopes
+    ):
+        return InvalidApiKey("not allowlisted")
+    return AuthUser(name=identity.user, scopes=identity.scopes)</code></pre>
+          </details>
         </div>
         <ul>
           <li>
@@ -138,12 +207,21 @@ data, or close outcome, and links to the source file and line it comes from.</p>
               <span class="name">no credential</span>
               <span class="sig">api_key is None → ANONYMOUS</span>
               <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/auth.py#L11">auth.py:11</a>, <a href="../bases/bot_detector/firehose/app/auth/auth.py#L122">L122</a></span>
+              <details class="code"><summary>code ▸</summary>
+<pre><code class="src">if not api_key:
+    return ANONYMOUS</code></pre>
+              </details>
             </div>
             <ul>
               <li><div class="node ok"><span class="kind">ok</span>
                 <span class="name">anonymous</span>
                 <span class="sig">shared group; keyed-only gate still applies</span>
                 <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/auth.py#L25">auth.py:25</a></span>
+                <details class="code"><summary>code ▸</summary>
+<pre><code class="src">ANONYMOUS_USER = "anonymous"
+…
+ANONYMOUS = AuthUser(name=ANONYMOUS_USER, scopes=[])</code></pre>
+                </details>
               </div></li>
             </ul>
           </li>
@@ -152,6 +230,32 @@ data, or close outcome, and links to the source file and line it comes from.</p>
               <span class="name">identify</span>
               <span class="sig">(api_key)</span>
               <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/auth.py#L79">auth.py:79</a></span>
+              <details class="code"><summary>code ▸</summary>
+<pre><code class="src">async def identify(self, api_key: str | None) -&gt; Identity:
+    if not api_key:
+        return Identity(user=ANONYMOUS_USER, allowed=True, scopes=[])
+    if self.discord_oauth is None or self._session_factory is None:
+        return Identity(user=None, allowed=False, scopes=[])
+    duser = await self.discord_oauth.get_current_user(access_token=api_key)
+    if isinstance(duser, Exception):
+        logger.info(f"discord token rejected: {duser}")
+        return Identity(user=None, allowed=False, scopes=[])
+    username = f"discord_{duser.id}"
+    try:
+        async with self._session_factory() as session:
+            row = await self._user_repo.get_user(
+                async_session=session, user_name=username, is_active=True
+            )
+            if row is None:
+                return Identity(user=username, allowed=False, scopes=[])
+            scopes = await self._user_repo.get_permissions(
+                async_session=session, user_id=row.id
+            )
+    except Exception as e:
+        logger.warning(f"db auth failed: {e}")
+        return Identity(user=None, allowed=False, scopes=[])
+    return Identity(user=username, allowed=True, scopes=scopes)</code></pre>
+              </details>
             </div>
             <ul>
               <li>
@@ -159,11 +263,27 @@ data, or close outcome, and links to the source file and line it comes from.</p>
                   <span class="name">DiscordOAuth.get_current_user</span>
                   <span class="sig">(access_token)</span>
                   <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/discord.py#L40">discord.py:40</a></span>
+                  <details class="code"><summary>code ▸</summary>
+<pre><code class="src">async def get_current_user(self, access_token: str) -&gt; DiscordUser | Exception:
+    try:
+        user: dict[str, Any] = await self._get(
+            path="/users/@me",
+            token=access_token,
+        )
+        return DiscordUser.model_validate(user)
+    except DiscordOAuthError as e:
+        return e
+    except (aiohttp.ClientError, ValueError, TypeError) as e:
+        return DiscordOAuthError(f"fetch user failed: {e}")</code></pre>
+                  </details>
                 </div>
                 <ul>
                   <li><div class="node close"><span class="kind">close</span>
                     <span class="name">4401</span> <span class="sig">token rejected → Identity(not allowed) → InvalidApiKey</span>
-                    <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/auth.py#L98">auth.py:98</a> · <a href="../bases/bot_detector/firehose/api/firehose.py#L48">firehose.py:48</a></span>
+                    <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/auth.py#L98">auth.py:98</a> · <a href="../bases/bot_detector/firehose/api/firehose.py#L50">firehose.py:50</a></span>
+                    <details class="code"><summary>code ▸</summary>
+<pre><code class="src">await websocket.close(code=4401, reason="invalid api key")</code></pre>
+                    </details>
                   </div></li>
                 </ul>
               </li>
@@ -172,11 +292,34 @@ data, or close outcome, and links to the source file and line it comes from.</p>
                   <span class="name">ApiUserRepo.get_user</span>
                   <span class="sig">(discord_&lt;id&gt;, is_active)</span>
                   <span class="loc"><a href="../components/bot_detector/database/api/repository.py#L59">database/api/repository.py:59</a></span>
+                  <details class="code"><summary>code ▸</summary>
+<pre><code class="src">async def get_user(
+    self,
+    async_session: AsyncSession,
+    user_name: str,
+    is_active: bool | None = None,
+) -&gt; ApiUserTableStruct | None:
+    if not user_name:
+        raise ValueError("user_name is required")
+    query = select(ApiUserTableStruct).where(
+        ApiUserTableStruct.username == user_name,
+    )
+    if is_active is not None:
+        query = query.where(ApiUserTableStruct.is_active == is_active)
+    result = await async_session.execute(query)
+    return result.scalar_one_or_none()</code></pre>
+                  </details>
                 </div>
                 <ul>
                   <li><div class="node close"><span class="kind">close</span>
                     <span class="name">4401</span> <span class="sig">not registered / not allowlisted → InvalidApiKey</span>
                     <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/auth.py#L109">auth.py:109</a> · <a href="../bases/bot_detector/firehose/app/auth/auth.py#L125">L125</a></span>
+                    <details class="code"><summary>code ▸</summary>
+<pre><code class="src">if row is None:
+    return Identity(user=username, allowed=False, scopes=[])
+…
+return InvalidApiKey("not allowlisted")</code></pre>
+                    </details>
                   </div></li>
                 </ul>
               </li>
@@ -185,12 +328,35 @@ data, or close outcome, and links to the source file and line it comes from.</p>
                   <span class="name">get_permissions</span>
                   <span class="sig">() → scopes</span>
                   <span class="loc"><a href="../components/bot_detector/database/api/repository.py#L75">repository.py:75</a></span>
+                  <details class="code"><summary>code ▸</summary>
+<pre><code class="src">async def get_permissions(
+    self,
+    async_session: AsyncSession,
+    user_id: int,
+) -&gt; list[str]:
+    query = (
+        select(ApiPermissionTableStruct.permission)
+        .join(
+            ApiUserPermTableStruct,
+            ApiUserPermTableStruct.permission_id == ApiPermissionTableStruct.id,
+        )
+        .where(ApiUserPermTableStruct.user_id == user_id)
+    )
+    result = await async_session.execute(query)
+    return list(result.scalars().all())</code></pre>
+                  </details>
                 </div>
                 <ul>
                   <li><div class="node data"><span class="kind">data</span>
                     <span class="name">Identity</span>
                     <span class="sig">(user, allowed, scopes)</span>
                     <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/auth.py#L28">auth.py:28</a></span>
+                    <details class="code"><summary>code ▸</summary>
+<pre><code class="src">class Identity(BaseModel):
+    user: str | None = None
+    allowed: bool = False
+    scopes: list[str] = []</code></pre>
+                    </details>
                   </div></li>
                 </ul>
               </li>
@@ -201,12 +367,23 @@ data, or close outcome, and links to the source file and line it comes from.</p>
               <span class="name">topic scope gate</span>
               <span class="sig">firehose.&lt;topic&gt; ∈ scopes ∨ firehose.* ∈ scopes</span>
               <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/auth.py#L126">auth.py:126</a></span>
+              <details class="code"><summary>code ▸</summary>
+<pre><code class="src">if (
+    firehose_permission(topic) not in identity.scopes
+    and WILDCARD_SCOPE not in identity.scopes
+):
+    return InvalidApiKey("not allowlisted")</code></pre>
+              </details>
             </div>
             <ul>
               <li><div class="node call"><span class="kind">call</span>
                 <span class="name">firehose_permission</span>
                 <span class="sig">(topic) → "firehose.&lt;topic&gt;"</span>
                 <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/auth.py#L15">auth.py:15</a></span>
+                <details class="code"><summary>code ▸</summary>
+<pre><code class="src">def firehose_permission(topic: str) -&gt; str:
+    return f"firehose.{topic}"</code></pre>
+                </details>
               </div></li>
               <li><div class="node data"><span class="kind">data</span>
                 <span class="name">WILDCARD_SCOPE</span>
@@ -223,6 +400,11 @@ data, or close outcome, and links to the source file and line it comes from.</p>
             <span class="name">→ AuthUser</span>
             <span class="sig">(name, scopes)</span>
             <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/auth.py#L20">auth.py:20</a></span>
+            <details class="code"><summary>code ▸</summary>
+<pre><code class="src">class AuthUser(BaseModel):
+    name: str
+    scopes: list[str] = []</code></pre>
+            </details>
           </div></li>
         </ul>
       </li>
@@ -231,12 +413,41 @@ data, or close outcome, and links to the source file and line it comes from.</p>
           <span class="name">keyed-only gate</span>
           <span class="sig">anonymous ∧ topic ∈ keyed_only_topics</span>
           <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L55">api/firehose.py:55</a></span>
+          <details class="code"><summary>code ▸</summary>
+<pre><code class="src">if user.name == ANONYMOUS_USER and topic in state.keyed_only_topics:
+    await websocket.close(code=4403, reason="topic requires an api key")
+    return</code></pre>
+          </details>
         </div>
         <ul>
           <li><div class="node data"><span class="kind">data</span>
             <span class="name">keyed_only_topics</span>
             <span class="sig">← Settings.topic_access, resolved at startup</span>
-            <span class="loc"><a href="../bases/bot_detector/firehose/core/config.py#L29">config.py:29</a> · <a href="../bases/bot_detector/firehose/app/consumer/structs.py#L30">structs.py:30</a> · <a href="../bases/bot_detector/firehose/core/server.py#L75">server.py:75</a></span>
+            <span class="loc"><a href="../bases/bot_detector/firehose/core/config.py#L31">config.py:31</a> · <a href="../bases/bot_detector/firehose/app/consumer/structs.py#L30">structs.py:30</a> · <a href="../bases/bot_detector/firehose/core/server.py#L75">server.py:75</a></span>
+            <details class="code"><summary>code ▸</summary>
+<pre><code class="src"># settings (default; env TOPIC_ACCESS replaces it wholesale)
+topic_access: dict[str, TopicAccess] = {
+    "players.scraped": "public",
+    "players.not_found": "public",
+    "reports.to_insert": "keyed",
+    "predictions.to_insert": "public",
+}
+
+# resolver
+def keyed_only_topics(topic_access: Mapping[str, TopicAccess]) -&gt; frozenset[str]:
+    return frozenset(
+        topic for topic, access in topic_access.items() if access == "keyed"
+    )
+
+# startup (create_app)
+missing = set(TOPIC_MODELS) - set(settings.topic_access)
+if missing:
+    raise ValueError(f"TOPIC_ACCESS is missing topics: {sorted(missing)}")
+unknown = set(settings.topic_access) - set(TOPIC_MODELS)
+if unknown:
+    raise ValueError(f"TOPIC_ACCESS names unknown topics: {sorted(unknown)}")
+keyed_only = keyed_only_topics(topic_access=settings.topic_access)</code></pre>
+            </details>
           </div></li>
           <li><div class="node close"><span class="kind">close</span>
             <span class="name">4403</span> <span class="sig">"topic requires an api key"</span>
@@ -249,6 +460,15 @@ data, or close outcome, and links to the source file and line it comes from.</p>
           <span class="name">resolve_consumer_group</span>
           <span class="sig">(user, topic)</span>
           <span class="loc"><a href="../bases/bot_detector/firehose/app/consumer/queue_repo.py#L33">queue_repo.py:33</a></span>
+          <details class="code"><summary>code ▸</summary>
+<pre><code class="src">def resolve_consumer_group(self, user: AuthUser, topic: str) -&gt; str:
+    if user.name == ANONYMOUS_USER:
+        return f"{ANONYMOUS_CONSUMER_GROUP_PREFIX}-{topic}"
+    return (
+        f"{KEYED_CONSUMER_GROUP_PREFIX}-{topic}-"
+        f"{user.name.removeprefix('discord_')}"
+    )</code></pre>
+          </details>
         </div>
         <ul>
           <li><div class="node data"><span class="kind">data</span>
@@ -264,7 +484,22 @@ data, or close outcome, and links to the source file and line it comes from.</p>
       <li><div class="node ok"><span class="kind">ok</span>
         <span class="name">stream</span>
         <span class="sig">pump → exchange → inbox → send_text</span>
-        <span class="loc"><a href="../bases/bot_detector/firehose/app/queue_manager.py#L130">queue_manager.py:130</a> · <a href="../bases/bot_detector/firehose/api/firehose.py#L66">firehose.py:66</a></span>
+        <span class="loc"><a href="../bases/bot_detector/firehose/app/queue_manager.py#L130">queue_manager.py:130</a> · <a href="../bases/bot_detector/firehose/api/firehose.py#L85">firehose.py:85</a></span>
+        <details class="code"><summary>code ▸</summary>
+<pre><code class="src"># the pump (queue_manager._consume)
+message = await queue.consumer.get_one()
+…
+payload = serialize(message)
+for conn_id in subscribers:
+    await self._exchange.send_or_wait(
+        conn_id=conn_id, topic=queue.topic, group=queue.group, message=payload,
+    )
+
+# the route
+message = await inbox.get_message(disconnect=recv_task)
+…
+await state.connection_manager.send(conn_id, payload=message)</code></pre>
+        </details>
       </div></li>
     </ul>
   </li>
@@ -277,6 +512,22 @@ data, or close outcome, and links to the source file and line it comes from.</p>
       <span class="name">GET /me</span>
       <span class="sig">(api_key) → identity + topics</span>
       <span class="loc"><a href="../bases/bot_detector/firehose/api/me.py#L47">api/me.py:47</a></span>
+      <details class="code"><summary>code ▸</summary>
+<pre><code class="src">@router.get("/me", summary="Validate credential; return identity and topics")
+async def me(request: Request, api_key: ApiKey) -&gt; MeResponse:
+    state: FirehoseState = request.app.state.firehose
+    identity = await state.auth_repo.identify(api_key=api_key)
+    if not identity.allowed:
+        logger.info(f"credential rejected user={identity.user}")
+        return MeResponse(user=identity.user, token=None, allowed=False, topics=[])
+    if identity.user == ANONYMOUS_USER:
+        topics = [
+            t for t in ALLOWED_TOPICS if t not in state.keyed_only_topics
+        ]
+    else:
+        topics = firehose_topics(identity.scopes)
+    return MeResponse(user=identity.user, token=api_key, allowed=True, topics=topics)</code></pre>
+      </details>
     </div>
     <ul>
       <li>
@@ -294,6 +545,17 @@ data, or close outcome, and links to the source file and line it comes from.</p>
             <span class="name">firehose_topics</span>
             <span class="sig">(scopes) → scopes ∩ ALLOWED_TOPICS — keyed sees keyed-only topics it holds scopes for</span>
             <span class="loc"><a href="../bases/bot_detector/firehose/api/me.py#L34">api/me.py:34</a></span>
+            <details class="code"><summary>code ▸</summary>
+<pre><code class="src">def firehose_topics(scopes: list[str]) -&gt; list[str]:
+    if WILDCARD_SCOPE in scopes:
+        return ALLOWED_TOPICS
+    return [
+        scope[len(SCOPE_PREFIX) :]
+        for scope in scopes
+        if scope.startswith(SCOPE_PREFIX)
+        and scope[len(SCOPE_PREFIX) :] in ALLOWED_TOPICS
+    ]</code></pre>
+            </details>
           </div></li>
         </ul>
       </li>
@@ -303,18 +565,27 @@ data, or close outcome, and links to the source file and line it comes from.</p>
     <div class="node entry"><span class="kind">entry</span>
       <span class="name">GET /firehose/topics</span>
       <span class="sig">() → topics streamable without an api key</span>
-      <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L22">api/firehose.py:22</a></span>
+      <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L20">api/firehose.py:20</a></span>
+      <details class="code"><summary>code ▸</summary>
+<pre><code class="src">@router.get("/firehose/topics", summary="Topics streamable without an api key")
+async def firehose_topics(request: Request) -&gt; list[str]:
+    state: FirehoseState = request.app.state.firehose
+    return [t for t in ALLOWED_TOPICS if t not in state.keyed_only_topics]</code></pre>
+      </details>
     </div>
     <ul>
       <li><div class="node data"><span class="kind">data</span>
-        <span class="sig">no auth context: advertises the anonymous persona → <code>state.anonymous_topics</code></span>
-        <span class="loc"><a href="../bases/bot_detector/firehose/app/consumer/structs.py#L42">structs.py:42</a></span>
+        <span class="sig">no auth context: advertises the anonymous persona — the catalog minus the keyed-only set (same rule as anonymous <code>/me</code>)</span>
+        <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L23">api/firehose.py:23</a> · <a href="../bases/bot_detector/firehose/api/me.py#L60">api/me.py:60</a></span>
       </div></li>
     </ul>
   </li>
 </ul>
 
 <h2>close codes</h2>
+<p>The route accepts the handshake before the gates, so every rejection below
+arrives as a websocket close frame carrying these codes — not as an http
+error.</p>
 <table>
   <tr><th>code</th><th>reason</th><th>when</th></tr>
   <tr><td class="close-code">4404</td><td><code>unknown topic</code></td><td>topic is not in the <a href="../bases/bot_detector/firehose/app/consumer/structs.py#L20">TOPIC_MODELS</a> catalog</td></tr>
@@ -326,41 +597,85 @@ data, or close outcome, and links to the source file and line it comes from.</p>
 
 <h2>topic access configuration</h2>
 <p>Anonymous visibility is a per-topic settings map, resolved once at startup
-into <a href="../bases/bot_detector/firehose/app/state.py#L24">FirehoseState</a>:</p>
+into <a href="../bases/bot_detector/firehose/app/state.py#L25">FirehoseState</a>:</p>
 <ul class="tree">
   <li>
     <div class="node data"><span class="kind">data</span>
       <span class="name">Settings.topic_access</span>
       <span class="sig">dict[str, "public" | "keyed"] — env TOPIC_ACCESS, json map</span>
-      <span class="loc"><a href="../bases/bot_detector/firehose/core/config.py#L29">config.py:29</a></span>
+      <span class="loc"><a href="../bases/bot_detector/firehose/core/config.py#L31">config.py:31</a></span>
+      <details class="code"><summary>code ▸</summary>
+<pre><code class="src"># anonymous access per topic; "keyed" requires a valid api key with
+# the `firehose.&lt;topic&gt;` scope, "public" streams to anonymous too.
+# the map must cover the catalog exactly (create_app refuses
+# missing and unknown entries), and the env value replaces this
+# default wholesale - list every topic:
+# TOPIC_ACCESS='{"players.scraped": "public", ..., "reports.to_insert": "keyed", ...}'
+topic_access: dict[str, TopicAccess] = {
+    "players.scraped": "public",
+    "players.not_found": "public",
+    "reports.to_insert": "keyed",
+    "predictions.to_insert": "public",
+}</code></pre>
+      </details>
     </div>
     <ul>
       <li><div class="node data"><span class="kind">data</span>
-        <span class="sig">default <code>{"reports.to_insert": "keyed"}</code>; topics missing from the map are public</span>
+        <span class="sig">default names every catalog topic and keys only <code>reports.to_insert</code></span>
       </div></li>
       <li><div class="node decision"><span class="kind">decision</span>
-        <span class="sig">unknown topic in the map → ValueError at startup</span>
-        <span class="loc"><a href="../bases/bot_detector/firehose/core/server.py#L74">server.py:74</a></span>
+        <span class="sig">map must cover the catalog exactly → ValueError at startup</span>
+        <span class="loc"><a href="../bases/bot_detector/firehose/core/server.py#L69">server.py:69</a></span>
+        <details class="code"><summary>code ▸</summary>
+<pre><code class="src">missing = set(TOPIC_MODELS) - set(settings.topic_access)
+if missing:
+    raise ValueError(f"TOPIC_ACCESS is missing topics: {sorted(missing)}")
+unknown = set(settings.topic_access) - set(TOPIC_MODELS)
+if unknown:
+    raise ValueError(f"TOPIC_ACCESS names unknown topics: {sorted(unknown)}")</code></pre>
+        </details>
       </div></li>
       <li><div class="node call"><span class="kind">call</span>
         <span class="name">keyed_only_topics</span>
         <span class="sig">(topic_access) → frozenset[str]</span>
         <span class="loc"><a href="../bases/bot_detector/firehose/app/consumer/structs.py#L30">structs.py:30</a></span>
-      </div></li>
-      <li><div class="node call"><span class="kind">call</span>
-        <span class="name">anonymous_topics</span>
-        <span class="sig">(allowed_topics, keyed_only) → list[str]</span>
-        <span class="loc"><a href="../bases/bot_detector/firehose/app/consumer/structs.py#L42">structs.py:42</a></span>
+        <details class="code"><summary>code ▸</summary>
+<pre><code class="src">def keyed_only_topics(topic_access: Mapping[str, TopicAccess]) -&gt; frozenset[str]:
+    return frozenset(
+        topic for topic, access in topic_access.items() if access == "keyed"
+    )</code></pre>
+        </details>
       </div></li>
     </ul>
   </li>
 </ul>
-<p>Example — make reports public again without a code change:</p>
-<p><code>TOPIC_ACCESS='{"reports.to_insert": "public"}'</code></p>
+<p>Example — make every topic public again without a code change (the env
+value replaces the default wholesale, so it must cover the catalog):</p>
+<p><code>TOPIC_ACCESS='{"players.scraped": "public", "players.not_found":
+"public", "reports.to_insert": "public", "predictions.to_insert":
+"public"}'</code></p>
 
-<footer><a href="index.html">← docs index</a> · source of truth is the code;
+<footer><a href="index.html">← docs index</a> · excerpts are trimmed to the
+relevant lines (<code>…</code> marks elisions); source of truth is the code —
 if this page disagrees with <code>bases/bot_detector/firehose/</code>, trust
 the code and fix the page. Line references match the branch this doc was
 written on.</footer>
+
+<script>
+  // tiny progressive-enhancement highlighter for the excerpts; without
+  // js the code still renders as plain monospace
+  (function () {
+    const re =
+      /(#[^\n]*)|(f?"[^"\n]*"|f?'[^'\n]*')|(\b(?:async|await|def|class|return|if|elif|else|not|in|is|None|True|False|and|or|import|from|raise|try|except|with|as|for|while|self)\b)|(@[\w.]+)/g;
+    const esc = (s) =>
+      s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    document.querySelectorAll("pre code.src").forEach((el) => {
+      el.innerHTML = esc(el.textContent).replace(re, (m, c, s, k, d) => {
+        const cls = c ? "tk-c" : s ? "tk-s" : k ? "tk-k" : "tk-d";
+        return '<span class="' + cls + '">' + m + "</span>";
+      });
+    });
+  })();
+</script>
 </body>
 </html>
