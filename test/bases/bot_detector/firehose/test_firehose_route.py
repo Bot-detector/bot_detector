@@ -104,7 +104,7 @@ class FakeWebSocket:
 
 
 def make_state(
-    auth_repo: FakeAuthRepo | FakeKeyedAuthRepo | None = None,
+    auth_repo: FakeAuthRepo | FakeKeyedAuthRepo | FakeDenyAuthRepo | None = None,
 ) -> tuple[SimpleNamespace, FakeConsumer]:
     repo = FakeQueueRepo()
     consumer = FakeConsumer(group=f"fh-anonymous-{TOPIC}")

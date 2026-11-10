@@ -46,7 +46,7 @@ def firehose_topics(scopes: list[str]) -> list[str]:
 async def me(request: Request, api_key: ApiKey) -> MeResponse:
     """Validate the credential, then report identity and allowed topics.
 
-    - no credential  -> anonymous, allowed, every topic (shared group)
+    - no credential  -> anonymous, allowed, every public topic (shared group)
     - bad credential -> allowed=false (invalid token or not allowlisted)
     - ok             -> identity + every topic the identity may consume
     """

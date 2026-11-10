@@ -584,11 +584,11 @@ as an http error. Gate order follows the tree: identity first (4401/4403),
 then the topic catalog (4404).</p>
 <table>
   <tr><th>code</th><th>reason</th><th>when</th></tr>
-  <tr><td class="close-code">4404</td><td><code>unknown topic</code></td><td>topic is not in the <a href="../bases/bot_detector/firehose/app/consumer/structs.py#L20">TOPIC_MODELS</a> catalog</td></tr>
+  <tr><td class="close-code">4404</td><td><code>unknown topic</code></td><td>topic is not in the <a href="../bases/bot_detector/firehose/app/consumer/structs.py#L16">TOPIC_MODELS</a> catalog</td></tr>
   <tr><td class="close-code">4401</td><td><code>invalid api key</code></td><td>token rejected, identity not allowlisted, or the <code>firehose.&lt;topic&gt;</code> scope is missing</td></tr>
   <tr><td class="close-code">4403</td><td><code>topic requires an api key</code></td><td>anonymous connect to a keyed-only topic</td></tr>
   <tr><td class="close-code">1011</td><td><code>internal error</code></td><td>consumer creation failed</td></tr>
-  <tr><td class="close-code">1013</td><td><code>slow consumer</code></td><td>backpressure kick after the join grace (see the base <a href="../bases/bot_detector/firehose/README.md">README</a>)</td></tr>
+  <tr><td class="close-code">1013</td><td><code>inbox full</code></td><td>backpressure kick after the join grace (see the base <a href="../bases/bot_detector/firehose/README.md">README</a>)</td></tr>
 </table>
 
 <h2>topic access configuration</h2>
@@ -613,6 +613,7 @@ public_topics: Annotated[set[str], NoDecode] = {
 keyed_topics: Annotated[set[str], NoDecode] = {"reports.to_insert"}
 
 @field_validator("public_topics", "keyed_topics", mode="before")
+@classmethod
 def _split_csv(cls, value): …</code></pre>
       </details>
     </div>
