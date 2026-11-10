@@ -20,7 +20,7 @@ class FirehoseState:
     queue_manager: QueueManager
     auth_repo: ApiKeyAuthRepo
     connection_manager: ConnectionManager
-    # resolved from settings.topic_access at startup
+    # resolved from settings.public_topics / keyed_topics at startup
     keyed_only_topics: frozenset[str]
     http_session: ClientSession | None = None
     discord_oauth: DiscordOAuth | None = None

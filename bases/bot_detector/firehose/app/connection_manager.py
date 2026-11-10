@@ -34,9 +34,9 @@ class ConnectionManager:
 
     Owns the connection registry (id -> websocket, grouped by consumer
     group) and every socket operation after the handshake: bounded
-    send, close. The route accepts the handshake before the access
-    gates so rejections carry application close codes; a failed or
-    timed-out send raises, and the caller closes the connection via
+    send, close. The auth dependency accepts the handshake before the
+    access gates so rejections carry application close codes; a failed
+    or timed-out send raises, and the caller closes the connection via
     `close`.
     """
 

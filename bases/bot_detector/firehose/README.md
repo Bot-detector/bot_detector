@@ -60,6 +60,10 @@ uv run python -m dst.main dst.scenarios.join_storm --json-pretty
 # keyed users isolated from a degrading anonymous fleet
 uv run python -m dst.main dst.scenarios.keyed --json-pretty
 
+# the 2h emission delay over a simulated day (note --start: epoch clock)
+uv run python -m dst.main dst.scenarios.reports_delay \
+    --start 2000000000 --json-pretty
+
 # broker outage: pump backs off, arrivals queue, stream resumes
 uv run python -m dst.main dst.scenarios.firehose \
     --kw outage_at_s=5 --kw outage_duration_s=8 --json-pretty
