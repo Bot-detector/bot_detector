@@ -32,6 +32,7 @@ import orjson  # noqa: E402
 from bot_detector.firehose.api.firehose import (  # noqa: E402
     firehose as firehose_route,
 )
+from bot_detector.firehose.app.auth.auth import ANONYMOUS  # noqa: E402
 from bot_detector.firehose.app.consumer.queue_repo import QueueRepo  # noqa: E402
 from bot_detector.firehose.app.consumer.structs import TOPIC_MODELS  # noqa: E402
 from bot_detector.firehose.app.exchange.structs import Inbox  # noqa: E402
@@ -316,6 +317,7 @@ async def main(**kwargs) -> FirehoseReport:
                     firehose_route(
                         websocket=websocket,  # type: ignore[arg-type]
                         topic=TOPIC,
+                        user=ANONYMOUS,
                     ),
                     name=f"route-{i}",
                 )

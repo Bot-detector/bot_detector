@@ -5,16 +5,19 @@ from types import SimpleNamespace
 import pytest
 from bot_detector.event_queue.core import QueueConsumer
 from bot_detector.event_queue.structs import ReportsToInsertStruct, ScrapedStruct
+from bot_detector.firehose.api.dependencies import auth_user
 from bot_detector.firehose.api.firehose import firehose
-from bot_detector.firehose.app.auth.auth import ANONYMOUS, AuthUser
+from bot_detector.firehose.app.auth.auth import ANONYMOUS, AuthUser, InvalidApiKey
 from bot_detector.firehose.app.connection_manager import ConnectionManager
 from bot_detector.firehose.app.exchange import Exchange
 from bot_detector.firehose.app.queue_manager import QueueManager
 from bot_detector.firehose.core.config import Settings
+from fastapi import WebSocketException
 
 TOPIC = "players.scraped"
 REPORTS_TOPIC = "reports.to_insert"
 N = 3
+KEYED = AuthUser(name="system-one", scopes=["firehose.reports.to_insert"])
 
 
 class FakeConsumer(QueueConsumer[ScrapedStruct]):
@@ -63,6 +66,11 @@ class FakeKeyedAuthRepo:
 
     async def authenticate(self, api_key: str | None, topic: str) -> AuthUser:
         return AuthUser(name="system-one", scopes=[f"firehose.{topic}"])
+
+
+class FakeDenyAuthRepo:
+    async def authenticate(self, api_key: str | None, topic: str) -> Exception:
+        return InvalidApiKey("not allowlisted")
 
 
 class FakeWebSocket:
@@ -129,9 +137,11 @@ async def test_anonymous_connection_receives_fan_out_messages():
     state, consumer = make_state()
     ws = FakeWebSocket(state=state)
 
-    task = asyncio.create_task(firehose(websocket=ws, topic=TOPIC))
+    # direct calls skip the auth dependency: simulate the accepted,
+    # authenticated state it leaves behind
+    await ws.accept()
+    task = asyncio.create_task(firehose(websocket=ws, topic=TOPIC, user=ANONYMOUS))
     try:
-        assert await asyncio.wait_for(asyncio.shield(_accepted(ws)), timeout=5)
         consumer.messages = _messages()
 
         await wait_for(lambda: len(ws.sent) >= N)
@@ -150,35 +160,22 @@ async def test_unknown_topic_closes_with_4404():
     state, _ = make_state()
     ws = FakeWebSocket(state=state)
 
-    await firehose(websocket=ws, topic="not.a.topic")
+    await firehose(websocket=ws, topic="not.a.topic", user=ANONYMOUS)
 
-    assert ws.accepted is True  # handshake completes so codes are delivered
     assert ws.closed == (4404, "unknown topic")
 
 
 @pytest.mark.asyncio
-async def test_anonymous_connect_to_keyed_only_topic_closes_4403():
-    state, _ = make_state()
-    ws = FakeWebSocket(state=state)
-
-    await firehose(websocket=ws, topic=REPORTS_TOPIC)
-
-    assert ws.accepted is True  # handshake completes so codes are delivered
-    assert ws.closed == (4403, "topic requires an api key")
-
-
-@pytest.mark.asyncio
 async def test_keyed_connection_streams_keyed_only_topic():
-    state, _ = make_state(auth_repo=FakeKeyedAuthRepo())
+    state, _ = make_state()
     # handle for message injection: the route creates this consumer
     consumer = FakeConsumer(group=f"fh-anonymous-{REPORTS_TOPIC}")
     state.queue_repo.consumers[consumer.group] = consumer
     ws = FakeWebSocket(state=state)
-    ws.query_params = {}  # no anonymous flag: the api-key path
+    await ws.accept()
 
-    task = asyncio.create_task(firehose(websocket=ws, topic=REPORTS_TOPIC))
+    task = asyncio.create_task(firehose(websocket=ws, topic=REPORTS_TOPIC, user=KEYED))
     try:
-        await wait_for(lambda: ws.accepted)
         # reports streams 2h behind live: the pump drops messages the
         # DelayAdapter cannot timestamp, so inject ts-shaped reports
         consumer.messages = [
@@ -213,10 +210,10 @@ async def test_stale_handshake_event_does_not_stall_delivery():
     ws = FakeWebSocket(state=state)
     # the ASGI handshake event arrives before anything else
     ws._incoming.put_nowait({"type": "websocket.connect"})
+    await ws.accept()
 
-    task = asyncio.create_task(firehose(websocket=ws, topic=TOPIC))
+    task = asyncio.create_task(firehose(websocket=ws, topic=TOPIC, user=ANONYMOUS))
     try:
-        await wait_for(lambda: ws.accepted)
         consumer.messages = _messages()
 
         await wait_for(lambda: len(ws.sent) >= N)
@@ -233,10 +230,9 @@ async def test_idle_disconnect_releases_stream_and_consumer():
     state, consumer = make_state()
     ws = FakeWebSocket(state=state)
 
-    task = asyncio.create_task(firehose(websocket=ws, topic=TOPIC))
+    task = asyncio.create_task(firehose(websocket=ws, topic=TOPIC, user=ANONYMOUS))
+    await ws.accept()
     try:
-        await wait_for(lambda: ws.accepted)
-
         # client vanishes while no messages flow: the handler must wake
         # on the disconnect (not stay parked on the empty inbox), clean
         # up, and release the shared stream
@@ -261,7 +257,50 @@ def _messages() -> list[ScrapedStruct]:
     ]
 
 
-async def _accepted(ws: FakeWebSocket) -> bool:
-    while not ws.accepted:
-        await asyncio.sleep(0.01)
-    return True
+@pytest.mark.asyncio
+async def test_auth_dependency_accepts_and_returns_anonymous():
+    state, _ = make_state()
+    ws = FakeWebSocket(state=state)
+
+    user = await auth_user(websocket=ws, topic=TOPIC)
+
+    assert ws.accepted is True  # accept first, so closes arrive as frames
+    assert user == ANONYMOUS
+
+
+@pytest.mark.asyncio
+async def test_auth_dependency_closes_anonymous_on_keyed_topics():
+    state, _ = make_state()
+    ws = FakeWebSocket(state=state)
+
+    with pytest.raises(WebSocketException) as raised:
+        await auth_user(websocket=ws, topic=REPORTS_TOPIC)
+
+    assert ws.accepted is True
+    assert (raised.value.code, raised.value.reason) == (
+        4403,
+        "topic requires an api key",
+    )
+
+
+@pytest.mark.asyncio
+async def test_auth_dependency_passes_keyed_users():
+    state, _ = make_state(auth_repo=FakeKeyedAuthRepo())
+    ws = FakeWebSocket(state=state)
+    ws.query_params = {}  # no anonymous flag: the api-key path
+
+    user = await auth_user(websocket=ws, topic=REPORTS_TOPIC)
+
+    assert user == KEYED
+
+
+@pytest.mark.asyncio
+async def test_auth_dependency_closes_invalid_credentials():
+    state, _ = make_state(auth_repo=FakeDenyAuthRepo())
+    ws = FakeWebSocket(state=state)
+    ws.query_params = {}
+
+    with pytest.raises(WebSocketException) as raised:
+        await auth_user(websocket=ws, topic=TOPIC)
+
+    assert (raised.value.code, raised.value.reason) == (4401, "invalid api key")
