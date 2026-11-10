@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bot_detector docs</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --line: #30363d;
+    --text: #e6edf3; --muted: #8b949e; --link: #58a6ff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2.5rem 1.5rem 4rem;
+    background: var(--bg); color: var(--text);
+    font: 15px/1.6 ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    max-width: 60rem; margin-inline: auto;
+  }
+  h1 { font-size: 1.5rem; margin: 0 0 .25rem; }
+  p.lead { color: var(--muted); margin-top: 0; }
+  .card {
+    display: block; margin: 1rem 0; padding: 1rem 1.25rem;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    text-decoration: none; color: var(--text);
+  }
+  .card:hover { border-color: var(--link); }
+  .card h2 { font-size: 1.05rem; margin: 0 0 .35rem; color: var(--link); }
+  .card p { margin: 0; color: var(--muted); }
+  footer { margin-top: 3rem; color: var(--muted); font-size: .85rem; }
+  code { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: .1em .35em; }
+</style>
+</head>
+<body>
+<h1>bot_detector docs</h1>
+<p class="lead">Hand-authored static HTML. Links point at repository files via
+relative paths, so they resolve when opened locally from this folder or when
+served from the repo root (e.g. <code>python -m http.server</code>).</p>
+
+<a class="card" href="firehose-authentication.html">
+  <h2>firehose / authentication</h2>
+  <p>The websocket authentication flow rendered as an abstract-syntax tree:
+  every node is a call, decision, or close outcome, and links to the source
+  file and line it comes from. Covers credentials, discord identity,
+  scope gates, keyed-only topics, and the close codes.</p>
+</a>
+
+<footer>source of truth is the code; if this page disagrees with
+<code>bases/bot_detector/firehose/</code>, trust the code and fix the page.</footer>
+</body>
+</html>

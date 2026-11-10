@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>firehose authentication</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --line: #30363d;
+    --text: #e6edf3; --muted: #8b949e; --link: #58a6ff;
+    --call: #58a6ff; --decision: #d29922; --close: #f85149;
+    --ok: #3fb950; --data: #bc8cff; --entry: #e6edf3;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2.5rem 1.5rem 4rem;
+    background: var(--bg); color: var(--text);
+    font: 14px/1.6 ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    max-width: 62rem; margin-inline: auto;
+  }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  h1 { font-size: 1.45rem; margin: 0 0 .25rem; }
+  h2 { font-size: 1.05rem; margin: 2.5rem 0 .75rem; color: var(--muted);
+       text-transform: uppercase; letter-spacing: .06em; }
+  p.lead { color: var(--muted); margin-top: 0; }
+  code { background: var(--panel); border: 1px solid var(--line);
+         border-radius: 4px; padding: .1em .35em; }
+
+  /* ast tree: rail + elbow connectors */
+  ul.tree, ul.tree ul { list-style: none; margin: 0; padding: 0; }
+  ul.tree ul { margin-left: .55rem; }
+  ul.tree li { position: relative; padding: .3rem 0 .3rem 1.5rem; }
+  ul.tree li::before {          /* vertical rail */
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0;
+    border-left: 1px solid var(--line);
+  }
+  ul.tree li:last-child::before { height: .9rem; bottom: auto; }
+  ul.tree li::after {           /* elbow into the node */
+    content: ""; position: absolute; left: 0; top: .9rem;
+    width: 1rem; border-top: 1px solid var(--line);
+  }
+  ul.tree > li { padding-left: 0; }
+  ul.tree > li::before, ul.tree > li::after { display: none; }
+
+  .node {
+    display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: .45rem;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 6px; padding: .3rem .7rem; max-width: 100%;
+  }
+  .node .kind {
+    font-size: .7rem; text-transform: uppercase; letter-spacing: .05em;
+    border-radius: 4px; padding: .05rem .4rem; color: var(--bg);
+  }
+  .node .name { font-weight: 700; }
+  .node .sig { color: var(--muted); }
+  .node .loc { font-size: .78rem; color: var(--muted); }
+  .node .loc a { color: var(--muted); }
+  .node .loc a:hover { color: var(--link); }
+
+  .call     .kind { background: var(--call); }
+  .decision .kind { background: var(--decision); }
+  .close    .kind { background: var(--close); }
+  .close    .name { color: var(--close); }
+  .ok       .kind { background: var(--ok); }
+  .ok       .name { color: var(--ok); }
+  .data     .kind { background: var(--data); }
+  .entry    .kind { background: var(--entry); }
+
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+  th, td { border: 1px solid var(--line); padding: .45rem .7rem; text-align: left; }
+  th { background: var(--panel); color: var(--muted); font-weight: 600; }
+  td code { white-space: nowrap; }
+  .close-code { color: var(--close); font-weight: 700; }
+  footer { margin-top: 3rem; color: var(--muted); font-size: .85rem; }
+</style>
+</head>
+<body>
+
+<h1>firehose authentication</h1>
+<p class="lead">How <code>GET /firehose/{topic}</code> (websocket) decides who
+is streaming. The credential is the discord access token; there is no session.
+The tree below reads top-to-bottom like an AST: each node is a call, decision,
+data, or close outcome, and links to the source file and line it comes from.</p>
+
+<h2>websocket connect</h2>
+<ul class="tree">
+  <li>
+    <div class="node entry"><span class="kind">entry</span>
+      <span class="name">firehose</span>
+      <span class="sig">(websocket, topic)</span>
+      <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L30">api/firehose.py:30</a></span>
+    </div>
+    <ul>
+      <li>
+        <div class="node decision"><span class="kind">decision</span>
+          <span class="name">topic catalog gate</span>
+          <span class="sig">topic ∈ ALLOWED_TOPICS</span>
+          <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L32">api/firehose.py:32</a> · <a href="../bases/bot_detector/firehose/app/consumer/structs.py#L27">structs.py:27</a></span>
+        </div>
+        <ul>
+          <li><div class="node close"><span class="kind">close</span>
+            <span class="name">4404</span> <span class="sig">"unknown topic"</span>
+            <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L32">api/firehose.py:32</a></span>
+          </div></li>
+        </ul>
+      </li>
+      <li>
+        <div class="node call"><span class="kind">call</span>
+          <span class="name">extract credential</span>
+          <span class="sig">(header, query)</span>
+          <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L38">api/firehose.py:38</a></span>
+        </div>
+        <ul>
+          <li><div class="node data"><span class="kind">data</span>
+            <span class="sig">?anonymous=1 → force_anonymous, no key</span>
+            <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L38">api/firehose.py:38</a></span>
+          </div></li>
+          <li><div class="node data"><span class="kind">data</span>
+            <span class="sig">header <code>x-api-key</code> — for systems</span>
+            <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L43">api/firehose.py:43</a></span>
+          </div></li>
+          <li><div class="node data"><span class="kind">data</span>
+            <span class="sig">query <code>?token=</code> — for browsers (a websocket cannot set headers)</span>
+            <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L44">api/firehose.py:44</a></span>
+          </div></li>
+        </ul>
+      </li>
+      <li>
+        <div class="node call"><span class="kind">call</span>
+          <span class="name">authenticate</span>
+          <span class="sig">(api_key, topic)</span>
+          <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/auth.py#L118">app/auth/auth.py:118</a></span>
+        </div>
+        <ul>
+          <li>
+            <div class="node decision"><span class="kind">decision</span>
+              <span class="name">no credential</span>
+              <span class="sig">api_key is None → ANONYMOUS</span>
+              <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/auth.py#L11">auth.py:11</a>, <a href="../bases/bot_detector/firehose/app/auth/auth.py#L122">L122</a></span>
+            </div>
+            <ul>
+              <li><div class="node ok"><span class="kind">ok</span>
+                <span class="name">anonymous</span>
+                <span class="sig">shared group; keyed-only gate still applies</span>
+                <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/auth.py#L25">auth.py:25</a></span>
+              </div></li>
+            </ul>
+          </li>
+          <li>
+            <div class="node call"><span class="kind">call</span>
+              <span class="name">identify</span>
+              <span class="sig">(api_key)</span>
+              <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/auth.py#L79">auth.py:79</a></span>
+            </div>
+            <ul>
+              <li>
+                <div class="node call"><span class="kind">call</span>
+                  <span class="name">DiscordOAuth.get_current_user</span>
+                  <span class="sig">(access_token)</span>
+                  <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/discord.py#L40">discord.py:40</a></span>
+                </div>
+                <ul>
+                  <li><div class="node close"><span class="kind">close</span>
+                    <span class="name">4401</span> <span class="sig">token rejected → Identity(not allowed) → InvalidApiKey</span>
+                    <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/auth.py#L98">auth.py:98</a> · <a href="../bases/bot_detector/firehose/api/firehose.py#L48">firehose.py:48</a></span>
+                  </div></li>
+                </ul>
+              </li>
+              <li>
+                <div class="node call"><span class="kind">call</span>
+                  <span class="name">ApiUserRepo.get_user</span>
+                  <span class="sig">(discord_&lt;id&gt;, is_active)</span>
+                  <span class="loc"><a href="../components/bot_detector/database/api/repository.py#L59">database/api/repository.py:59</a></span>
+                </div>
+                <ul>
+                  <li><div class="node close"><span class="kind">close</span>
+                    <span class="name">4401</span> <span class="sig">not registered / not allowlisted → InvalidApiKey</span>
+                    <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/auth.py#L109">auth.py:109</a> · <a href="../bases/bot_detector/firehose/app/auth/auth.py#L125">L125</a></span>
+                  </div></li>
+                </ul>
+              </li>
+              <li>
+                <div class="node call"><span class="kind">call</span>
+                  <span class="name">get_permissions</span>
+                  <span class="sig">() → scopes</span>
+                  <span class="loc"><a href="../components/bot_detector/database/api/repository.py#L75">repository.py:75</a></span>
+                </div>
+                <ul>
+                  <li><div class="node data"><span class="kind">data</span>
+                    <span class="name">Identity</span>
+                    <span class="sig">(user, allowed, scopes)</span>
+                    <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/auth.py#L28">auth.py:28</a></span>
+                  </div></li>
+                </ul>
+              </li>
+            </ul>
+          </li>
+          <li>
+            <div class="node decision"><span class="kind">decision</span>
+              <span class="name">topic scope gate</span>
+              <span class="sig">firehose.&lt;topic&gt; ∈ scopes ∨ firehose.* ∈ scopes</span>
+              <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/auth.py#L126">auth.py:126</a></span>
+            </div>
+            <ul>
+              <li><div class="node call"><span class="kind">call</span>
+                <span class="name">firehose_permission</span>
+                <span class="sig">(topic) → "firehose.&lt;topic&gt;"</span>
+                <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/auth.py#L15">auth.py:15</a></span>
+              </div></li>
+              <li><div class="node data"><span class="kind">data</span>
+                <span class="name">WILDCARD_SCOPE</span>
+                <span class="sig">"firehose.*"</span>
+                <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/auth.py#L12">auth.py:12</a></span>
+              </div></li>
+              <li><div class="node close"><span class="kind">close</span>
+                <span class="name">4401</span> <span class="sig">scope missing → InvalidApiKey</span>
+                <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/auth.py#L130">auth.py:130</a></span>
+              </div></li>
+            </ul>
+          </li>
+          <li><div class="node data"><span class="kind">data</span>
+            <span class="name">→ AuthUser</span>
+            <span class="sig">(name, scopes)</span>
+            <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/auth.py#L20">auth.py:20</a></span>
+          </div></li>
+        </ul>
+      </li>
+      <li>
+        <div class="node decision"><span class="kind">decision</span>
+          <span class="name">keyed-only gate</span>
+          <span class="sig">anonymous ∧ topic ∈ keyed_only_topics</span>
+          <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L55">api/firehose.py:55</a></span>
+        </div>
+        <ul>
+          <li><div class="node data"><span class="kind">data</span>
+            <span class="name">keyed_only_topics</span>
+            <span class="sig">← Settings.topic_access, resolved at startup</span>
+            <span class="loc"><a href="../bases/bot_detector/firehose/core/config.py#L29">config.py:29</a> · <a href="../bases/bot_detector/firehose/app/consumer/structs.py#L30">structs.py:30</a> · <a href="../bases/bot_detector/firehose/core/server.py#L75">server.py:75</a></span>
+          </div></li>
+          <li><div class="node close"><span class="kind">close</span>
+            <span class="name">4403</span> <span class="sig">"topic requires an api key"</span>
+            <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L56">api/firehose.py:56</a></span>
+          </div></li>
+        </ul>
+      </li>
+      <li>
+        <div class="node call"><span class="kind">call</span>
+          <span class="name">resolve_consumer_group</span>
+          <span class="sig">(user, topic)</span>
+          <span class="loc"><a href="../bases/bot_detector/firehose/app/consumer/queue_repo.py#L33">queue_repo.py:33</a></span>
+        </div>
+        <ul>
+          <li><div class="node data"><span class="kind">data</span>
+            <span class="sig">anonymous → <code>fh-anonymous-&lt;topic&gt;</code> (one shared group per topic)</span>
+            <span class="loc"><a href="../bases/bot_detector/firehose/app/consumer/queue_repo.py#L34">queue_repo.py:34</a></span>
+          </div></li>
+          <li><div class="node data"><span class="kind">data</span>
+            <span class="sig">keyed → <code>fh-&lt;topic&gt;-&lt;discord id&gt;</code> (independent stream, replays from earliest)</span>
+            <span class="loc"><a href="../bases/bot_detector/firehose/app/consumer/queue_repo.py#L36">queue_repo.py:36</a></span>
+          </div></li>
+        </ul>
+      </li>
+      <li><div class="node ok"><span class="kind">ok</span>
+        <span class="name">stream</span>
+        <span class="sig">pump → exchange → inbox → send_text</span>
+        <span class="loc"><a href="../bases/bot_detector/firehose/app/queue_manager.py#L130">queue_manager.py:130</a> · <a href="../bases/bot_detector/firehose/api/firehose.py#L66">firehose.py:66</a></span>
+      </div></li>
+    </ul>
+  </li>
+</ul>
+
+<h2>http surface</h2>
+<ul class="tree">
+  <li>
+    <div class="node entry"><span class="kind">entry</span>
+      <span class="name">GET /me</span>
+      <span class="sig">(api_key) → identity + topics</span>
+      <span class="loc"><a href="../bases/bot_detector/firehose/api/me.py#L47">api/me.py:47</a></span>
+    </div>
+    <ul>
+      <li>
+        <div class="node call"><span class="kind">call</span>
+          <span class="name">identify</span>
+          <span class="sig">(api_key)</span>
+          <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/auth.py#L79">auth.py:79</a></span>
+        </div>
+        <ul>
+          <li><div class="node data"><span class="kind">data</span>
+            <span class="sig">anonymous → <code>state.anonymous_topics</code> (public topics only)</span>
+            <span class="loc"><a href="../bases/bot_detector/firehose/api/me.py#L60">api/me.py:60</a></span>
+          </div></li>
+          <li><div class="node call"><span class="kind">call</span>
+            <span class="name">firehose_topics</span>
+            <span class="sig">(scopes) → scopes ∩ ALLOWED_TOPICS — keyed sees keyed-only topics it holds scopes for</span>
+            <span class="loc"><a href="../bases/bot_detector/firehose/api/me.py#L34">api/me.py:34</a></span>
+          </div></li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li>
+    <div class="node entry"><span class="kind">entry</span>
+      <span class="name">GET /firehose/topics</span>
+      <span class="sig">() → topics streamable without an api key</span>
+      <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L22">api/firehose.py:22</a></span>
+    </div>
+    <ul>
+      <li><div class="node data"><span class="kind">data</span>
+        <span class="sig">no auth context: advertises the anonymous persona → <code>state.anonymous_topics</code></span>
+        <span class="loc"><a href="../bases/bot_detector/firehose/app/consumer/structs.py#L42">structs.py:42</a></span>
+      </div></li>
+    </ul>
+  </li>
+</ul>
+
+<h2>close codes</h2>
+<table>
+  <tr><th>code</th><th>reason</th><th>when</th></tr>
+  <tr><td class="close-code">4404</td><td><code>unknown topic</code></td><td>topic is not in the <a href="../bases/bot_detector/firehose/app/consumer/structs.py#L20">TOPIC_MODELS</a> catalog</td></tr>
+  <tr><td class="close-code">4401</td><td><code>invalid api key</code></td><td>token rejected, identity not allowlisted, or the <code>firehose.&lt;topic&gt;</code> scope is missing</td></tr>
+  <tr><td class="close-code">4403</td><td><code>topic requires an api key</code></td><td>anonymous connect to a keyed-only topic</td></tr>
+  <tr><td class="close-code">1011</td><td><code>internal error</code></td><td>consumer creation failed</td></tr>
+  <tr><td class="close-code">1013</td><td><code>slow consumer</code></td><td>backpressure kick after the join grace (see the base <a href="../bases/bot_detector/firehose/README.md">README</a>)</td></tr>
+</table>
+
+<h2>topic access configuration</h2>
+<p>Anonymous visibility is a per-topic settings map, resolved once at startup
+into <a href="../bases/bot_detector/firehose/app/state.py#L24">FirehoseState</a>:</p>
+<ul class="tree">
+  <li>
+    <div class="node data"><span class="kind">data</span>
+      <span class="name">Settings.topic_access</span>
+      <span class="sig">dict[str, "public" | "keyed"] — env TOPIC_ACCESS, json map</span>
+      <span class="loc"><a href="../bases/bot_detector/firehose/core/config.py#L29">config.py:29</a></span>
+    </div>
+    <ul>
+      <li><div class="node data"><span class="kind">data</span>
+        <span class="sig">default <code>{"reports.to_insert": "keyed"}</code>; topics missing from the map are public</span>
+      </div></li>
+      <li><div class="node decision"><span class="kind">decision</span>
+        <span class="sig">unknown topic in the map → ValueError at startup</span>
+        <span class="loc"><a href="../bases/bot_detector/firehose/core/server.py#L74">server.py:74</a></span>
+      </div></li>
+      <li><div class="node call"><span class="kind">call</span>
+        <span class="name">keyed_only_topics</span>
+        <span class="sig">(topic_access) → frozenset[str]</span>
+        <span class="loc"><a href="../bases/bot_detector/firehose/app/consumer/structs.py#L30">structs.py:30</a></span>
+      </div></li>
+      <li><div class="node call"><span class="kind">call</span>
+        <span class="name">anonymous_topics</span>
+        <span class="sig">(allowed_topics, keyed_only) → list[str]</span>
+        <span class="loc"><a href="../bases/bot_detector/firehose/app/consumer/structs.py#L42">structs.py:42</a></span>
+      </div></li>
+    </ul>
+  </li>
+</ul>
+<p>Example — make reports public again without a code change:</p>
+<p><code>TOPIC_ACCESS='{"reports.to_insert": "public"}'</code></p>
+
+<footer><a href="index.html">← docs index</a> · source of truth is the code;
+if this page disagrees with <code>bases/bot_detector/firehose/</code>, trust
+the code and fix the page. Line references match the branch this doc was
+written on.</footer>
+</body>
+</html>
