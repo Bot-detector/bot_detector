@@ -18,17 +18,14 @@ logger = logging.getLogger(__name__)
 
 @router.get("/firehose/topics", summary="Topics streamable without an api key")
 async def firehose_topics(request: Request) -> list[str]:
-    # no auth context on this endpoint: it advertises the anonymous
-    # persona; keyed identities get their topics from /me
+    # no auth context: the anonymous persona; keyed identities use /me
     state: FirehoseState = request.app.state.firehose
     return [t for t in ALLOWED_TOPICS if t not in state.keyed_only_topics]
 
 
 @router.websocket("/firehose/{topic}")
 async def firehose(websocket: WebSocket, topic: str) -> None:
-    # accept before the gates: a pre-accept close collapses into an
-    # undifferentiated http 403 on uvicorn, so the application close
-    # codes below would never reach the client
+    # accept first, or uvicorn turns every close below into a bare http 403
     await websocket.accept()
     if topic not in ALLOWED_TOPICS:
         await websocket.close(code=4404, reason="unknown topic")
@@ -50,8 +47,7 @@ async def firehose(websocket: WebSocket, topic: str) -> None:
         await websocket.close(code=4401, reason="invalid api key")
         return
 
-    # anonymous is fine for public topics, but keyed-only topics
-    # (Settings.topic_access) refuse the shared anonymous stream
+    # keyed-only topics refuse the anonymous shared stream
     if user.name == ANONYMOUS_USER and topic in state.keyed_only_topics:
         await websocket.close(code=4403, reason="topic requires an api key")
         return

@@ -8,7 +8,6 @@ from bot_detector.event_queue.structs import ReportsToInsertStruct, ScrapedStruc
 from bot_detector.firehose.api.firehose import firehose
 from bot_detector.firehose.app.auth.auth import ANONYMOUS, AuthUser
 from bot_detector.firehose.app.connection_manager import ConnectionManager
-from bot_detector.firehose.app.consumer import keyed_only_topics
 from bot_detector.firehose.app.exchange import Exchange
 from bot_detector.firehose.app.queue_manager import QueueManager
 from bot_detector.firehose.core.config import Settings
@@ -103,16 +102,14 @@ def make_state(
     consumer = FakeConsumer(group=f"fh-anonymous-{TOPIC}")
     repo.consumers[consumer.group] = consumer  # create_consumer reuses this
     exchange = Exchange()
-    settings = Settings()
-    keyed_only = keyed_only_topics(topic_access=settings.topic_access)
     state = SimpleNamespace(
-        settings=settings,
+        settings=Settings(),
         queue_repo=repo,
         exchange=exchange,
         queue_manager=QueueManager(queue_repo=repo, exchange=exchange),
         auth_repo=auth_repo or FakeAuthRepo(),
         connection_manager=ConnectionManager(),
-        keyed_only_topics=keyed_only,
+        keyed_only_topics={"reports.to_insert"},
         http_session=None,
         discord_oauth=None,
     )

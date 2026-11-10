@@ -10,8 +10,7 @@ from bot_detector.firehose.api import firehose, me
 from bot_detector.firehose.app.auth.auth import ApiKeyAuthRepo
 from bot_detector.firehose.app.auth.discord import DiscordOAuth
 from bot_detector.firehose.app.connection_manager import ConnectionManager
-from bot_detector.firehose.app.consumer import TOPIC_MODELS, keyed_only_topics
-from bot_detector.firehose.app.consumer import QueueRepo
+from bot_detector.firehose.app.consumer import QueueRepo, TOPIC_MODELS
 from bot_detector.firehose.app.exchange import Exchange
 from bot_detector.firehose.app.queue_manager import QueueManager
 from bot_detector.firehose.app.state import FirehoseState
@@ -63,16 +62,23 @@ def create_app(settings: Settings) -> FastAPI:
     queue_repo = QueueRepo(settings=settings)
     session_factory, _ = get_session_factory(DatabaseSettings())
     exchange = Exchange(grace_s=settings.kick_grace_s)
-    # fail fast unless the access map covers the catalog exactly: a
-    # missing entry silently publishes the topic to anonymous callers,
-    # an unknown entry silently does nothing
-    missing = set(TOPIC_MODELS) - set(settings.topic_access)
+    # the lists must cover the catalog exactly: a missing topic silently
+    # publishes it to anonymous callers, an unknown one is inert, and a
+    # topic in both lists is ambiguous
+    missing = set(TOPIC_MODELS) - settings.public_topics - settings.keyed_topics
+    unknown = (settings.public_topics | settings.keyed_topics) - set(TOPIC_MODELS)
+    overlap = settings.public_topics & settings.keyed_topics
     if missing:
-        raise ValueError(f"TOPIC_ACCESS is missing topics: {sorted(missing)}")
-    unknown = set(settings.topic_access) - set(TOPIC_MODELS)
+        raise ValueError(
+            f"PUBLIC_TOPICS/KEYED_TOPICS are missing topics: {sorted(missing)}"
+        )
     if unknown:
-        raise ValueError(f"TOPIC_ACCESS names unknown topics: {sorted(unknown)}")
-    keyed_only = keyed_only_topics(topic_access=settings.topic_access)
+        raise ValueError(
+            f"PUBLIC_TOPICS/KEYED_TOPICS name unknown topics: {sorted(unknown)}"
+        )
+    if overlap:
+        raise ValueError(f"PUBLIC_TOPICS and KEYED_TOPICS overlap: {sorted(overlap)}")
+    keyed_only = frozenset(settings.keyed_topics)
     _app.state.firehose = FirehoseState(
         settings=settings,
         queue_repo=queue_repo,

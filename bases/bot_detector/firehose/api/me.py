@@ -21,8 +21,7 @@ class MeResponse(BaseModel):
 
     - user None + allowed=false  -> invalid credential
     - user set + allowed=false   -> known identity, not allowlisted
-    - anonymous                  -> allowed, every anonymous-visible
-                                    topic (shared group)
+    - anonymous                  -> allowed, every public topic (shared group)
     """
 
     user: str | None = None

@@ -109,13 +109,11 @@ the code excerpt it summarizes — expand <code>code ▸</code> on a node.</p>
     <div class="node entry"><span class="kind">entry</span>
       <span class="name">firehose</span>
       <span class="sig">(websocket, topic)</span>
-      <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L28">api/firehose.py:28</a></span>
+      <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L27">api/firehose.py:27</a></span>
       <details class="code"><summary>code ▸</summary>
 <pre><code class="src">@router.websocket("/firehose/{topic}")
 async def firehose(websocket: WebSocket, topic: str) -&gt; None:
-    # accept before the gates: a pre-accept close collapses into an
-    # undifferentiated http 403 on uvicorn, so the application close
-    # codes below would never reach the client
+    # accept first, or uvicorn turns every close below into a bare http 403
     await websocket.accept()
     if topic not in ALLOWED_TOPICS:
         await websocket.close(code=4404, reason="unknown topic")
@@ -128,7 +126,7 @@ async def firehose(websocket: WebSocket, topic: str) -&gt; None:
         <div class="node decision"><span class="kind">decision</span>
           <span class="name">topic catalog gate</span>
           <span class="sig">topic ∈ ALLOWED_TOPICS</span>
-          <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L34">api/firehose.py:34</a> · <a href="../bases/bot_detector/firehose/app/consumer/structs.py#L27">structs.py:27</a></span>
+          <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L31">api/firehose.py:31</a> · <a href="../bases/bot_detector/firehose/app/consumer/structs.py#L23">structs.py:23</a></span>
           <details class="code"><summary>code ▸</summary>
 <pre><code class="src">TOPIC_MODELS: dict[str, type[BaseModel]] = {
     "players.scraped": ScrapedStruct,
@@ -143,7 +141,7 @@ ALLOWED_TOPICS: list[str] = list(TOPIC_MODELS.keys())</code></pre>
         <ul>
           <li><div class="node close"><span class="kind">close</span>
             <span class="name">4404</span> <span class="sig">"unknown topic"</span>
-            <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L34">api/firehose.py:34</a></span>
+            <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L31">api/firehose.py:31</a></span>
             <details class="code"><summary>code ▸</summary>
 <pre><code class="src">await websocket.close(code=4404, reason="unknown topic")</code></pre>
             </details>
@@ -154,7 +152,7 @@ ALLOWED_TOPICS: list[str] = list(TOPIC_MODELS.keys())</code></pre>
         <div class="node call"><span class="kind">call</span>
           <span class="name">extract credential</span>
           <span class="sig">(header, query)</span>
-          <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L40">api/firehose.py:40</a></span>
+          <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L37">api/firehose.py:37</a></span>
           <details class="code"><summary>code ▸</summary>
 <pre><code class="src">force_anonymous = websocket.query_params.get("anonymous") == "1"
 api_key = None
@@ -167,15 +165,15 @@ if not force_anonymous:
         <ul>
           <li><div class="node data"><span class="kind">data</span>
             <span class="sig">?anonymous=1 → force_anonymous, no key</span>
-            <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L40">api/firehose.py:40</a></span>
+            <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L37">api/firehose.py:37</a></span>
           </div></li>
           <li><div class="node data"><span class="kind">data</span>
             <span class="sig">header <code>x-api-key</code> — for systems</span>
-            <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L43">api/firehose.py:43</a></span>
+            <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L40">api/firehose.py:40</a></span>
           </div></li>
           <li><div class="node data"><span class="kind">data</span>
             <span class="sig">query <code>?token=</code> — for browsers (a websocket cannot set headers)</span>
-            <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L43">api/firehose.py:43</a></span>
+            <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L40">api/firehose.py:40</a></span>
           </div></li>
         </ul>
       </li>
@@ -280,7 +278,7 @@ ANONYMOUS = AuthUser(name=ANONYMOUS_USER, scopes=[])</code></pre>
                 <ul>
                   <li><div class="node close"><span class="kind">close</span>
                     <span class="name">4401</span> <span class="sig">token rejected → Identity(not allowed) → InvalidApiKey</span>
-                    <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/auth.py#L98">auth.py:98</a> · <a href="../bases/bot_detector/firehose/api/firehose.py#L50">firehose.py:50</a></span>
+                    <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/auth.py#L98">auth.py:98</a> · <a href="../bases/bot_detector/firehose/api/firehose.py#L47">firehose.py:47</a></span>
                     <details class="code"><summary>code ▸</summary>
 <pre><code class="src">await websocket.close(code=4401, reason="invalid api key")</code></pre>
                     </details>
@@ -412,7 +410,7 @@ return InvalidApiKey("not allowlisted")</code></pre>
         <div class="node decision"><span class="kind">decision</span>
           <span class="name">keyed-only gate</span>
           <span class="sig">anonymous ∧ topic ∈ keyed_only_topics</span>
-          <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L55">api/firehose.py:55</a></span>
+          <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L51">api/firehose.py:51</a></span>
           <details class="code"><summary>code ▸</summary>
 <pre><code class="src">if user.name == ANONYMOUS_USER and topic in state.keyed_only_topics:
     await websocket.close(code=4403, reason="topic requires an api key")
@@ -421,37 +419,26 @@ return InvalidApiKey("not allowlisted")</code></pre>
         </div>
         <ul>
           <li><div class="node data"><span class="kind">data</span>
-            <span class="name">keyed_only_topics</span>
-            <span class="sig">← Settings.topic_access, resolved at startup</span>
-            <span class="loc"><a href="../bases/bot_detector/firehose/core/config.py#L31">config.py:31</a> · <a href="../bases/bot_detector/firehose/app/consumer/structs.py#L30">structs.py:30</a> · <a href="../bases/bot_detector/firehose/core/server.py#L75">server.py:75</a></span>
+            <span class="name">state.keyed_only_topics</span>
+            <span class="sig">← Settings.public_topics / keyed_topics, resolved at startup</span>
+            <span class="loc"><a href="../bases/bot_detector/firehose/core/config.py#L27">config.py:27</a> · <a href="../bases/bot_detector/firehose/core/server.py#L81">server.py:81</a></span>
             <details class="code"><summary>code ▸</summary>
-<pre><code class="src"># settings (default; env TOPIC_ACCESS replaces it wholesale)
-topic_access: dict[str, TopicAccess] = {
-    "players.scraped": "public",
-    "players.not_found": "public",
-    "reports.to_insert": "keyed",
-    "predictions.to_insert": "public",
+<pre><code class="src"># settings (defaults; env PUBLIC_TOPICS / KEYED_TOPICS override as csv)
+public_topics: Annotated[set[str], NoDecode] = {
+    "players.scraped",
+    "players.not_found",
+    "predictions.to_insert",
 }
-
-# resolver
-def keyed_only_topics(topic_access: Mapping[str, TopicAccess]) -&gt; frozenset[str]:
-    return frozenset(
-        topic for topic, access in topic_access.items() if access == "keyed"
-    )
+keyed_topics: Annotated[set[str], NoDecode] = {"reports.to_insert"}
 
 # startup (create_app)
-missing = set(TOPIC_MODELS) - set(settings.topic_access)
-if missing:
-    raise ValueError(f"TOPIC_ACCESS is missing topics: {sorted(missing)}")
-unknown = set(settings.topic_access) - set(TOPIC_MODELS)
-if unknown:
-    raise ValueError(f"TOPIC_ACCESS names unknown topics: {sorted(unknown)}")
-keyed_only = keyed_only_topics(topic_access=settings.topic_access)</code></pre>
+…
+keyed_only = frozenset(settings.keyed_topics)</code></pre>
             </details>
           </div></li>
           <li><div class="node close"><span class="kind">close</span>
             <span class="name">4403</span> <span class="sig">"topic requires an api key"</span>
-            <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L56">api/firehose.py:56</a></span>
+            <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L52">api/firehose.py:52</a></span>
           </div></li>
         </ul>
       </li>
@@ -473,18 +460,18 @@ keyed_only = keyed_only_topics(topic_access=settings.topic_access)</code></pre>
         <ul>
           <li><div class="node data"><span class="kind">data</span>
             <span class="sig">anonymous → <code>fh-anonymous-&lt;topic&gt;</code> (one shared group per topic)</span>
-            <span class="loc"><a href="../bases/bot_detector/firehose/app/consumer/queue_repo.py#L34">queue_repo.py:34</a></span>
+            <span class="loc"><a href="../bases/bot_detector/firehose/app/consumer/queue_repo.py#L35">queue_repo.py:35</a></span>
           </div></li>
           <li><div class="node data"><span class="kind">data</span>
             <span class="sig">keyed → <code>fh-&lt;topic&gt;-&lt;discord id&gt;</code> (independent stream, replays from earliest)</span>
-            <span class="loc"><a href="../bases/bot_detector/firehose/app/consumer/queue_repo.py#L36">queue_repo.py:36</a></span>
+            <span class="loc"><a href="../bases/bot_detector/firehose/app/consumer/queue_repo.py#L37">queue_repo.py:37</a></span>
           </div></li>
         </ul>
       </li>
       <li><div class="node ok"><span class="kind">ok</span>
         <span class="name">stream</span>
         <span class="sig">pump → exchange → inbox → send_text</span>
-        <span class="loc"><a href="../bases/bot_detector/firehose/app/queue_manager.py#L130">queue_manager.py:130</a> · <a href="../bases/bot_detector/firehose/api/firehose.py#L85">firehose.py:85</a></span>
+        <span class="loc"><a href="../bases/bot_detector/firehose/app/queue_manager.py#L130">queue_manager.py:130</a> · <a href="../bases/bot_detector/firehose/api/firehose.py#L81">firehose.py:81</a></span>
         <details class="code"><summary>code ▸</summary>
 <pre><code class="src"># the pump (queue_manager._consume)
 message = await queue.consumer.get_one()
@@ -511,7 +498,7 @@ await state.connection_manager.send(conn_id, payload=message)</code></pre>
     <div class="node entry"><span class="kind">entry</span>
       <span class="name">GET /me</span>
       <span class="sig">(api_key) → identity + topics</span>
-      <span class="loc"><a href="../bases/bot_detector/firehose/api/me.py#L47">api/me.py:47</a></span>
+      <span class="loc"><a href="../bases/bot_detector/firehose/api/me.py#L46">api/me.py:46</a></span>
       <details class="code"><summary>code ▸</summary>
 <pre><code class="src">@router.get("/me", summary="Validate credential; return identity and topics")
 async def me(request: Request, api_key: ApiKey) -&gt; MeResponse:
@@ -521,9 +508,7 @@ async def me(request: Request, api_key: ApiKey) -&gt; MeResponse:
         logger.info(f"credential rejected user={identity.user}")
         return MeResponse(user=identity.user, token=None, allowed=False, topics=[])
     if identity.user == ANONYMOUS_USER:
-        topics = [
-            t for t in ALLOWED_TOPICS if t not in state.keyed_only_topics
-        ]
+        topics = [t for t in ALLOWED_TOPICS if t not in state.keyed_only_topics]
     else:
         topics = firehose_topics(identity.scopes)
     return MeResponse(user=identity.user, token=api_key, allowed=True, topics=topics)</code></pre>
@@ -538,13 +523,13 @@ async def me(request: Request, api_key: ApiKey) -&gt; MeResponse:
         </div>
         <ul>
           <li><div class="node data"><span class="kind">data</span>
-            <span class="sig">anonymous → <code>state.anonymous_topics</code> (public topics only)</span>
-            <span class="loc"><a href="../bases/bot_detector/firehose/api/me.py#L60">api/me.py:60</a></span>
+            <span class="sig">anonymous → <code>ALLOWED_TOPICS</code> minus <code>state.keyed_only_topics</code> (public topics only)</span>
+            <span class="loc"><a href="../bases/bot_detector/firehose/api/me.py#L59">api/me.py:59</a></span>
           </div></li>
           <li><div class="node call"><span class="kind">call</span>
             <span class="name">firehose_topics</span>
             <span class="sig">(scopes) → scopes ∩ ALLOWED_TOPICS — keyed sees keyed-only topics it holds scopes for</span>
-            <span class="loc"><a href="../bases/bot_detector/firehose/api/me.py#L34">api/me.py:34</a></span>
+            <span class="loc"><a href="../bases/bot_detector/firehose/api/me.py#L33">api/me.py:33</a></span>
             <details class="code"><summary>code ▸</summary>
 <pre><code class="src">def firehose_topics(scopes: list[str]) -&gt; list[str]:
     if WILDCARD_SCOPE in scopes:
@@ -576,7 +561,7 @@ async def firehose_topics(request: Request) -&gt; list[str]:
     <ul>
       <li><div class="node data"><span class="kind">data</span>
         <span class="sig">no auth context: advertises the anonymous persona — the catalog minus the keyed-only set (same rule as anonymous <code>/me</code>)</span>
-        <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L23">api/firehose.py:23</a> · <a href="../bases/bot_detector/firehose/api/me.py#L60">api/me.py:60</a></span>
+        <span class="loc"><a href="../bases/bot_detector/firehose/api/firehose.py#L23">api/firehose.py:23</a> · <a href="../bases/bot_detector/firehose/api/me.py#L59">api/me.py:59</a></span>
       </div></li>
     </ul>
   </li>
@@ -596,64 +581,55 @@ error.</p>
 </table>
 
 <h2>topic access configuration</h2>
-<p>Anonymous visibility is a per-topic settings map, resolved once at startup
-into <a href="../bases/bot_detector/firehose/app/state.py#L25">FirehoseState</a>:</p>
+<p>Anonymous visibility is configured as two topic lists, resolved once at
+startup into <a href="../bases/bot_detector/firehose/app/state.py#L24">FirehoseState</a>:</p>
 <ul class="tree">
   <li>
     <div class="node data"><span class="kind">data</span>
-      <span class="name">Settings.topic_access</span>
-      <span class="sig">dict[str, "public" | "keyed"] — env TOPIC_ACCESS, json map</span>
-      <span class="loc"><a href="../bases/bot_detector/firehose/core/config.py#L31">config.py:31</a></span>
+      <span class="name">Settings.public_topics / keyed_topics</span>
+      <span class="sig">set[str] — csv in env: PUBLIC_TOPICS=..., KEYED_TOPICS=...</span>
+      <span class="loc"><a href="../bases/bot_detector/firehose/core/config.py#L27">config.py:27</a></span>
       <details class="code"><summary>code ▸</summary>
-<pre><code class="src"># anonymous access per topic; "keyed" requires a valid api key with
-# the `firehose.&lt;topic&gt;` scope, "public" streams to anonymous too.
-# the map must cover the catalog exactly (create_app refuses
-# missing and unknown entries), and the env value replaces this
-# default wholesale - list every topic:
-# TOPIC_ACCESS='{"players.scraped": "public", ..., "reports.to_insert": "keyed", ...}'
-topic_access: dict[str, TopicAccess] = {
-    "players.scraped": "public",
-    "players.not_found": "public",
-    "reports.to_insert": "keyed",
-    "predictions.to_insert": "public",
-}</code></pre>
+<pre><code class="src"># per-topic anonymous access: keyed topics need a valid api key with
+# the `firehose.&lt;topic&gt;` scope, public topics stream to anonymous
+# too; together they must cover the catalog exactly. csv in env:
+# PUBLIC_TOPICS=players.scraped,players.not_found KEYED_TOPICS=reports.to_insert
+public_topics: Annotated[set[str], NoDecode] = {
+    "players.scraped",
+    "players.not_found",
+    "predictions.to_insert",
+}
+keyed_topics: Annotated[set[str], NoDecode] = {"reports.to_insert"}
+
+@field_validator("public_topics", "keyed_topics", mode="before")
+def _split_csv(cls, value): …</code></pre>
       </details>
     </div>
     <ul>
       <li><div class="node data"><span class="kind">data</span>
-        <span class="sig">default names every catalog topic and keys only <code>reports.to_insert</code></span>
+        <span class="sig">defaults cover the catalog and key only <code>reports.to_insert</code></span>
       </div></li>
       <li><div class="node decision"><span class="kind">decision</span>
-        <span class="sig">map must cover the catalog exactly → ValueError at startup</span>
-        <span class="loc"><a href="../bases/bot_detector/firehose/core/server.py#L69">server.py:69</a></span>
+        <span class="sig">lists must cover the catalog exactly, no overlap → ValueError at startup</span>
+        <span class="loc"><a href="../bases/bot_detector/firehose/core/server.py#L68">server.py:68</a></span>
         <details class="code"><summary>code ▸</summary>
-<pre><code class="src">missing = set(TOPIC_MODELS) - set(settings.topic_access)
-if missing:
-    raise ValueError(f"TOPIC_ACCESS is missing topics: {sorted(missing)}")
-unknown = set(settings.topic_access) - set(TOPIC_MODELS)
-if unknown:
-    raise ValueError(f"TOPIC_ACCESS names unknown topics: {sorted(unknown)}")</code></pre>
-        </details>
-      </div></li>
-      <li><div class="node call"><span class="kind">call</span>
-        <span class="name">keyed_only_topics</span>
-        <span class="sig">(topic_access) → frozenset[str]</span>
-        <span class="loc"><a href="../bases/bot_detector/firehose/app/consumer/structs.py#L30">structs.py:30</a></span>
-        <details class="code"><summary>code ▸</summary>
-<pre><code class="src">def keyed_only_topics(topic_access: Mapping[str, TopicAccess]) -&gt; frozenset[str]:
-    return frozenset(
-        topic for topic, access in topic_access.items() if access == "keyed"
-    )</code></pre>
+<pre><code class="src">missing = set(TOPIC_MODELS) - settings.public_topics - settings.keyed_topics
+unknown = (settings.public_topics | settings.keyed_topics) - set(TOPIC_MODELS)
+overlap = settings.public_topics &amp; settings.keyed_topics
+…
+raise ValueError(f"PUBLIC_TOPICS and KEYED_TOPICS overlap: {sorted(overlap)}")
+keyed_only = frozenset(settings.keyed_topics)</code></pre>
         </details>
       </div></li>
     </ul>
   </li>
 </ul>
-<p>Example — make every topic public again without a code change (the env
-value replaces the default wholesale, so it must cover the catalog):</p>
-<p><code>TOPIC_ACCESS='{"players.scraped": "public", "players.not_found":
-"public", "reports.to_insert": "public", "predictions.to_insert":
-"public"}'</code></p>
+<p>Example — deploy with reports public: env values are plain csv, so they
+drop straight into a k8s container env (<code>KEYED_TOPICS</code> empty or
+omitted-default means no keyed topics, as long as
+<code>PUBLIC_TOPICS</code> covers the catalog):</p>
+<p><code>PUBLIC_TOPICS='players.scraped,players.not_found,reports.to_insert,predictions.to_insert'
+KEYED_TOPICS=''</code></p>
 
 <footer><a href="index.html">← docs index</a> · excerpts are trimmed to the
 relevant lines (<code>…</code> marks elisions); source of truth is the code —

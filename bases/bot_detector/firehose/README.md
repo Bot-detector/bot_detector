@@ -23,19 +23,13 @@ Dependency flow: `bases/bot_detector/firehose` imports
 Key policy: a full inbox drops messages while the connection is inside
 its join grace (`KICK_GRACE_S`, default 30) and kicks it (close 1013)
 once the grace is over - but a lone subscriber is never kicked; the
-pump waits instead. Topic access is configured per topic in
-`Settings.topic_access` (env `TOPIC_ACCESS`, json map): `"public"`
-streams to anonymous and keyed identities, `"keyed"` requires a valid
-api key with the `firehose.<topic>` scope and anonymous connects close
-4403. The map must cover the catalog exactly - create_app refuses
-missing and unknown entries, and the env value replaces the default
-wholesale. The default keys only `reports.to_insert`, which streams
-`delay_s` behind live (the DelayAdapter holds each message until its
-`report.ts` is old enough).
-
-Known limitation: the browser credential `?token=` appears in access
-logs (uvicorn logs the full request path); prefer the `x-api-key`
-header wherever a header is possible.
+pump waits instead. Topic access is configured as two topic lists in
+`Settings` (csv in env): topics in `KEYED_TOPICS` require a valid api
+key with the `firehose.<topic>` scope and anonymous connects close
+4403; topics in `PUBLIC_TOPICS` stream to anonymous too. Together the
+lists must cover the catalog exactly. The default keys only
+`reports.to_insert`, which streams `delay_s` behind live (the
+DelayAdapter holds each message until its `report.ts` is old enough).
 
 ## How to test this base
 
