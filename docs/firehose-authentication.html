@@ -393,7 +393,7 @@ return InvalidApiKey("not allowlisted")</code></pre>
               <li><div class="node data"><span class="kind">data</span>
                 <span class="name">→ AuthUser</span>
                 <span class="sig">(name, scopes)</span>
-                <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/auth.py#L20">auth.py:20</a> · <a href="../bases/bot_detector/firehose/api/dependencies.py#L47">dependencies.py:42</a></span>
+                <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/auth.py#L20">auth.py:20</a> · <a href="../bases/bot_detector/firehose/api/dependencies.py#L42">dependencies.py:42</a></span>
                 <details class="code"><summary>code ▸</summary>
 <pre><code class="src">class AuthUser(BaseModel):
     name: str
@@ -405,16 +405,12 @@ return InvalidApiKey("not allowlisted")</code></pre>
           <li>
             <div class="node decision"><span class="kind">decision</span>
               <span class="name">topic access gate</span>
-              <span class="sig">anonymous: topic ∈ public_topics · keyed: topic ∈ public ∪ keyed</span>
-              <span class="loc"><a href="../bases/bot_detector/firehose/api/dependencies.py#L40">dependencies.py:43</a></span>
+              <span class="sig">anonymous: topic ∈ public_topics · everyone: topic ∈ public ∪ keyed</span>
+              <span class="loc"><a href="../bases/bot_detector/firehose/api/dependencies.py#L38">dependencies.py:38</a></span>
               <details class="code"><summary>code ▸</summary>
 <pre><code class="src">if user.name == ANONYMOUS_USER and topic not in state.public_topics:
     raise WebSocketException(code=4403, reason="topic requires an api key")
-if (
-    user.name != ANONYMOUS_USER
-    and topic not in state.public_topics
-    and topic not in state.keyed_topics
-):
+if topic not in state.public_topics and topic not in state.keyed_topics:
     raise WebSocketException(code=4403, reason="topic not available")</code></pre>
               </details>
             </div>
@@ -440,14 +436,14 @@ keyed_topics=frozenset(settings.keyed_topics),</code></pre>
               </div></li>
               <li><div class="node close"><span class="kind">close</span>
                 <span class="name">4403</span> <span class="sig">"topic requires an api key"</span>
-                <span class="loc"><a href="../bases/bot_detector/firehose/api/dependencies.py#L40">dependencies.py:40</a></span>
+                <span class="loc"><a href="../bases/bot_detector/firehose/api/dependencies.py#L39">dependencies.py:39</a></span>
                 <details class="code"><summary>code ▸</summary>
 <pre><code class="src">raise WebSocketException(code=4403, reason="topic requires an api key")</code></pre>
                 </details>
               </div></li>
               <li><div class="node close"><span class="kind">close</span>
                 <span class="name">4403</span> <span class="sig">"topic not available"</span>
-                <span class="loc"><a href="../bases/bot_detector/firehose/api/dependencies.py#L46">dependencies.py:46</a></span>
+                <span class="loc"><a href="../bases/bot_detector/firehose/api/dependencies.py#L41">dependencies.py:41</a></span>
                 <details class="code"><summary>code ▸</summary>
 <pre><code class="src">raise WebSocketException(code=4403, reason="topic not available")</code></pre>
                 </details>
