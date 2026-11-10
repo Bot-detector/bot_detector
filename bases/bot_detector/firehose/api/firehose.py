@@ -1,6 +1,8 @@
 import asyncio
 import logging
 
+from bot_detector.firehose.api.dependencies import auth_user
+from bot_detector.firehose.app.auth.auth import AuthUser
 from bot_detector.firehose.app.consumer import ALLOWED_TOPICS
 from bot_detector.firehose.app.exchange import InboxClosed, KICK_CODE, KICK_REASON
 from bot_detector.firehose.app.metrics import (
@@ -9,39 +11,30 @@ from bot_detector.firehose.app.metrics import (
     FIREHOSE_MESSAGES,
 )
 from bot_detector.firehose.app.state import FirehoseState
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect
 
 router = APIRouter(tags=["Firehose"])
 logger = logging.getLogger(__name__)
 
 
-@router.get("/firehose/topics", summary="Available firehose topics")
-async def firehose_topics() -> list[str]:
-    return ALLOWED_TOPICS
+@router.get("/firehose/topics", summary="Topics streamable without an api key")
+async def firehose_topics(request: Request) -> list[str]:
+    # no auth context: the anonymous persona; keyed identities use /me
+    state: FirehoseState = request.app.state.firehose
+    return sorted(state.public_topics)
 
 
 @router.websocket("/firehose/{topic}")
-async def firehose(websocket: WebSocket, topic: str) -> None:
+async def firehose(
+    websocket: WebSocket,
+    topic: str,
+    user: AuthUser = Depends(auth_user),
+) -> None:
     if topic not in ALLOWED_TOPICS:
         await websocket.close(code=4404, reason="unknown topic")
         return
 
-    # header for systems; ?token= for browsers (a websocket cannot set
-    # headers from javascript). ?anonymous=1 forces the shared anonymous
-    # group.
-    force_anonymous = websocket.query_params.get("anonymous") == "1"
-    api_key = None
-    if not force_anonymous:
-        api_key = websocket.headers.get("x-api-key") or websocket.query_params.get(
-            "token"
-        )
     state: FirehoseState = websocket.app.state.firehose
-
-    user = await state.auth_repo.authenticate(api_key=api_key, topic=topic)
-    if isinstance(user, Exception):
-        await websocket.close(code=4401, reason="invalid api key")
-        return
-
     queue = state.queue_manager.get(user=user, topic=topic)
     if isinstance(queue, Exception):
         logger.error(f"failed to create consumer: {queue}")

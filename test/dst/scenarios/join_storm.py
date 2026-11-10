@@ -22,6 +22,7 @@ os.environ.setdefault("BOOTSTRAP_SERVERS", "localhost:9092")
 os.environ.setdefault("DATABASE_URL", "mysql+asyncmy://sim:sim@localhost/sim")
 
 from bot_detector.firehose.api.firehose import firehose as firehose_route  # noqa: E402
+from bot_detector.firehose.app.auth.auth import ANONYMOUS  # noqa: E402
 from bot_detector.firehose.app.consumer.queue_repo import QueueRepo  # noqa: E402
 from bot_detector.firehose.core.config import Settings  # noqa: E402
 from bot_detector.firehose.core.server import create_app  # noqa: E402
@@ -144,6 +145,7 @@ async def main(**kwargs) -> JoinStormReport:
                     firehose_route(
                         websocket=websocket,  # type: ignore[arg-type]
                         topic=TOPIC,
+                        user=ANONYMOUS,
                     ),
                     name=f"route-{i}",
                 )

@@ -39,12 +39,11 @@ def manager() -> ConnectionManager:
 
 
 @pytest.mark.asyncio
-async def test_connect_accepts_registers_and_returns_id(manager: ConnectionManager):
+async def test_connect_registers_and_returns_id(manager: ConnectionManager):
     ws = FakeWebSocket()
 
     conn_id = await manager.connect(websocket=ws, group="g")
 
-    assert ws.accepted is True
     assert isinstance(conn_id, str) and conn_id
     assert manager.group(conn_id) == "g"
     assert manager.count(group="g") == 1

@@ -10,7 +10,7 @@ from bot_detector.firehose.api import firehose, me
 from bot_detector.firehose.app.auth.auth import ApiKeyAuthRepo
 from bot_detector.firehose.app.auth.discord import DiscordOAuth
 from bot_detector.firehose.app.connection_manager import ConnectionManager
-from bot_detector.firehose.app.consumer import QueueRepo
+from bot_detector.firehose.app.consumer import TOPIC_MODELS, QueueRepo
 from bot_detector.firehose.app.exchange import Exchange
 from bot_detector.firehose.app.queue_manager import QueueManager
 from bot_detector.firehose.app.state import FirehoseState
@@ -62,6 +62,13 @@ def create_app(settings: Settings) -> FastAPI:
     queue_repo = QueueRepo(settings=settings)
     session_factory, _ = get_session_factory(DatabaseSettings())
     exchange = Exchange(grace_s=settings.kick_grace_s)
+    # unknown topic names are refused: a typo would otherwise be
+    # silently inert. a topic in neither list is simply disabled
+    unknown = (settings.public_topics | settings.keyed_topics) - set(TOPIC_MODELS)
+    if unknown:
+        raise ValueError(
+            f"PUBLIC_TOPICS/KEYED_TOPICS name unknown topics: {sorted(unknown)}"
+        )
     _app.state.firehose = FirehoseState(
         settings=settings,
         queue_repo=queue_repo,
@@ -69,6 +76,8 @@ def create_app(settings: Settings) -> FastAPI:
         queue_manager=QueueManager(queue_repo=queue_repo, exchange=exchange),
         auth_repo=ApiKeyAuthRepo(session_factory=session_factory),
         connection_manager=ConnectionManager(),
+        public_topics=frozenset(settings.public_topics),
+        keyed_topics=frozenset(settings.keyed_topics),
     )
     init_routers(_app=_app)
     return _app

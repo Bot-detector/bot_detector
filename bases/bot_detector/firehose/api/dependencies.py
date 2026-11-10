@@ -2,7 +2,9 @@
 
 from typing import Annotated
 
-from fastapi import Security
+from bot_detector.firehose.app.auth.auth import ANONYMOUS_USER, AuthUser
+from bot_detector.firehose.app.state import FirehoseState
+from fastapi import Security, WebSocket, WebSocketException
 from fastapi.security import APIKeyHeader
 
 API_KEY_HEADER = APIKeyHeader(
@@ -12,3 +14,29 @@ API_KEY_HEADER = APIKeyHeader(
 )
 
 ApiKey = Annotated[str | None, Security(API_KEY_HEADER)]
+
+
+async def auth_user(websocket: WebSocket, topic: str) -> AuthUser:
+    """Authenticate a websocket for the topic; the route's DI edge.
+
+    Accepts the handshake first, so rejections arrive as websocket
+    close frames (4401/4403) instead of an undifferentiated http 403.
+    """
+    await websocket.accept()
+    state: FirehoseState = websocket.app.state.firehose
+
+    force_anonymous = websocket.query_params.get("anonymous") == "1"
+    header_key = websocket.headers.get("x-api-key")  # systems
+    token = websocket.query_params.get("token")  # browsers
+    api_key = None if force_anonymous else header_key or token
+
+    user = await state.auth_repo.authenticate(api_key=api_key, topic=topic)
+    if isinstance(user, Exception):
+        raise WebSocketException(code=4401, reason="invalid api key")
+
+    if user.name == ANONYMOUS_USER and topic not in state.public_topics:
+        raise WebSocketException(code=4403, reason="topic requires an api key")
+
+    if topic not in state.public_topics and topic not in state.keyed_topics:
+        raise WebSocketException(code=4403, reason="topic not available")
+    return user

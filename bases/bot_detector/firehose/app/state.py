@@ -20,6 +20,8 @@ class FirehoseState:
     queue_manager: QueueManager
     auth_repo: ApiKeyAuthRepo
     connection_manager: ConnectionManager
+    public_topics: frozenset[str]
+    keyed_topics: frozenset[str]
     http_session: ClientSession | None = None
     discord_oauth: DiscordOAuth | None = None
 

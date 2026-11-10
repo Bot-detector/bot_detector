@@ -10,14 +10,6 @@ ANONYMOUS_CONSUMER_GROUP_PREFIX = "fh-anonymous"
 KEYED_CONSUMER_GROUP_PREFIX = "fh"
 
 
-def report_ts(message: BaseModel) -> float | None:
-    """Event timestamp (epoch seconds) of a reports.to_insert message."""
-    ts = getattr(getattr(message, "report", None), "ts", None)
-    if isinstance(ts, (int, float)) and not isinstance(ts, bool) and ts >= 0:
-        return float(ts)
-    return None
-
-
 # hardcoded catalog: topics exposed by the firehose -> message model
 # (add entries here to expose more topics; each needs a `firehose.<topic>`
 # permission for keyed access)

@@ -18,8 +18,6 @@ per-group feed totals so the isolation is auditable.
 import asyncio
 import logging
 import os
-import types
-from collections.abc import Awaitable, Callable
 
 os.environ.setdefault("BOOTSTRAP_SERVERS", "localhost:9092")
 os.environ.setdefault("DATABASE_URL", "mysql+asyncmy://sim:sim@localhost/sim")
@@ -79,25 +77,6 @@ class KeyedIsolationReport(BaseModel):
     produced_per_group: dict[str, int]
 
 
-def _make_auth_patch() -> Callable[..., Awaitable[AuthUser]]:
-    """Authenticate key-<n> tokens as discord users; everyone anonymous.
-
-    Mirrors the product contract: a registered, allowlisted token maps
-    to ``discord_<identity>`` with the topic permission; an absent
-    token maps to the shared anonymous user.
-    """
-
-    async def authenticate(self: object, api_key: str | None, topic: str) -> AuthUser:
-        if api_key and api_key.startswith("key-"):
-            return AuthUser(
-                name=f"discord_{api_key.removeprefix('key-')}",
-                scopes=[f"firehose.{topic}"],
-            )
-        return ANONYMOUS
-
-    return authenticate
-
-
 async def main(**kwargs) -> KeyedIsolationReport:
     """Run fast keyed users next to a slow anonymous fleet."""
     config = KeyedIsolationConfig(**kwargs)
@@ -123,10 +102,6 @@ async def main(**kwargs) -> KeyedIsolationReport:
         )
         app = create_app(
             Settings(port=0, metrics_port=0, kick_grace_s=config.kick_grace_s)
-        )
-        state = app.state.firehose
-        state.auth_repo.authenticate = types.MethodType(  # type: ignore[method-assign]
-            _make_auth_patch(), state.auth_repo
         )
         base = {
             kind: {
@@ -228,10 +203,21 @@ async def main(**kwargs) -> KeyedIsolationReport:
 
 
 def _route_task(websocket: FakeWebSocket, name: str) -> asyncio.Task:
+    # the route's user is injected directly; mirror the product identity
+    # mapping: key-<n> tokens authenticate as discord users, everyone
+    # else is anonymous
+    user = ANONYMOUS
+    api_key = websocket.headers.get("x-api-key")
+    if api_key and api_key.startswith("key-"):
+        user = AuthUser(
+            name=f"discord_{api_key.removeprefix('key-')}",
+            scopes=[f"firehose.{TOPIC}"],
+        )
     return asyncio.create_task(
         firehose_route(
             websocket=websocket,  # type: ignore[arg-type]
             topic=TOPIC,
+            user=user,
         ),
         name=f"route-{name}",
     )

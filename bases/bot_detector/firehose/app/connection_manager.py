@@ -15,8 +15,6 @@ SEND_TIMEOUT_S = 2.0
 class WebsocketLike(Protocol):
     """Minimal contract the manager needs from a websocket."""
 
-    async def accept(self) -> None: ...
-
     async def send_text(self, data: str) -> None: ...
 
     async def close(self, code: int = 1000, reason: str | None = None) -> None: ...
@@ -35,17 +33,18 @@ class ConnectionManager:
     """The interface between the firehose and websockets.
 
     Owns the connection registry (id -> websocket, grouped by consumer
-    group) and every socket operation: accept, bounded send, close.
-    Callers never touch the websocket itself; a failed or timed-out send
-    raises, and the caller closes the connection via `close`.
+    group) and every socket operation after the handshake: bounded
+    send, close. The auth dependency accepts the handshake before the
+    access gates so rejections carry application close codes; a failed
+    or timed-out send raises, and the caller closes the connection via
+    `close`.
     """
 
     def __init__(self) -> None:
         self._connections: dict[str, Connection] = {}
 
     async def connect(self, websocket: WebsocketLike, group: str) -> str:
-        """Accept the socket, register it and return its connection id."""
-        await websocket.accept()
+        """Register the (already accepted) socket and return its id."""
         conn_id = uuid.uuid4().hex
         self._connections[conn_id] = Connection(
             id=conn_id, websocket=websocket, group=group

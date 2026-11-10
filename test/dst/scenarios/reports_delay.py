@@ -36,6 +36,7 @@ os.environ.setdefault("DATABASE_URL", "mysql+asyncmy://sim:sim@localhost/sim")
 import orjson  # noqa: E402
 from bot_detector.firehose.api.firehose import firehose as firehose_route  # noqa: E402
 from bot_detector.firehose.app import queue_manager  # noqa: E402
+from bot_detector.firehose.app.auth.auth import AuthUser  # noqa: E402
 from bot_detector.firehose.app.consumer.queue_repo import QueueRepo  # noqa: E402
 from bot_detector.firehose.app.exchange.delay import DelayAdapter  # noqa: E402
 from bot_detector.firehose.core.config import Settings  # noqa: E402
@@ -59,6 +60,10 @@ from dst.systems import KafkaConfig, KafkaFaults  # noqa: E402
 logger = logging.getLogger(__name__)
 
 TOPIC = "reports.to_insert"
+
+# reports is keyed-only: the route is driven directly, so the auth
+# dependency is bypassed and the keyed identity is injected here
+SUBSCRIBER = AuthUser(name="system-one", scopes=["firehose.reports.to_insert"])
 
 
 class ReportsDelayConfig(BaseModel):
@@ -184,6 +189,7 @@ async def _run(config: ReportsDelayConfig) -> ReportsDelayReport:
         firehose_route(
             websocket=websocket,  # type: ignore[arg-type]
             topic=TOPIC,
+            user=SUBSCRIBER,
         ),
         name="route-0",
     )

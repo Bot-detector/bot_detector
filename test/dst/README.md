@@ -189,11 +189,13 @@ rule.
 
 ### reports_delay - the 2h emission delay over a full day
 
-The reports.to_insert topic with the product's real DelayAdapter. The
-broker produces fresh reports from t=0, each ts generated on the spot
-and jittered 0..300s into the past. The adapter locks on the first
-message, so the first ~2h are silent; then the stream flows 2h behind
-arrivals, and at the end the last ~2h sit in kafka:
+The reports.to_insert topic (keyed-only; the scenario injects a keyed
+identity since it drives the route function directly) with the
+product's real DelayAdapter. The broker produces fresh reports from
+t=0, each ts generated on the spot and jittered 0..300s into the past.
+The adapter locks on the first message, so the first ~2h are silent;
+then the stream flows 2h behind arrivals, and at the end the last ~2h
+sit in kafka:
 
 ```sh
 uv run python -m dst.main dst.scenarios.reports_delay \
