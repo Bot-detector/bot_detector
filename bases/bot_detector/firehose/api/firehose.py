@@ -1,7 +1,10 @@
 import asyncio
 import logging
 
-from bot_detector.firehose.app.consumer import ALLOWED_TOPICS
+from bot_detector.firehose.app.auth.auth import ANONYMOUS_USER
+from bot_detector.firehose.app.consumer import (
+    ALLOWED_TOPICS,
+)
 from bot_detector.firehose.app.exchange import InboxClosed, KICK_CODE, KICK_REASON
 from bot_detector.firehose.app.metrics import (
     FIREHOSE_BYTES,
@@ -9,15 +12,18 @@ from bot_detector.firehose.app.metrics import (
     FIREHOSE_MESSAGES,
 )
 from bot_detector.firehose.app.state import FirehoseState
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
 
 router = APIRouter(tags=["Firehose"])
 logger = logging.getLogger(__name__)
 
 
-@router.get("/firehose/topics", summary="Available firehose topics")
-async def firehose_topics() -> list[str]:
-    return ALLOWED_TOPICS
+@router.get("/firehose/topics", summary="Topics streamable without an api key")
+async def firehose_topics(request: Request) -> list[str]:
+    # no auth context on this endpoint: it advertises the anonymous
+    # persona; keyed identities get their topics from /me
+    state: FirehoseState = request.app.state.firehose
+    return state.anonymous_topics
 
 
 @router.websocket("/firehose/{topic}")
@@ -40,6 +46,12 @@ async def firehose(websocket: WebSocket, topic: str) -> None:
     user = await state.auth_repo.authenticate(api_key=api_key, topic=topic)
     if isinstance(user, Exception):
         await websocket.close(code=4401, reason="invalid api key")
+        return
+
+    # anonymous is fine for public topics, but keyed-only topics
+    # (Settings.topic_access) refuse the shared anonymous stream
+    if user.name == ANONYMOUS_USER and topic in state.keyed_only_topics:
+        await websocket.close(code=4403, reason="topic requires an api key")
         return
 
     queue = state.queue_manager.get(user=user, topic=topic)

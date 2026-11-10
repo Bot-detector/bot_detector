@@ -4,15 +4,21 @@ from types import SimpleNamespace
 
 import pytest
 from bot_detector.event_queue.core import QueueConsumer
-from bot_detector.event_queue.structs import ScrapedStruct
+from bot_detector.event_queue.structs import ReportsToInsertStruct, ScrapedStruct
 from bot_detector.firehose.api.firehose import firehose
 from bot_detector.firehose.app.auth.auth import ANONYMOUS, AuthUser
 from bot_detector.firehose.app.connection_manager import ConnectionManager
+from bot_detector.firehose.app.consumer import (
+    ALLOWED_TOPICS,
+    anonymous_topics,
+    keyed_only_topics,
+)
 from bot_detector.firehose.app.exchange import Exchange
 from bot_detector.firehose.app.queue_manager import QueueManager
 from bot_detector.firehose.core.config import Settings
 
 TOPIC = "players.scraped"
+REPORTS_TOPIC = "reports.to_insert"
 N = 3
 
 
@@ -57,6 +63,13 @@ class FakeAuthRepo:
         return ANONYMOUS
 
 
+class FakeKeyedAuthRepo:
+    """Stands in for a valid api key: every topic authenticates keyed."""
+
+    async def authenticate(self, api_key: str | None, topic: str) -> AuthUser:
+        return AuthUser(name="system-one", scopes=[f"firehose.{topic}"])
+
+
 class FakeWebSocket:
     def __init__(self, state):
         self.sent: list[str] = []
@@ -87,18 +100,24 @@ class FakeWebSocket:
         return await self._incoming.get()
 
 
-def make_state() -> tuple[SimpleNamespace, FakeConsumer]:
+def make_state(
+    auth_repo: FakeAuthRepo | FakeKeyedAuthRepo | None = None,
+) -> tuple[SimpleNamespace, FakeConsumer]:
     repo = FakeQueueRepo()
     consumer = FakeConsumer(group=f"fh-anonymous-{TOPIC}")
     repo.consumers[consumer.group] = consumer  # create_consumer reuses this
     exchange = Exchange()
+    settings = Settings()
+    keyed_only = keyed_only_topics(topic_access=settings.topic_access)
     state = SimpleNamespace(
-        settings=Settings(),
+        settings=settings,
         queue_repo=repo,
         exchange=exchange,
         queue_manager=QueueManager(queue_repo=repo, exchange=exchange),
-        auth_repo=FakeAuthRepo(),
+        auth_repo=auth_repo or FakeAuthRepo(),
         connection_manager=ConnectionManager(),
+        keyed_only_topics=keyed_only,
+        anonymous_topics=anonymous_topics(ALLOWED_TOPICS, keyed_only),
         http_session=None,
         discord_oauth=None,
     )
@@ -143,6 +162,43 @@ async def test_unknown_topic_closes_with_4404():
 
     assert ws.closed == (4404, "unknown topic")
     assert ws.accepted is False
+
+
+@pytest.mark.asyncio
+async def test_anonymous_connect_to_keyed_only_topic_closes_4403():
+    state, _ = make_state()
+    ws = FakeWebSocket(state=state)
+
+    await firehose(websocket=ws, topic=REPORTS_TOPIC)
+
+    assert ws.closed == (4403, "topic requires an api key")
+    assert ws.accepted is False
+
+
+@pytest.mark.asyncio
+async def test_keyed_connection_streams_keyed_only_topic():
+    state, _ = make_state(auth_repo=FakeKeyedAuthRepo())
+    # the route creates the consumer for the reports group; seed it
+    # here so create_consumer reuses this instance
+    consumer = FakeConsumer(group=f"fh-anonymous-{REPORTS_TOPIC}")
+    state.queue_repo.consumers[consumer.group] = consumer
+    ws = FakeWebSocket(state=state)
+    ws.query_params = {}  # no anonymous flag: the api-key path
+
+    task = asyncio.create_task(firehose(websocket=ws, topic=REPORTS_TOPIC))
+    try:
+        await wait_for(lambda: ws.accepted)
+        consumer.messages = _report_messages()
+
+        await wait_for(lambda: len(ws.sent) >= N)
+
+        got = [json.loads(m)["report"]["reporter_id"] for m in ws.sent]
+        assert got == list(range(N))
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+    assert ws.closed is None
 
 
 @pytest.mark.asyncio
@@ -198,6 +254,23 @@ def _messages() -> list[ScrapedStruct]:
             metadata={"version": 1, "source": "test"},
             player_data={"id": i, "name": f"player_{i}"},
             highscore_data=None,
+        )
+        for i in range(N)
+    ]
+
+
+def _report_messages() -> list[ReportsToInsertStruct]:
+    return [
+        ReportsToInsertStruct.model_validate(
+            {
+                "metadata": {"version": 1, "source": "test"},
+                "report": {
+                    "reporter_id": i,
+                    "reported_id": i + 1,
+                    "ts": 1_000 + i,
+                    "equipment": {},
+                },
+            }
         )
         for i in range(N)
     ]

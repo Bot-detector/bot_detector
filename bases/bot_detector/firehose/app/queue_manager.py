@@ -12,9 +12,7 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
-# emission delay per topic; unknown topics stream live. a hold for a
-# disabled topic (reports.to_insert is out of consumer.TOPIC_MODELS)
-# is inert and kept so a re-enable restores the delay automatically
+# emission delay per topic; unknown topics stream live
 TOPIC_HOLDS: dict[str, DelayAdapter] = {
     "reports.to_insert": DelayAdapter(delay_s=2 * 60 * 60),
 }

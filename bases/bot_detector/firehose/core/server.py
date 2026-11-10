@@ -10,6 +10,12 @@ from bot_detector.firehose.api import firehose, me
 from bot_detector.firehose.app.auth.auth import ApiKeyAuthRepo
 from bot_detector.firehose.app.auth.discord import DiscordOAuth
 from bot_detector.firehose.app.connection_manager import ConnectionManager
+from bot_detector.firehose.app.consumer import (
+    ALLOWED_TOPICS,
+    TOPIC_MODELS,
+    anonymous_topics,
+    keyed_only_topics,
+)
 from bot_detector.firehose.app.consumer import QueueRepo
 from bot_detector.firehose.app.exchange import Exchange
 from bot_detector.firehose.app.queue_manager import QueueManager
@@ -62,6 +68,11 @@ def create_app(settings: Settings) -> FastAPI:
     queue_repo = QueueRepo(settings=settings)
     session_factory, _ = get_session_factory(DatabaseSettings())
     exchange = Exchange(grace_s=settings.kick_grace_s)
+    # fail fast on an access map that names topics outside the catalog
+    unknown = set(settings.topic_access) - set(TOPIC_MODELS)
+    if unknown:
+        raise ValueError(f"TOPIC_ACCESS names unknown topics: {sorted(unknown)}")
+    keyed_only = keyed_only_topics(topic_access=settings.topic_access)
     _app.state.firehose = FirehoseState(
         settings=settings,
         queue_repo=queue_repo,
@@ -69,6 +80,8 @@ def create_app(settings: Settings) -> FastAPI:
         queue_manager=QueueManager(queue_repo=queue_repo, exchange=exchange),
         auth_repo=ApiKeyAuthRepo(session_factory=session_factory),
         connection_manager=ConnectionManager(),
+        keyed_only_topics=keyed_only,
+        anonymous_topics=anonymous_topics(ALLOWED_TOPICS, keyed_only),
     )
     init_routers(_app=_app)
     return _app

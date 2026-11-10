@@ -21,7 +21,8 @@ class MeResponse(BaseModel):
 
     - user None + allowed=false  -> invalid credential
     - user set + allowed=false   -> known identity, not allowlisted
-    - anonymous                  -> allowed, every topic (shared group)
+    - anonymous                  -> allowed, every anonymous-visible
+                                    topic (shared group)
     """
 
     user: str | None = None
@@ -56,7 +57,7 @@ async def me(request: Request, api_key: ApiKey) -> MeResponse:
         logger.info(f"credential rejected user={identity.user}")
         return MeResponse(user=identity.user, token=None, allowed=False, topics=[])
     if identity.user == ANONYMOUS_USER:
-        topics = ALLOWED_TOPICS
+        topics = state.anonymous_topics
     else:
         topics = firehose_topics(identity.scopes)
     return MeResponse(user=identity.user, token=api_key, allowed=True, topics=topics)

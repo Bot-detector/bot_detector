@@ -47,11 +47,9 @@ class ReportToInsertStruct(BaseModel):
 def create_reports_to_insert(
     players: list[PlayerStruct], reports_per_player: int
 ) -> Generator[ReportToInsertStruct, None, None]:
-    # spread reports over the last 10h so ingestion consumers see both
-    # fresh and older events; the firehose reports topic is disabled
-    # (out of firehose TOPIC_MODELS), so its 2h delay window is not
-    # streaming. the offsets come from the seeded RNG, so runs are
-    # reproducible up to the wall-clock window
+    # spread reports over the last 10h so the firehose 2h delay window has
+    # both eligible and not-yet-eligible messages; the offsets come from the
+    # seeded RNG, so runs are reproducible up to the wall-clock window
     NOW_MINUS_10H_S = 10 * 60 * 60
     base_ts = int(time.time())
     for player in players:
