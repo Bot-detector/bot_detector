@@ -23,9 +23,9 @@ Dependency flow: `bases/bot_detector/firehose` imports
 Key policy: a full inbox drops messages while the connection is inside
 its join grace (`KICK_GRACE_S`, default 30) and kicks it (close 1013)
 once the grace is over - but a lone subscriber is never kicked; the
-pump waits instead. `reports.to_insert` streams `delay_s` behind live
-(the DelayAdapter holds each message until its `report.ts` is old
-enough).
+pump waits instead. `reports.to_insert` is disabled (out of
+`TOPIC_MODELS`, connects close 4404); its 2h `DelayAdapter` hold stays
+in `TOPIC_HOLDS` for a one-line re-enable.
 
 ## How to test this base
 
@@ -55,10 +55,6 @@ uv run python -m dst.main dst.scenarios.join_storm --json-pretty
 
 # keyed users isolated from a degrading anonymous fleet
 uv run python -m dst.main dst.scenarios.keyed --json-pretty
-
-# the 2h emission delay over a simulated day (note --start: epoch clock)
-uv run python -m dst.main dst.scenarios.reports_delay \
-    --start 2000000000 --json-pretty
 
 # broker outage: pump backs off, arrivals queue, stream resumes
 uv run python -m dst.main dst.scenarios.firehose \

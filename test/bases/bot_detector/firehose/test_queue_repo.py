@@ -46,16 +46,15 @@ def test_resolve_consumer_group_is_topic_scoped(repo: QueueRepo):
     user = AuthUser(name="system-one")
     assert repo.resolve_consumer_group(
         user=user, topic=TOPIC
-    ) != repo.resolve_consumer_group(user=user, topic="reports.to_insert")
+    ) != repo.resolve_consumer_group(user=user, topic="players.not_found")
 
 
-def test_create_consumer_reports_uses_reports_struct(repo: QueueRepo):
+def test_create_consumer_reports_topic_is_disabled(repo: QueueRepo):
+    # reports.to_insert is out of TOPIC_MODELS; a consumer must be
+    # refused, which is what closes websocket connects with 4404
     consumer = repo.create_consumer(user=ANONYMOUS, topic="reports.to_insert")
 
-    assert not isinstance(consumer, Exception)
-    backend = consumer._backend
-    assert isinstance(backend, AIOKafkaConsumerAdapter)
-    assert backend.config.topic == "reports.to_insert"
+    assert isinstance(consumer, Exception)
 
 
 def test_create_consumer_predictions_uses_predictions_struct(repo: QueueRepo):
