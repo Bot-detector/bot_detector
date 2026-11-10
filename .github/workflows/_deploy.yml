@@ -26,7 +26,7 @@ jobs:
     runs-on: [self-hosted, "hetzner"]
     steps:
       - name: Checkout Target Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
         with:
           repository: Bot-detector/bot-detector-k8s
 
