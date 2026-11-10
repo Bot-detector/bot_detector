@@ -1,14 +1,13 @@
 from bot_detector.firehose.api.me import firehose_topics
-from bot_detector.firehose.app.consumer import ALLOWED_TOPICS
 from bot_detector.firehose.core.config import Settings
 
 REPORTS = "reports.to_insert"
 
 
-def test_settings_defaults_cover_the_catalog_and_key_reports():
+def test_settings_default_keys_only_reports():
     settings = Settings()
-    assert settings.public_topics | settings.keyed_topics == set(ALLOWED_TOPICS)
     assert settings.keyed_topics == {REPORTS}
+    assert "players.scraped" in settings.public_topics
 
 
 def test_topic_lists_parse_csv_from_env():
@@ -21,8 +20,15 @@ def test_topic_lists_parse_csv_from_env():
 
 
 def test_legacy_reports_scope_projects_to_the_topic():
-    assert firehose_topics(scopes=["firehose.reports.to_insert"]) == [REPORTS]
+    topics = firehose_topics(
+        scopes=["firehose.reports.to_insert"],
+        streamable={REPORTS, "players.scraped"},
+    )
+    assert topics == [REPORTS]
 
 
-def test_wildcard_scope_includes_keyed_only_topic():
-    assert REPORTS in firehose_topics(scopes=["firehose.*"])
+def test_wildcard_scope_projects_all_streamable_topics():
+    topics = firehose_topics(
+        scopes=["firehose.*"], streamable={REPORTS, "players.scraped"}
+    )
+    assert topics == ["players.scraped", REPORTS]

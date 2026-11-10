@@ -20,10 +20,10 @@ class Settings(BaseSettings):
     # because a client is slow. within the grace a full inbox drops
     # messages instead of kicking
     kick_grace_s: float = 30.0
-    # per-topic anonymous access: keyed topics need a valid api key with
-    # the `firehose.<topic>` scope, public topics stream to anonymous
-    # too; together they must cover the catalog exactly. csv in env:
-    # PUBLIC_TOPICS=players.scraped,players.not_found KEYED_TOPICS=reports.to_insert
+    # per-topic access as two allowlists: anonymous clients stream
+    # public_topics, keyed identities (valid api key + `firehose.<topic>`
+    # scope) stream keyed_topics; a topic may be in both or in neither
+    # (disabled). csv in env: PUBLIC_TOPICS=a,b KEYED_TOPICS=c
     public_topics: Annotated[set[str], NoDecode] = {
         "players.scraped",
         "players.not_found",

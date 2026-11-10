@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 async def firehose_topics(request: Request) -> list[str]:
     # no auth context: the anonymous persona; keyed identities use /me
     state: FirehoseState = request.app.state.firehose
-    return [t for t in ALLOWED_TOPICS if t not in state.keyed_only_topics]
+    return sorted(state.public_topics)
 
 
 @router.websocket("/firehose/{topic}")

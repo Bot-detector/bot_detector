@@ -20,8 +20,10 @@ class FirehoseState:
     queue_manager: QueueManager
     auth_repo: ApiKeyAuthRepo
     connection_manager: ConnectionManager
-    # resolved from settings.public_topics / keyed_topics at startup
-    keyed_only_topics: frozenset[str]
+    # per-client-type topic allowlists, from settings: anonymous
+    # clients stream public topics, keyed identities keyed topics
+    public_topics: frozenset[str]
+    keyed_topics: frozenset[str]
     http_session: ClientSession | None = None
     discord_oauth: DiscordOAuth | None = None
 

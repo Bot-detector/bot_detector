@@ -23,13 +23,14 @@ Dependency flow: `bases/bot_detector/firehose` imports
 Key policy: a full inbox drops messages while the connection is inside
 its join grace (`KICK_GRACE_S`, default 30) and kicks it (close 1013)
 once the grace is over - but a lone subscriber is never kicked; the
-pump waits instead. Topic access is configured as two topic lists in
-`Settings` (csv in env): topics in `KEYED_TOPICS` require a valid api
-key with the `firehose.<topic>` scope and anonymous connects close
-4403; topics in `PUBLIC_TOPICS` stream to anonymous too. Together the
-lists must cover the catalog exactly. The default keys only
-`reports.to_insert`, which streams `delay_s` behind live (the
-DelayAdapter holds each message until its `report.ts` is old enough).
+pump waits instead. Topic access is configured as two topic allowlists in
+`Settings` (csv in env): anonymous clients stream topics in
+`PUBLIC_TOPICS`, keyed identities (valid api key + the
+`firehose.<topic>` scope) stream topics in `KEYED_TOPICS`. A topic may
+be in both lists or in neither (disabled), and unknown topic names
+refuse to boot. The default keys only `reports.to_insert`, which
+streams `delay_s` behind live (the DelayAdapter holds each message
+until its `report.ts` is old enough).
 
 ## How to test this base
 

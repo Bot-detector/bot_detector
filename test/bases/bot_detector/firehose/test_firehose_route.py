@@ -117,7 +117,8 @@ def make_state(
         queue_manager=QueueManager(queue_repo=repo, exchange=exchange),
         auth_repo=auth_repo or FakeAuthRepo(),
         connection_manager=ConnectionManager(),
-        keyed_only_topics={"reports.to_insert"},
+        public_topics={"players.scraped"},
+        keyed_topics={"reports.to_insert"},
         http_session=None,
         discord_oauth=None,
     )
@@ -304,3 +305,19 @@ async def test_auth_dependency_closes_invalid_credentials():
         await auth_user(websocket=ws, topic=TOPIC)
 
     assert (raised.value.code, raised.value.reason) == (4401, "invalid api key")
+
+
+@pytest.mark.asyncio
+async def test_auth_dependency_closes_keyed_on_disabled_topics():
+    # players.not_found is in neither list: disabled for everyone
+    state, _ = make_state(auth_repo=FakeKeyedAuthRepo())
+    ws = FakeWebSocket(state=state)
+    ws.query_params = {}
+
+    with pytest.raises(WebSocketException) as raised:
+        await auth_user(websocket=ws, topic="players.not_found")
+
+    assert (raised.value.code, raised.value.reason) == (
+        4403,
+        "topic not available",
+    )

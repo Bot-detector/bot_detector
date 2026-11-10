@@ -36,7 +36,16 @@ async def auth_user(websocket: WebSocket, topic: str) -> AuthUser:
     user = await state.auth_repo.authenticate(api_key=api_key, topic=topic)
     if isinstance(user, Exception):
         raise WebSocketException(code=4401, reason="invalid api key")
-    # keyed-only topics refuse the anonymous shared stream
-    if user.name == ANONYMOUS_USER and topic in state.keyed_only_topics:
+    # topic policy: anonymous clients stream public topics; keyed
+    # identities (scope-checked above) stream any listed topic — a
+    # topic in both lists streams to both, a topic in neither is
+    # disabled
+    if user.name == ANONYMOUS_USER and topic not in state.public_topics:
         raise WebSocketException(code=4403, reason="topic requires an api key")
+    if (
+        user.name != ANONYMOUS_USER
+        and topic not in state.public_topics
+        and topic not in state.keyed_topics
+    ):
+        raise WebSocketException(code=4403, reason="topic not available")
     return user

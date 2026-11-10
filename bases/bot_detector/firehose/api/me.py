@@ -1,11 +1,11 @@
 import logging
+from collections.abc import Set as AbstractSet
 
 from bot_detector.firehose.api.dependencies import ApiKey
 from bot_detector.firehose.app.auth.auth import (
     ANONYMOUS_USER,
     WILDCARD_SCOPE,
 )
-from bot_detector.firehose.app.consumer import ALLOWED_TOPICS
 from bot_detector.firehose.app.state import FirehoseState
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
@@ -30,16 +30,15 @@ class MeResponse(BaseModel):
     topics: list[str] = []
 
 
-def firehose_topics(scopes: list[str]) -> list[str]:
-    """Project `firehose.<topic>` scopes onto the topic catalog."""
+def firehose_topics(scopes: list[str], streamable: AbstractSet[str]) -> list[str]:
+    """Project `firehose.<topic>` scopes onto the streamable topics."""
     if WILDCARD_SCOPE in scopes:
-        return ALLOWED_TOPICS
-    return [
+        return sorted(streamable)
+    return sorted(
         scope[len(SCOPE_PREFIX) :]
         for scope in scopes
-        if scope.startswith(SCOPE_PREFIX)
-        and scope[len(SCOPE_PREFIX) :] in ALLOWED_TOPICS
-    ]
+        if scope.startswith(SCOPE_PREFIX) and scope[len(SCOPE_PREFIX) :] in streamable
+    )
 
 
 @router.get("/me", summary="Validate credential; return identity and topics")
@@ -56,7 +55,9 @@ async def me(request: Request, api_key: ApiKey) -> MeResponse:
         logger.info(f"credential rejected user={identity.user}")
         return MeResponse(user=identity.user, token=None, allowed=False, topics=[])
     if identity.user == ANONYMOUS_USER:
-        topics = [t for t in ALLOWED_TOPICS if t not in state.keyed_only_topics]
+        topics = sorted(state.public_topics)
     else:
-        topics = firehose_topics(identity.scopes)
+        topics = firehose_topics(
+            identity.scopes, state.public_topics | state.keyed_topics
+        )
     return MeResponse(user=identity.user, token=api_key, allowed=True, topics=topics)
