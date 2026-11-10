@@ -274,7 +274,7 @@ ANONYMOUS = AuthUser(name=ANONYMOUS_USER, scopes=[])</code></pre>
                     <ul>
                       <li><div class="node close"><span class="kind">close</span>
                         <span class="name">4401</span> <span class="sig">token rejected → Identity(not allowed) → InvalidApiKey</span>
-                        <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/auth.py#L98">auth.py:98</a> · <a href="../bases/bot_detector/firehose/api/dependencies.py#L34">dependencies.py:38</a></span>
+                        <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/auth.py#L98">auth.py:98</a> · <a href="../bases/bot_detector/firehose/api/dependencies.py#L35">dependencies.py:38</a></span>
                         <details class="code"><summary>code ▸</summary>
 <pre><code class="src">raise WebSocketException(code=4401, reason="invalid api key")</code></pre>
                         </details>
@@ -307,7 +307,7 @@ ANONYMOUS = AuthUser(name=ANONYMOUS_USER, scopes=[])</code></pre>
                     <ul>
                       <li><div class="node close"><span class="kind">close</span>
                         <span class="name">4401</span> <span class="sig">not registered / not allowlisted → InvalidApiKey</span>
-                        <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/auth.py#L109">auth.py:109</a> · <a href="../bases/bot_detector/firehose/app/auth/auth.py#L125">L125</a> · <a href="../bases/bot_detector/firehose/api/dependencies.py#L34">dependencies.py:38</a></span>
+                        <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/auth.py#L109">auth.py:109</a> · <a href="../bases/bot_detector/firehose/app/auth/auth.py#L125">L125</a> · <a href="../bases/bot_detector/firehose/api/dependencies.py#L35">dependencies.py:38</a></span>
                         <details class="code"><summary>code ▸</summary>
 <pre><code class="src">if row is None:
     return Identity(user=username, allowed=False, scopes=[])
@@ -386,7 +386,7 @@ return InvalidApiKey("not allowlisted")</code></pre>
                   </div></li>
                   <li><div class="node close"><span class="kind">close</span>
                     <span class="name">4401</span> <span class="sig">scope missing → InvalidApiKey</span>
-                    <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/auth.py#L130">auth.py:130</a> · <a href="../bases/bot_detector/firehose/api/dependencies.py#L34">dependencies.py:38</a></span>
+                    <span class="loc"><a href="../bases/bot_detector/firehose/app/auth/auth.py#L130">auth.py:130</a> · <a href="../bases/bot_detector/firehose/api/dependencies.py#L35">dependencies.py:38</a></span>
                   </div></li>
                 </ul>
               </li>
@@ -436,7 +436,7 @@ keyed_topics=frozenset(settings.keyed_topics),</code></pre>
               </div></li>
               <li><div class="node close"><span class="kind">close</span>
                 <span class="name">4403</span> <span class="sig">"topic requires an api key"</span>
-                <span class="loc"><a href="../bases/bot_detector/firehose/api/dependencies.py#L39">dependencies.py:39</a></span>
+                <span class="loc"><a href="../bases/bot_detector/firehose/api/dependencies.py#L37">dependencies.py:37</a></span>
                 <details class="code"><summary>code ▸</summary>
 <pre><code class="src">raise WebSocketException(code=4403, reason="topic requires an api key")</code></pre>
                 </details>

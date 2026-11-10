@@ -24,19 +24,19 @@ async def auth_user(websocket: WebSocket, topic: str) -> AuthUser:
     """
     await websocket.accept()
     state: FirehoseState = websocket.app.state.firehose
-    # ?anonymous=1 forces the shared anonymous group
+
     force_anonymous = websocket.query_params.get("anonymous") == "1"
     header_key = websocket.headers.get("x-api-key")  # systems
     token = websocket.query_params.get("token")  # browsers
     api_key = None if force_anonymous else header_key or token
+
     user = await state.auth_repo.authenticate(api_key=api_key, topic=topic)
     if isinstance(user, Exception):
         raise WebSocketException(code=4401, reason="invalid api key")
-    # topic policy: anonymous clients stream public topics; keyed
-    # identities (scope-checked above) stream any listed topic. a
-    # topic in neither list is disabled
+
     if user.name == ANONYMOUS_USER and topic not in state.public_topics:
         raise WebSocketException(code=4403, reason="topic requires an api key")
+
     if topic not in state.public_topics and topic not in state.keyed_topics:
         raise WebSocketException(code=4403, reason="topic not available")
     return user
