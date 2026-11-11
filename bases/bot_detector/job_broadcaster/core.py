@@ -61,8 +61,12 @@ class Settings(BaseSettings):
     DB_RETRY_ATTEMPTS: int = Field(default=3, ge=1, le=10)
     DB_RETRY_BACKOFF_SECONDS: float = Field(default=5.0, ge=0)
     DB_LOCK_WAIT_TIMEOUT: int = Field(default=10, ge=1, le=60)
-    DB_UPDATE_BATCH_SIZE: int = Field(default=1000, ge=1)
     METRICS_PORT: int = 8000
+
+
+# Players per SELECT page when streaming the pending-bot snapshot; purely a
+# memory/round-trip knob, apply batching is driven by CHUNK_SIZE instead.
+READ_PAGE_SIZE = 1000
 
 
 async def broadcast(
@@ -77,22 +81,23 @@ async def broadcast(
     db_attempts: int = 3,
     db_backoff_seconds: float = 5.0,
     db_lock_wait_timeout: int = 10,
-    db_batch_size: int = 1000,
     event: EventLoggerInterface | None = None,
 ) -> int:
     """Apply predicted bot bans and broadcast the results to Discord.
 
     Lock-strategy: the pending bots are read in one snapshot transaction
-    (counts + id-cursor pages), then applied in batches - each batch a
-    single-table PK UPDATE in its own short transaction. Lock windows stay
-    in the milliseconds and concurrent writers interleave between batches.
-    The applied set is the announced set by construction: only ids from
-    the snapshot are updated, rows flagged mid-run wait for the next run.
+    (counts + id-cursor pages), then applied in chunks - each chunk a
+    single-table PK UPDATE in its own short transaction, immediately
+    followed by that chunk's names embed. Lock windows stay in the
+    milliseconds, concurrent writers interleave between chunks, and the
+    embed-post pacing throttles the UPDATE rate for free. The applied set
+    is the announced set by construction: only ids from the snapshot are
+    updated, rows flagged mid-run wait for the next run.
 
-    The snapshot and every batch are retried on transient DB errors (lock
-    wait timeouts, deadlocks, lost connections) with exponential backoff;
-    the session's innodb_lock_wait_timeout is lowered first so waits fail
-    fast into the retry loop instead of hanging.
+    The snapshot and every chunk apply are retried on transient DB errors
+    (lock wait timeouts, deadlocks, lost connections) with exponential
+    backoff; the session's innodb_lock_wait_timeout is lowered first so
+    waits fail fast into the retry loop instead of hanging.
 
     Accumulates one wide event for the whole run: counts, selected and
     applied bans, db retries, webhook outcomes. Emits it at the end -
@@ -105,13 +110,12 @@ async def broadcast(
         webhook: Discord webhook transport.
         webhook_url: Graveyard channel webhook URL.
         role_mention: Optional role mention posted with completion.
-        chunk_size: Max names per names embed.
+        chunk_size: Max names per embed and players per apply transaction.
         chunk_max_chars: Max joined name chars per names embed.
-        chunk_sleep_seconds: Pause between webhook posts.
+        chunk_sleep_seconds: Pause between chunk iterations.
         db_attempts: Max tries for each DB transaction.
         db_backoff_seconds: Base for exponential retry backoff.
         db_lock_wait_timeout: Session innodb_lock_wait_timeout in seconds.
-        db_batch_size: Players per read page and per apply transaction.
         event: Wide event logger; defaults to the module instance.
 
     Returns:
@@ -126,7 +130,7 @@ async def broadcast(
                 _read_bans_snapshot,
                 session_factory=session_factory,
                 repo=repo,
-                batch_size=db_batch_size,
+                batch_size=READ_PAGE_SIZE,
                 lock_wait_timeout=db_lock_wait_timeout,
             ),
             attempts=db_attempts,
@@ -134,25 +138,48 @@ async def broadcast(
             event=event,
             label="snapshot",
         )
-        bans_applied = 0
-        for i, batch in enumerate(
-            _chunk_ids([b.player_id for b in bots], db_batch_size), 1
-        ):
-            bans_applied += await _with_db_retry(
-                partial(
-                    _apply_batch,
-                    session_factory=session_factory,
-                    repo=repo,
-                    player_ids=batch,
-                    lock_wait_timeout=db_lock_wait_timeout,
-                ),
-                attempts=db_attempts,
-                backoff_seconds=db_backoff_seconds,
-                event=event,
-                label=f"batch_{i}",
-            )
+
+        err = await webhook.post(
+            url=webhook_url,
+            embeds=[build_totals_embed(counts=counts, bot_bans=len(bots))],
+        )
+        webhook_ctx: dict = {"totals_failed": err is not None}
+        if err is not None:
+            logger.error(f"broadcast: totals embed failed: {err}")
+            embeds_failed_counter.inc()
 
         num_bots = len(bots)
+        bans_applied = 0
+        chunks_failed = 0
+        chunks_total = 0
+        if num_bots > 0:
+            bans_applied, chunks_total, chunks_failed = await _apply_and_announce(
+                bots=bots,
+                session_factory=session_factory,
+                repo=repo,
+                webhook=webhook,
+                webhook_url=webhook_url,
+                chunk_size=chunk_size,
+                chunk_max_chars=chunk_max_chars,
+                chunk_sleep_seconds=chunk_sleep_seconds,
+                db_attempts=db_attempts,
+                db_backoff_seconds=db_backoff_seconds,
+                db_lock_wait_timeout=db_lock_wait_timeout,
+                event=event,
+            )
+            webhook_ctx["names_chunks"] = chunks_total
+            webhook_ctx["names_failed"] = chunks_failed
+
+            err = await webhook.post(
+                url=webhook_url,
+                embeds=[build_complete_embed(num_bans=num_bots)],
+                content=role_mention or None,
+            )
+            webhook_ctx["complete_failed"] = err is not None
+            if err is not None:
+                logger.error(f"broadcast: complete embed failed: {err}")
+                embeds_failed_counter.inc()
+
         event.add(
             {
                 "db": {
@@ -174,38 +201,6 @@ async def broadcast(
                 f"broadcast: applied {bans_applied} bans but selected {num_bots} bots "
                 "(rows changed mid-run); embeds report the selected set"
             )
-
-        err = await webhook.post(
-            url=webhook_url,
-            embeds=[build_totals_embed(counts=counts, bot_bans=num_bots)],
-        )
-        webhook_ctx: dict = {"totals_failed": err is not None}
-        if err is not None:
-            logger.error(f"broadcast: totals embed failed: {err}")
-            embeds_failed_counter.inc()
-
-        if num_bots > 0:
-            chunks_failed, chunks_total = await _broadcast_names(
-                bots=bots,
-                webhook=webhook,
-                webhook_url=webhook_url,
-                chunk_size=chunk_size,
-                chunk_max_chars=chunk_max_chars,
-                chunk_sleep_seconds=chunk_sleep_seconds,
-                event=event,
-            )
-            webhook_ctx["names_chunks"] = chunks_total
-            webhook_ctx["names_failed"] = chunks_failed
-
-            err = await webhook.post(
-                url=webhook_url,
-                embeds=[build_complete_embed(num_bans=num_bots)],
-                content=role_mention or None,
-            )
-            webhook_ctx["complete_failed"] = err is not None
-            if err is not None:
-                logger.error(f"broadcast: complete embed failed: {err}")
-                embeds_failed_counter.inc()
 
         event.add({"webhook": webhook_ctx})
         if bans_applied > 0 or any(
@@ -270,10 +265,6 @@ async def _with_db_retry(
     raise AssertionError("unreachable: retry loop always returns or raises")
 
 
-def _chunk_ids(ids: list[int], batch_size: int) -> list[list[int]]:
-    return [ids[i : i + batch_size] for i in range(0, len(ids), batch_size)]
-
-
 async def _read_bans_snapshot(
     session_factory: async_sessionmaker[AsyncSession],
     repo: BanBroadcastInterface,
@@ -315,25 +306,48 @@ async def _set_lock_wait_timeout(session: AsyncSession, seconds: int) -> None:
     )
 
 
-async def _broadcast_names(
+async def _apply_and_announce(
     bots: list[BannedBot],
+    session_factory: async_sessionmaker[AsyncSession],
+    repo: BanBroadcastInterface,
     webhook: WebhookInterface,
     webhook_url: str,
     chunk_size: int,
     chunk_max_chars: int,
     chunk_sleep_seconds: float,
+    db_attempts: int,
+    db_backoff_seconds: float,
+    db_lock_wait_timeout: int,
     event: EventLoggerInterface,
-) -> tuple[int, int]:
-    """Post banned names in embed-sized chunks.
+) -> tuple[int, int, int]:
+    """Apply each chunk of vetted bots, then announce it, in one loop.
 
-    Returns (chunks_failed, chunks_total); failures are logged inline and
-    reflected in the wide event by the caller.
+    Apply-before-announce per chunk: a failed apply aborts the run before
+    further announcements, and a failed embed never hides applied bans.
+    The embed-pacing sleeps throttle the UPDATE rate as a side effect.
+
+    Returns (bans_applied, chunks_total, chunks_failed); failures are
+    logged inline and reflected in the wide event by the caller.
     """
     chunks = chunk_bots(bots=bots, max_names=chunk_size, max_chars=chunk_max_chars)
+    bans_applied = 0
     chunks_failed = 0
     for i, chunk in enumerate(chunks, start=1):
         if i > 1:
             await asyncio.sleep(chunk_sleep_seconds)
+        bans_applied += await _with_db_retry(
+            partial(
+                _apply_batch,
+                session_factory=session_factory,
+                repo=repo,
+                player_ids=[bot.player_id for bot in chunk],
+                lock_wait_timeout=db_lock_wait_timeout,
+            ),
+            attempts=db_attempts,
+            backoff_seconds=db_backoff_seconds,
+            event=event,
+            label=f"batch_{i}",
+        )
         err = await webhook.post(
             url=webhook_url,
             embeds=[build_names_embed(chunk=chunk)],
@@ -345,7 +359,7 @@ async def _broadcast_names(
             continue
         embeds_sent_counter.inc()
         logger.debug(f"broadcast: names chunk {i}/{len(chunks)} sent")
-    return chunks_failed, len(chunks)
+    return bans_applied, len(chunks), chunks_failed
 
 
 async def main():
@@ -367,7 +381,6 @@ async def main():
                 db_attempts=settings.DB_RETRY_ATTEMPTS,
                 db_backoff_seconds=settings.DB_RETRY_BACKOFF_SECONDS,
                 db_lock_wait_timeout=settings.DB_LOCK_WAIT_TIMEOUT,
-                db_batch_size=settings.DB_UPDATE_BATCH_SIZE,
                 event=wide_event,
             )
         finally:

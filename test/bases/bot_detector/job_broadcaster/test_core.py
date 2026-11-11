@@ -604,8 +604,9 @@ def _batch_flaky_repo(fail_batches: int, exc: Exception, bots: list[BannedBot]):
 
 @pytest.mark.asyncio
 async def test_broadcast_applies_in_id_batches(monkeypatch):
-    """Bots must be applied in batches of db_batch_size - each batch its
-    own transaction - so lock windows stay short under contention."""
+    """Bots must be applied in chunks aligned with the names embeds - each
+    chunk applied then announced, one transaction per chunk - so lock
+    windows stay short and the embed pacing throttles the UPDATE rate."""
     bots = [
         BannedBot(player_id=i, name=f"bot{i}", prediction="vanilla") for i in range(5)
     ]
@@ -617,7 +618,7 @@ async def test_broadcast_applies_in_id_batches(monkeypatch):
         repo=repo,
         webhook=_make_webhook(),
         webhook_url="http://hook",
-        db_batch_size=2,
+        chunk_size=2,
         chunk_sleep_seconds=0,
         event=WideEventLogger(sample_ratio=0.0),
     )
@@ -655,10 +656,11 @@ async def test_broadcast_retries_batch_on_lock_wait(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_broadcast_batch_failure_aborts_before_announce(monkeypatch):
-    """If any batch exhausts retries, the run must raise BEFORE posting any
-    embed - a partial apply is never announced, and the next run (which
-    re-selects confirmed_ban = 0) announces the remainder."""
+async def test_broadcast_batch_failure_aborts_before_further_announce(monkeypatch):
+    """If a batch exhausts retries, the run must raise before announcing
+    anything beyond what was already applied+announced - a partial apply
+    is never announced, and the next run (which re-selects
+    confirmed_ban = 0) announces the remainder."""
     from sqlalchemy.exc import OperationalError
 
     monkeypatch.setattr(core.asyncio, "sleep", AsyncMock(return_value=None))
@@ -679,13 +681,15 @@ async def test_broadcast_batch_failure_aborts_before_announce(monkeypatch):
             webhook=webhook,
             webhook_url="http://hook",
             db_attempts=2,
-            db_batch_size=2,
+            chunk_size=2,
             db_backoff_seconds=0,
             chunk_sleep_seconds=0,
             event=WideEventLogger(sample_ratio=0.0),
         )
 
-    assert webhook.posts == []
+    # only the totals embed went out; no names embeds, no completion
+    titles = [p["embeds"][0].title for p in webhook.posts]
+    assert titles == ["Pending Bans Stats"]
 
 
 def _dict_records(caplog) -> list[dict]:
