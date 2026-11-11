@@ -6,10 +6,10 @@ from pydantic import BaseModel, model_validator
 
 
 class ToScrapeStruct(BaseModel):
-    """Legacy single-name payload on players.to_scrape.
+    """Legacy single-name payload (metadata version 1) on players.to_scrape.
 
-    Still produced by requeues and by infra seeders, so consumers must
-    keep accepting it during a rolling deploy.
+    Still emitted by infra seeders and producers predating batching,
+    so consumers must keep accepting it during a rolling deploy.
     """
 
     metadata: MetaData
@@ -17,7 +17,8 @@ class ToScrapeStruct(BaseModel):
 
 
 class ToScrapeBatchStruct(BaseModel):
-    """Batched payload on players.to_scrape: N names in one message.
+    """Batched payload (metadata version 2) on players.to_scrape:
+    N names in one message.
 
     One kafka message pays one fetch RTT and one offset commit for the
     whole batch; the consumer fans out per name.
@@ -30,9 +31,11 @@ class ToScrapeBatchStruct(BaseModel):
 class ToScrapeMessage(ToScrapeBatchStruct):
     """Consumer-facing view of players.to_scrape.
 
-    Normalizes both payload shapes so the scraper always iterates
-    .players (size 1..N): batched payloads pass through, legacy
-    single-name payloads become a batch of one.
+    Normalizes both payload versions so the scraper always iterates
+    .players (size 1..N): version 2 batched payloads pass through,
+    version 1 legacy single-name payloads become a batch of one.
+    Dispatch is by payload shape, not the version int, so messages are
+    parsed even if metadata.version is missing or mislabeled.
     """
 
     @model_validator(mode="before")

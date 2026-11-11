@@ -151,6 +151,9 @@ async def test_produce_players_packs_full_page_into_one_batch():
     assert len(batches) == 1
     assert isinstance(batches[0], ToScrapeBatchStruct)
     assert len(batches[0].players) == 10
+    # version 2 marks the batched payload; version 1 stays legacy
+    assert batches[0].metadata.version == 2
+    assert batches[0].metadata.source == "scrape_task_producer"
 
 
 @pytest.mark.asyncio

@@ -86,9 +86,10 @@ async def produce_player_to_scrape(
     MAX_RETRIES = 3
     while retries < MAX_RETRIES:
         # singleton requeue: one name per message keeps the rest of a
-        # failed batch flowing instead of retrying the whole batch
+        # failed batch flowing instead of retrying the whole batch;
+        # version 2 because the payload uses the batched players shape
         to_scrape_message = ToScrapeMessage(
-            metadata=MetaData(version=1, source="hiscore_scraper"),
+            metadata=MetaData(version=2, source="hiscore_scraper"),
             players=[player],
         )
         error = await player_ts_queue.put([to_scrape_message])

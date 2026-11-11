@@ -32,6 +32,38 @@ def test_normalizes_legacy_payload_to_batch_of_one():
     assert message.players[0].id == 7
 
 
+def test_normalization_preserves_metadata_version():
+    legacy = ToScrapeMessage.model_validate(
+        {
+            "metadata": {"version": 1, "source": "test"},
+            "player_data": make_player().model_dump(),
+        }
+    )
+    batched = ToScrapeMessage.model_validate(
+        {
+            "metadata": {"version": 2, "source": "test"},
+            "players": [make_player().model_dump()],
+        }
+    )
+
+    # metadata rides along untouched: v1 = legacy single, v2 = batched
+    assert legacy.metadata.version == 1
+    assert batched.metadata.version == 2
+
+
+def test_dispatch_is_by_shape_not_version_int():
+    # a players-shaped payload with a legacy version int still parses
+    payload = {
+        "metadata": {"version": 1, "source": "test"},
+        "players": [make_player(id=8).model_dump()],
+    }
+
+    message = ToScrapeMessage.model_validate(payload)
+
+    assert len(message.players) == 1
+    assert message.players[0].id == 8
+
+
 def test_batched_payload_passes_through():
     payload = {
         "metadata": make_metadata().model_dump(),

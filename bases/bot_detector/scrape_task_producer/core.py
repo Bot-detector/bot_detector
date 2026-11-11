@@ -124,7 +124,9 @@ async def produce_players(
         return
 
     wide_event.add({"queue_players": {"count": len(players)}})
-    metadata = MetaData(version=1, source="scrape_task_producer")
+    # version 2 marks the batched players payload (version 1 = legacy
+    # single-name payloads)
+    metadata = MetaData(version=2, source="scrape_task_producer")
     batches = chunk_players(players=players, batch_size=batch_size, metadata=metadata)
     if not batches:
         return

@@ -247,6 +247,8 @@ async def test_produce_player_to_scrape_requeues_batch_of_one():
     assert len(messages) == 1
     assert isinstance(messages[0], ToScrapeMessage)
     assert [p.id for p in messages[0].players] == [9]
+    # requeues use the batched players shape -> metadata version 2
+    assert messages[0].metadata.version == 2
 
 
 @pytest.mark.asyncio
