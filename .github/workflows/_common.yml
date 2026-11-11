@@ -9,7 +9,7 @@ on:
 
 jobs:
   lock_file:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, "hetzner"]
     container:
       image: ghcr.io/astral-sh/uv:bookworm-slim
     steps:
@@ -17,7 +17,7 @@ jobs:
       - run: cd ${{ inputs.project_dir }} && uv lock --locked
 
   linting:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, "hetzner"]
     needs: [lock_file]
     container:
       image: ghcr.io/astral-sh/uv:bookworm-slim
@@ -26,7 +26,7 @@ jobs:
       - run: uvx ruff@0.15.22 check .
 
   formatting:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, "hetzner"]
     needs: [lock_file]
     container:
       image: ghcr.io/astral-sh/uv:bookworm-slim
@@ -35,7 +35,7 @@ jobs:
       - run: uvx ruff@0.15.22 format --check .
 
   tests:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, "hetzner"]
     needs: [lock_file]
     container:
       image: ghcr.io/astral-sh/uv:bookworm-slim
