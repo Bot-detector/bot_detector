@@ -6,7 +6,11 @@ from unittest.mock import AsyncMock
 import aiohttp
 import pytest
 from aiohttp import RequestInfo
-from bot_detector.event_queue.structs import ScrapedStruct, ToScrapeStruct
+from bot_detector.event_queue.structs import (
+    ScrapedStruct,
+    ToScrapeMessage,
+    ToScrapeStruct,
+)
 from bot_detector.hiscore_scraper import core
 from bot_detector.structs import HighscoreBaseStruct, MetaData, PlayerStruct
 
@@ -19,15 +23,26 @@ class _DummySession:
         return False
 
 
-def _to_scrape_player() -> ToScrapeStruct:
-    player = PlayerStruct(
-        id=1,
-        name="player-1",
+def _player(player_id: int = 1, name: str | None = None) -> PlayerStruct:
+    return PlayerStruct(
+        id=player_id,
+        name=name or f"player-{player_id}",
         created_at=datetime(2024, 1, 1),
     )
+
+
+def _to_scrape_message(player_ids: list[int]) -> ToScrapeMessage:
+    players = [_player(player_id) for player_id in player_ids]
+    return ToScrapeMessage(
+        metadata=MetaData(version=1, source="test"),
+        players=players,
+    )
+
+
+def _legacy_to_scrape_player() -> ToScrapeStruct:
     return ToScrapeStruct(
         metadata=MetaData(version=1, source="test"),
-        player_data=player,
+        player_data=_player(),
     )
 
 
@@ -70,23 +85,41 @@ def _patch_common(monkeypatch: pytest.MonkeyPatch) -> None:
         AsyncMock(side_effect=["user@proxy", asyncio.CancelledError()]),
     )
     monkeypatch.setattr(
-        core, "get_player_to_scrape", AsyncMock(return_value=_to_scrape_player())
+        core, "get_player_to_scrape", AsyncMock(return_value=_to_scrape_message([1]))
     )
 
 
 @pytest.mark.asyncio
-async def test_get_player_to_scrape_commits_message(monkeypatch: pytest.MonkeyPatch):
+async def test_get_player_to_scrape_normalizes_legacy_struct():
+    # legacy single-name payloads still sit in the topic during a
+    # rolling deploy; the consumer reshapes them into a batch of one
     player_ts_queue = AsyncMock()
-    player_to_scrape = _to_scrape_player()
-    player_ts_queue.get_one = AsyncMock(return_value=player_to_scrape)
-    player_ts_queue.commit = AsyncMock(return_value=None)
+    player_ts_queue.get_one = AsyncMock(return_value=_legacy_to_scrape_player())
 
     result = await core.get_player_to_scrape(
         worker_id=1, player_ts_queue=player_ts_queue
     )
 
-    assert result == player_to_scrape
-    player_ts_queue.commit.assert_awaited_once()
+    assert isinstance(result, ToScrapeMessage)
+    assert len(result.players) == 1
+    assert result.players[0].name == "player-1"
+    # the commit moved out of the getter: work() commits once per
+    # batch message, after the inner loop
+    player_ts_queue.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_get_player_to_scrape_passes_batched_message_through():
+    batch = _to_scrape_message([1, 2, 3])
+    player_ts_queue = AsyncMock()
+    player_ts_queue.get_one = AsyncMock(return_value=batch)
+
+    result = await core.get_player_to_scrape(
+        worker_id=1, player_ts_queue=player_ts_queue
+    )
+
+    assert isinstance(result, ToScrapeMessage)
+    assert [p.id for p in result.players] == [1, 2, 3]
 
 
 @pytest.mark.asyncio
@@ -167,6 +200,53 @@ async def test_work_refreshes_proxies_on_proxy_error(monkeypatch: pytest.MonkeyP
         )
 
     proxy_manager.rotate_proxies.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_work_commits_once_per_batch(monkeypatch: pytest.MonkeyPatch):
+    _patch_common(monkeypatch)
+
+    batch = _to_scrape_message([1, 2, 3])
+    monkeypatch.setattr(core, "get_player_to_scrape", AsyncMock(return_value=batch))
+
+    player_ts_queue = AsyncMock()
+    player_ts_queue.commit = AsyncMock(return_value=None)
+
+    monkeypatch.setattr(core, "scrape_player", AsyncMock(return_value=(object(), None)))
+    monkeypatch.setattr(
+        core, "transform_player_stats", AsyncMock(return_value=_scraped_player())
+    )
+    monkeypatch.setattr(core, "produce_player_to_scrape", AsyncMock(return_value=None))
+    monkeypatch.setattr(core, "produce_player_scraped", AsyncMock(return_value=None))
+
+    with pytest.raises(asyncio.CancelledError):
+        await core.work(
+            worker_id=1,
+            proxy_manager=AsyncMock(),
+            player_ts_queue=player_ts_queue,
+            player_nf_producer=AsyncMock(),
+            player_sc_producer=AsyncMock(),
+        )
+
+    # every name in the batch is scraped...
+    assert core.scrape_player.await_count == 3
+    # ...but the offset commit is paid once, after the inner loop
+    player_ts_queue.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_produce_player_to_scrape_requeues_batch_of_one():
+    player_ts_queue = AsyncMock()
+    player_ts_queue.put = AsyncMock(return_value=None)
+
+    error = await core.produce_player_to_scrape(player_ts_queue, _player(9))
+
+    assert error is None
+    player_ts_queue.put.assert_awaited_once()
+    (messages,) = player_ts_queue.put.await_args.args
+    assert len(messages) == 1
+    assert isinstance(messages[0], ToScrapeMessage)
+    assert [p.id for p in messages[0].players] == [9]
 
 
 @pytest.mark.asyncio

@@ -8,6 +8,8 @@ from .structs import (
     PlayerBannedStruct,
     ReportsToInsertStruct,
     ScrapedStruct,
+    ToScrapeBatchStruct,
+    ToScrapeMessage,
     ToScrapeStruct,
 )
 
@@ -17,6 +19,8 @@ __all__ = [
     "LagProbeProtocol",
     "Settings",
     "ToScrapeStruct",
+    "ToScrapeBatchStruct",
+    "ToScrapeMessage",
     "ScrapedStruct",
     "NotFoundStruct",
     "ReportsToInsertStruct",

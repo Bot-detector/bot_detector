@@ -49,5 +49,7 @@ async def test_produce_players_puts_filtered_batch():
     await produce_players(players=players, player_queue=queue)
 
     queue.put.assert_awaited_once()
-    put_batch = queue.put.await_args.args[0]
-    assert len(put_batch) == 3
+    put_batches = queue.put.await_args.args[0]
+    # one batch struct carrying the whole (filtered) page
+    assert len(put_batches) == 1
+    assert len(put_batches[0].players) == 3

@@ -15,7 +15,7 @@ from bot_detector.event_queue.adapters.kafka import (
 from bot_detector.event_queue.core import QueueProducer
 from bot_detector.event_queue.factory import QueueFactory
 from bot_detector.event_queue.lag_probe import LagProbeProtocol
-from bot_detector.event_queue.structs import ToScrapeStruct
+from bot_detector.event_queue.structs import ToScrapeBatchStruct
 from bot_detector.scrape_task_producer.metrics import (
     done_for_day_counter,
     lag_throttle_counter,
@@ -25,6 +25,7 @@ from bot_detector.scrape_task_producer.metrics import (
 )
 from bot_detector.structs import MetaData, PlayerStruct
 from bot_detector.wide_event import WideEventLogger
+from pydantic import Field
 from pydantic_settings import BaseSettings
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from typing_extensions import Literal
@@ -41,6 +42,10 @@ class Settings(BaseSettings):
     LIMIT: int = 10_000
     MAX_LAG: int = 100_000
     METRICS_PORT: int = 8000
+    # names packed per players.to_scrape message; the scraper pays one
+    # fetch RTT + one offset commit per message, so this lifts the
+    # commit cap proportionally (sim-validated: 10 -> ~2000 msg/s)
+    TO_SCRAPE_BATCH_SIZE: int = Field(default=10, gt=0)
 
 
 @dataclass
@@ -93,23 +98,38 @@ class FetchParams:
         self.player_id = 0
 
 
+def chunk_players(
+    players: list[PlayerStruct],
+    batch_size: int,
+    metadata: MetaData,
+) -> list[ToScrapeBatchStruct]:
+    """Pack eligible players into batch structs of at most batch_size.
+
+    A partial final batch flushes as-is: pages already batch naturally,
+    so no timeout buffering is needed.
+    """
+    eligible = [player for player in players if len(player.name) <= 13]
+    return [
+        ToScrapeBatchStruct(metadata=metadata, players=eligible[i : i + batch_size])
+        for i in range(0, len(eligible), batch_size)
+    ]
+
+
 async def produce_players(
     players: list[PlayerStruct],
-    player_queue: QueueProducer[ToScrapeStruct],
+    player_queue: QueueProducer[ToScrapeBatchStruct],
+    batch_size: int = 10,
 ):
     if not players:
         return
 
     wide_event.add({"queue_players": {"count": len(players)}})
     metadata = MetaData(version=1, source="scrape_task_producer")
-    player_structs = [
-        ToScrapeStruct(metadata=metadata, player_data=player)
-        for player in players
-        if len(player.name) <= 13
-    ]
-    if not player_structs:
+    batches = chunk_players(players=players, batch_size=batch_size, metadata=metadata)
+    if not batches:
         return
-    error = await player_queue.put(player_structs)
+    wide_event.add({"queue_batches": {"count": len(batches)}})
+    error = await player_queue.put(batches)
     if isinstance(error, Exception):
         raise error
 
@@ -183,11 +203,12 @@ def determine_fetch_params(
 async def process_players(
     async_session: async_sessionmaker[AsyncSession],
     player_repo: PlayerRepo,
-    player_queue: QueueProducer[ToScrapeStruct],
+    player_queue: QueueProducer[ToScrapeBatchStruct],
     lag_probe: LagProbeProtocol,
     lag_topic: str,
     lag_group_id: str,
     limit: int = 10,
+    batch_size: int = 10,
 ):
     max_days = 20
     fp = FetchParams(
@@ -235,7 +256,9 @@ async def process_players(
                     limit=fp.limit,
                 )
 
-            await produce_players(players=players, player_queue=player_queue)
+            await produce_players(
+                players=players, player_queue=player_queue, batch_size=batch_size
+            )
 
             fp = determine_fetch_params(
                 fetch_params=fp,
@@ -280,11 +303,13 @@ async def main():
     lag_topic = "players.to_scrape"
     lag_group_id = "scraper"
 
-    def partition_key_fn(msg: ToScrapeStruct) -> str:
-        return str(msg.player_data.id % 10)
+    def partition_key_fn(msg: ToScrapeBatchStruct) -> str:
+        # batches span many players; key on the first player id to keep
+        # the same % 10 key space as the legacy single-name messages
+        return str(msg.players[0].id % 10)
 
     player_queue = QueueFactory.create_queue(
-        model=ToScrapeStruct,
+        model=ToScrapeBatchStruct,
         queue_type="producer",
         backend_type="kafka",
         config=KafkaConfig(
@@ -320,6 +345,7 @@ async def main():
             lag_topic=lag_topic,
             lag_group_id=lag_group_id,
             limit=Settings().LIMIT,
+            batch_size=Settings().TO_SCRAPE_BATCH_SIZE,
         )
     finally:
         await async_engine.dispose()

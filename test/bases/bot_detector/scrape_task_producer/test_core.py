@@ -1,8 +1,16 @@
 import datetime
+from unittest.mock import AsyncMock
 
 import pytest
-from bot_detector.scrape_task_producer.core import FetchParams, determine_fetch_params
+from bot_detector.event_queue.structs import ToScrapeBatchStruct
+from bot_detector.scrape_task_producer.core import (
+    FetchParams,
+    Settings,
+    determine_fetch_params,
+    produce_players,
+)
 from bot_detector.structs import PlayerStruct
+from pydantic import ValidationError
 
 
 def make_fetch_params(**overrides) -> FetchParams:
@@ -19,12 +27,12 @@ def make_fetch_params(**overrides) -> FetchParams:
     return params
 
 
-def make_player(id: int = 1) -> PlayerStruct:
+def make_player(id: int = 1, name: str | None = None) -> PlayerStruct:
     """Minimal player factory with unique id."""
     now = datetime.datetime(2025, 1, 1, 12, 0, 0)
     return PlayerStruct(
         id=id,
-        name=f"Player{id}",
+        name=name or f"Player{id}",
         created_at=now,
         updated_at=now,
         possible_ban=False,
@@ -121,3 +129,83 @@ def test_full_reset_after_confirmed_cycle_exhausted():
     )
     assert result.step == "normal"
     assert result.days == 11
+
+
+def make_players(count: int, start_id: int = 1) -> list[PlayerStruct]:
+    return [make_player(id=start_id + i) for i in range(count)]
+
+
+def _captured_batches(queue) -> list[ToScrapeBatchStruct]:
+    (batches,) = queue.put.await_args.args
+    return batches
+
+
+@pytest.mark.asyncio
+async def test_produce_players_packs_full_page_into_one_batch():
+    queue = AsyncMock()
+    queue.put = AsyncMock(return_value=None)
+
+    await produce_players(players=make_players(10), player_queue=queue, batch_size=10)
+
+    batches = _captured_batches(queue)
+    assert len(batches) == 1
+    assert isinstance(batches[0], ToScrapeBatchStruct)
+    assert len(batches[0].players) == 10
+
+
+@pytest.mark.asyncio
+async def test_produce_players_chunks_partial_final_batch():
+    queue = AsyncMock()
+    queue.put = AsyncMock(return_value=None)
+
+    await produce_players(players=make_players(25), player_queue=queue, batch_size=10)
+
+    batches = _captured_batches(queue)
+    assert [len(batch.players) for batch in batches] == [10, 10, 5]
+    # every player lands exactly once, in order
+    ids = [player.id for batch in batches for player in batch.players]
+    assert ids == list(range(1, 26))
+
+
+@pytest.mark.asyncio
+async def test_produce_players_filters_long_names_before_chunking():
+    queue = AsyncMock()
+    queue.put = AsyncMock(return_value=None)
+    players = make_players(5) + [make_player(id=99, name="a-very-long-player-name")]
+
+    await produce_players(players=players, player_queue=queue, batch_size=10)
+
+    batches = _captured_batches(queue)
+    assert len(batches) == 1
+    assert [player.id for player in batches[0].players] == [1, 2, 3, 4, 5]
+
+
+@pytest.mark.asyncio
+async def test_produce_players_skips_put_when_no_eligible_players():
+    queue = AsyncMock()
+    queue.put = AsyncMock(return_value=None)
+    players = [make_player(id=1, name="a-very-long-player-name")]
+
+    await produce_players(players=players, player_queue=queue, batch_size=10)
+
+    queue.put.assert_not_awaited()
+
+
+def test_batch_size_defaults_to_ten():
+    assert Settings().TO_SCRAPE_BATCH_SIZE == 10
+
+
+def test_batch_size_is_configurable_via_env(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("TO_SCRAPE_BATCH_SIZE", "25")
+
+    assert Settings().TO_SCRAPE_BATCH_SIZE == 25
+
+
+@pytest.mark.parametrize("invalid", ["0", "-3"])
+def test_batch_size_rejects_zero_and_negative(
+    monkeypatch: pytest.MonkeyPatch, invalid: str
+):
+    monkeypatch.setenv("TO_SCRAPE_BATCH_SIZE", invalid)
+
+    with pytest.raises(ValidationError):
+        Settings()

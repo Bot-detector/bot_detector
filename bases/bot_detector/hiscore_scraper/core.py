@@ -15,7 +15,7 @@ from bot_detector.event_queue.factory import QueueFactory
 from bot_detector.event_queue.structs import (
     NotFoundStruct,
     ScrapedStruct,
-    ToScrapeStruct,
+    ToScrapeMessage,
 )
 from bot_detector.osrs_hs_api import HiscoreOldSchoolAPI
 from bot_detector.osrs_hs_api.exceptions import Err, Ok, PlayerDoesNotExist
@@ -78,18 +78,20 @@ class Settings(BaseSettings):
 
 
 async def produce_player_to_scrape(
-    player_ts_queue: Queue[ToScrapeStruct],
+    player_ts_queue: Queue[ToScrapeMessage],
     player: PlayerStruct,
 ):
     error = None
     retries = 0
     MAX_RETRIES = 3
     while retries < MAX_RETRIES:
-        to_scrape_struct = ToScrapeStruct(
+        # singleton requeue: one name per message keeps the rest of a
+        # failed batch flowing instead of retrying the whole batch
+        to_scrape_message = ToScrapeMessage(
             metadata=MetaData(version=1, source="hiscore_scraper"),
-            player_data=player,
+            players=[player],
         )
-        error = await player_ts_queue.put([to_scrape_struct])
+        error = await player_ts_queue.put([to_scrape_message])
         if not error:
             return None
         retries += 1
@@ -180,7 +182,7 @@ async def scrape_player(
 async def transform_player_stats(
     player_stats: PlayerStats,
     player: PlayerStruct,
-    player_ts_producer: Queue[ToScrapeStruct],
+    player_ts_producer: Queue[ToScrapeMessage],
 ) -> ScrapedStruct | None:
     player.updated_at = datetime.now()
     player.possible_ban = False
@@ -261,8 +263,8 @@ async def get_proxy(
 
 async def get_player_to_scrape(
     worker_id: int,
-    player_ts_queue: Queue[ToScrapeStruct],
-) -> ToScrapeStruct | None:
+    player_ts_queue: Queue[ToScrapeMessage],
+) -> ToScrapeMessage | None:
     result = await player_ts_queue.get_one()
     if isinstance(result, Exception):
         logger.error(f"[{worker_id}]: Error consuming player to scrape: {result}")
@@ -270,19 +272,20 @@ async def get_player_to_scrape(
     if result is None:
         logger.warning(f"[{worker_id}]: No player available.")
         return None
-    commit_error = await player_ts_queue.commit()
-    if commit_error:
-        logger.error(
-            f"[{worker_id}]: Error committing player to scrape offset: {commit_error}"
-        )
+    try:
+        # normalizes legacy single-name payloads (rolling deploy,
+        # memory backend, sims) into the batched shape; batched
+        # messages pass through unchanged
+        return ToScrapeMessage.model_validate(result)
+    except ValidationError as e:
+        logger.error(f"[{worker_id}]: Malformed player to scrape message: {e}")
         return None
-    return result
 
 
 async def work(
     worker_id: int,
     proxy_manager: ProxyManager,
-    player_ts_queue: Queue[ToScrapeStruct],
+    player_ts_queue: Queue[ToScrapeMessage],
     player_nf_producer: QueueProducer[NotFoundStruct],
     player_sc_producer: QueueProducer[ScrapedStruct],
 ):
@@ -314,73 +317,92 @@ async def work(
 
             _proxy = proxy.split("@")[1]
 
-            # get player from kafka
-            player_to_scrape = await get_player_to_scrape(worker_id, player_ts_queue)
-            if player_to_scrape is None:
+            # get one batch message from kafka (1..N names)
+            batch = await get_player_to_scrape(worker_id, player_ts_queue)
+            if batch is None:
                 await asyncio.sleep(10)
                 continue
 
-            player_data = player_to_scrape.player_data
+            # per-name failures do not sleep mid-batch: requeue-and-
+            # move-on keeps the remaining names of the batch flowing;
+            # the accumulated backoff is paid once per batch by the
+            # single handle_retry call after the commit
+            retry_due = False
 
-            # metric: every time we scrape a player, we increment the counter
-            total_counter.labels(proxy=_proxy).inc()
+            for player_data in batch.players:
+                # metric: every time we scrape a player, we increment the counter
+                total_counter.labels(proxy=_proxy).inc()
 
-            player_stats, scrape_error = await scrape_player(
-                player=player_data,
-                session=session,
-                api=api,
-                proxy=proxy,
-            )
+                player_stats, scrape_error = await scrape_player(
+                    player=player_data,
+                    session=session,
+                    api=api,
+                    proxy=proxy,
+                )
 
-            if scrape_error:
-                log_prefix = f"[{worker_id}][{player_data.name}]"
+                if scrape_error:
+                    log_prefix = f"[{worker_id}][{player_data.name}]"
 
-                if isinstance(scrape_error, PlayerDoesNotExist):
-                    not_found_counter.labels(proxy=_proxy).inc()
-                    player_data.possible_ban = True
-                    err = await produce_not_found(player_nf_producer, player_data)
+                    if isinstance(scrape_error, PlayerDoesNotExist):
+                        not_found_counter.labels(proxy=_proxy).inc()
+                        player_data.possible_ban = True
+                        err = await produce_not_found(player_nf_producer, player_data)
+                        if err:
+                            logger.error(f"{log_prefix}:{err}")
+                        continue
+                    if isinstance(scrape_error, aiohttp.ClientHttpProxyError):
+                        if scrape_error.status == 407:
+                            logger.warning(f"{log_prefix}: Rotating proxies.")
+                            await proxy_manager.rotate_proxies()
+                            await asyncio.sleep(ROTATE_COOLDOWN_S)
+
+                    logger.warning(f"{log_prefix}: {scrape_error=}")
+                    error_counter.labels(proxy=_proxy).inc()
+                    err = await produce_player_to_scrape(player_ts_queue, player_data)
                     if err:
-                        logger.error(f"{log_prefix}:{err}")
+                        logger.error(f"{log_prefix}: {err}")
+                    retry_due = True
                     continue
-                if isinstance(scrape_error, aiohttp.ClientHttpProxyError):
-                    if scrape_error.status == 407:
-                        logger.warning(f"{log_prefix}: Rotating proxies.")
-                        await proxy_manager.rotate_proxies()
-                        await asyncio.sleep(ROTATE_COOLDOWN_S)
 
-                logger.warning(f"{log_prefix}: {scrape_error=}")
-                error_counter.labels(proxy=_proxy).inc()
-                err = await produce_player_to_scrape(player_ts_queue, player_data)
-                if err:
-                    logger.error(f"{log_prefix}: {err}")
+                success_counter.labels(proxy=_proxy).inc()
+
+                # transform player stats to hiscore data
+                assert player_stats is not None  # for mypy
+                scraped_data = await transform_player_stats(
+                    player_stats=player_stats,
+                    player=player_data,
+                    player_ts_producer=player_ts_queue,
+                )
+
+                if scraped_data is None:
+                    # transform failure already requeued the name
+                    retry_due = True
+                    continue
+
+                # Successful scrape - reset retry counter
+                retry_tracker.record_attempt(worker_id, success=True)
+
+                error = await produce_player_scraped(player_sc_producer, scraped_data)
+                logger_prefix = f"[{worker_id}][{player_data.name}]"
+                if error:
+                    logger.error(f"{logger_prefix}: {error}")
+                    await produce_player_to_scrape(player_ts_queue, player_data)
+                    continue
+
+                logger.debug(f"{logger_prefix}: scraped successfully.")
+
+            # at-least-once: one commit per batch message, paid after
+            # the inner loop; a crash redelivers the whole batch, which
+            # costs <= batch size duplicate scrapes (benign: snapshot
+            # data)
+            commit_error = await player_ts_queue.commit()
+            if commit_error:
+                logger.error(
+                    f"[{worker_id}]: Error committing player to scrape offset: {commit_error}"
+                )
+
+            if retry_due:
                 await handle_retry(retry_tracker, worker_id, proxy)
-                continue
-
-            success_counter.labels(proxy=_proxy).inc()
-
-            # transform player stats to hiscore data
-            assert player_stats is not None  # for mypy
-            scraped_data = await transform_player_stats(
-                player_stats=player_stats,
-                player=player_data,
-                player_ts_producer=player_ts_queue,
-            )
-
-            if scraped_data is None:
-                await handle_retry(retry_tracker, worker_id, proxy)
-                continue
-
-            # Successful scrape - reset retry counter
-            retry_tracker.record_attempt(worker_id, success=True)
-
-            error = await produce_player_scraped(player_sc_producer, scraped_data)
-            logger_prefix = f"[{worker_id}][{player_data.name}]"
-            if error:
-                logger.error(f"{logger_prefix}: {error}")
-                await produce_player_to_scrape(player_ts_queue, player_data)
-                continue
-
-            logger.debug(f"{logger_prefix}: scraped successfully.")
 
 
 async def main():
@@ -390,8 +412,10 @@ async def main():
 
     # initialize kafka producers and consumers
     b_server = KafkaSettings().bootstrap_servers
+    # ToScrapeMessage accepts batched payloads and legacy single-name
+    # payloads, so a rolling deploy can drain old messages
     player_ts_queue = QueueFactory.create_queue(
-        model=ToScrapeStruct,
+        model=ToScrapeMessage,
         queue_type="queue",
         backend_type="kafka",
         config=KafkaConfig(
