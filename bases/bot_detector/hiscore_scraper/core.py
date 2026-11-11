@@ -22,7 +22,7 @@ from bot_detector.osrs_hs_api.exceptions import Err, Ok, PlayerDoesNotExist
 from bot_detector.osrs_hs_api.structs import PlayerStats
 from bot_detector.proxy_manager import ProxyManager
 from bot_detector.proxy_manager import Settings as ProxySettings
-from bot_detector.rate_limiter import RateLimiter
+from bot_detector.rate_limiter import RateLimiter, Window
 from bot_detector.retry_tracker import RetryTracker
 from bot_detector.structs import (
     HighscoreBaseStruct,
@@ -288,10 +288,15 @@ async def work(
     retry_tracker = RetryTracker(base_delay=1.0, max_delay=300.0, decay_window=300.0)
     proxy_settings = ProxySettings()  # type: ignore[call-arg]
     rate_limiter = RateLimiter(
-        calls_per_interval=proxy_settings.MAX_CALLS,
-        interval=proxy_settings.INTERVAL,
-        extra_windows=[
-            (proxy_settings.MAX_CALLS_PER_SECOND, proxy_settings.SECOND_INTERVAL),
+        windows=[
+            Window(
+                count=proxy_settings.MAX_CALLS,
+                interval_ms=proxy_settings.INTERVAL_MS,
+            ),
+            Window(
+                count=proxy_settings.MAX_CALLS_PER_SECOND,
+                interval_ms=proxy_settings.SECOND_INTERVAL_MS,
+            ),
         ],
     )
 

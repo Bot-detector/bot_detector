@@ -3,145 +3,160 @@ import time
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from bot_detector.rate_limiter import RateLimiter
-
-
-@pytest.mark.asyncio
-async def test_no_sleep_before_limit():
-    limiter = RateLimiter(calls_per_interval=5, interval=60)
-
-    with (
-        patch.object(time, "time", return_value=1000),
-        patch.object(asyncio, "sleep", AsyncMock()),
-    ):
-        for _ in range(4):
-            await limiter.check()
-
-    assert len(limiter.history) == 4
-
-
-@pytest.mark.asyncio
-async def test_sleep_when_full_and_within_interval():
-    limiter = RateLimiter(calls_per_interval=3, interval=60)
-
-    mock_sleep = AsyncMock()
-    with (
-        patch.object(time, "time", return_value=1000),
-        patch.object(asyncio, "sleep", mock_sleep),
-    ):
-        await limiter.check()
-        await limiter.check()
-        mock_sleep.assert_not_called()
-
-        await limiter.check()
-        mock_sleep.assert_awaited_once_with(60)
-
-
-@pytest.mark.asyncio
-async def test_no_sleep_when_full_but_outside_interval():
-    limiter = RateLimiter(calls_per_interval=3, interval=10)
-
-    mock_sleep = AsyncMock()
-    time_values = [1000, 1003, 1011]
-    time_iter = iter(time_values)
-
-    with (
-        patch.object(time, "time", side_effect=lambda: next(time_iter)),
-        patch.object(asyncio, "sleep", mock_sleep),
-    ):
-        await limiter.check()
-        await limiter.check()
-        mock_sleep.assert_not_called()
-
-        await limiter.check()
-        mock_sleep.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_custom_config():
-    limiter = RateLimiter(calls_per_interval=10, interval=30)
-
-    assert limiter.history.maxlen == 10
-    assert limiter.interval == 30
-
-
-@pytest.mark.asyncio
-async def test_sleep_duration_calculation():
-    limiter = RateLimiter(calls_per_interval=2, interval=60)
-
-    mock_sleep = AsyncMock()
-    time_values = [1000, 1020]
-    time_iter = iter(time_values)
-
-    with (
-        patch.object(time, "time", side_effect=lambda: next(time_iter)),
-        patch.object(asyncio, "sleep", mock_sleep),
-    ):
-        await limiter.check()
-        mock_sleep.assert_not_called()
-
-        await limiter.check()
-        mock_sleep.assert_awaited_once_with(40)
+from bot_detector.rate_limiter import RateLimiter, Window
 
 
 @pytest.mark.asyncio
 async def test_default_config():
     limiter = RateLimiter()
 
-    assert limiter.history.maxlen == 60
-    assert limiter.interval == 60
+    assert limiter.windows == (Window(count=60, interval_ms=60_000),)
 
 
 @pytest.mark.asyncio
-async def test_history_is_sliding():
-    limiter = RateLimiter(calls_per_interval=3, interval=60)
-
-    time_values = [1000, 1001, 1002]
-    time_iter = iter(time_values)
-
-    with (
-        patch.object(time, "time", side_effect=lambda: next(time_iter)),
-        patch.object(asyncio, "sleep", AsyncMock()),
-    ):
-        await limiter.check()
-        await limiter.check()
-        await limiter.check()
-
-    assert len(limiter.history) == 3
-    assert list(limiter.history) == [1000, 1001, 1002]
-
-
-@pytest.mark.asyncio
-async def test_extra_window_enforces_per_second_limit():
-    limiter = RateLimiter(
-        calls_per_interval=1200,
-        interval=60,
-        extra_windows=[(2, 1)],
-    )
+async def test_no_sleep_before_limit():
+    limiter = RateLimiter(windows=[Window(count=5, interval_ms=60_000)])
 
     mock_sleep = AsyncMock()
     with (
         patch.object(time, "time", return_value=1000),
         patch.object(asyncio, "sleep", mock_sleep),
     ):
-        await limiter.check()
-        mock_sleep.assert_not_called()
+        for _ in range(4):
+            await limiter.check()
 
-        # second call is allowed, third is capped by the extra window
-        await limiter.check()
-        mock_sleep.assert_awaited_once_with(1)
+    mock_sleep.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_extra_window_does_not_block_spread_calls():
+async def test_sleep_when_full_and_within_interval():
+    limiter = RateLimiter(windows=[Window(count=3, interval_ms=60_000)])
+
+    mock_sleep = AsyncMock()
+    with (
+        patch.object(time, "time", return_value=1_000_000),
+        patch.object(asyncio, "sleep", mock_sleep),
+    ):
+        await limiter.check()
+        await limiter.check()
+        mock_sleep.assert_not_called()
+
+        await limiter.check()
+        mock_sleep.assert_awaited_once_with(60.0)
+
+
+@pytest.mark.asyncio
+async def test_no_sleep_when_full_but_outside_interval():
+    limiter = RateLimiter(windows=[Window(count=3, interval_ms=10_000)])
+
+    mock_sleep = AsyncMock()
+    time_values = [1_000_000, 1_003_000, 1_011_000]
+    time_iter = iter(time_values)
+
+    with (
+        patch.object(time, "time", side_effect=lambda: next(time_iter)),
+        patch.object(asyncio, "sleep", mock_sleep),
+    ):
+        await limiter.check()
+        await limiter.check()
+        mock_sleep.assert_not_called()
+
+        await limiter.check()
+        mock_sleep.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_sleep_duration_calculation():
+    limiter = RateLimiter(windows=[Window(count=2, interval_ms=60_000)])
+
+    mock_sleep = AsyncMock()
+    time_values = [1_000_000, 1_020_000]
+    time_iter = iter(time_values)
+
+    with (
+        patch.object(time, "time", side_effect=lambda: next(time_iter)),
+        patch.object(asyncio, "sleep", mock_sleep),
+    ):
+        await limiter.check()
+        mock_sleep.assert_not_called()
+
+        await limiter.check()
+        mock_sleep.assert_awaited_once_with(40.0)
+
+
+@pytest.mark.asyncio
+async def test_sleeps_sub_second_intervals():
+    limiter = RateLimiter(windows=[Window(count=2, interval_ms=500)])
+
+    mock_sleep = AsyncMock()
+    time_values = [1_000_000, 1_000_300]
+    time_iter = iter(time_values)
+
+    with (
+        patch.object(time, "time", side_effect=lambda: next(time_iter)),
+        patch.object(asyncio, "sleep", mock_sleep),
+    ):
+        await limiter.check()
+        mock_sleep.assert_not_called()
+
+        await limiter.check()
+        mock_sleep.assert_awaited_once_with(0.2)
+
+
+@pytest.mark.asyncio
+async def test_history_is_sliding():
+    limiter = RateLimiter(windows=[Window(count=2, interval_ms=10_000)])
+
+    mock_sleep = AsyncMock()
+    time_values = [1_000_000, 1_005_000, 1_011_000]
+    time_iter = iter(time_values)
+
+    with (
+        patch.object(time, "time", side_effect=lambda: next(time_iter)),
+        patch.object(asyncio, "sleep", mock_sleep),
+    ):
+        await limiter.check()
+        await limiter.check()
+        mock_sleep.assert_awaited_once_with(5.0)
+
+        # the call at t=1_000_000 slid out of the window: spans 6s
+        await limiter.check()
+        mock_sleep.assert_awaited_with(4.0)
+
+
+@pytest.mark.asyncio
+async def test_multiple_windows_cap_shortest_interval():
     limiter = RateLimiter(
-        calls_per_interval=2,
-        interval=60,
-        extra_windows=[(2, 1)],
+        windows=[
+            Window(count=1200, interval_ms=60_000),
+            Window(count=2, interval_ms=1_000),
+        ]
     )
 
     mock_sleep = AsyncMock()
-    time_values = [1000, 1061, 1122]
+    with (
+        patch.object(time, "time", return_value=1_000_000),
+        patch.object(asyncio, "sleep", mock_sleep),
+    ):
+        await limiter.check()
+        mock_sleep.assert_not_called()
+
+        # second call is allowed, third is capped by the 1s window
+        await limiter.check()
+        mock_sleep.assert_awaited_once_with(1.0)
+
+
+@pytest.mark.asyncio
+async def test_multiple_windows_allow_spread_calls():
+    limiter = RateLimiter(
+        windows=[
+            Window(count=2, interval_ms=60_000),
+            Window(count=2, interval_ms=1_000),
+        ]
+    )
+
+    mock_sleep = AsyncMock()
+    time_values = [1_000_000, 1_061_000, 1_122_000]
     time_iter = iter(time_values)
 
     with (
@@ -159,19 +174,20 @@ async def test_extra_window_does_not_block_spread_calls():
 @pytest.mark.asyncio
 async def test_sleeps_for_longest_window():
     limiter = RateLimiter(
-        calls_per_interval=1200,
-        interval=60,
-        extra_windows=[(2, 1)],
+        windows=[
+            Window(count=5, interval_ms=60_000),
+            Window(count=2, interval_ms=1_000),
+        ]
     )
 
     mock_sleep = AsyncMock()
     with (
-        patch.object(time, "time", return_value=1000),
+        patch.object(time, "time", return_value=1_000_000),
         patch.object(asyncio, "sleep", mock_sleep),
     ):
-        # exhaust both windows: extra (2 calls) and primary (1200 calls)
-        for _ in range(1200):
+        # exhaust both windows: the 1s window first, then the 60s window
+        for _ in range(5):
             await limiter.check()
 
-    # only the last call exceeded both windows; primary demands the wait
-    mock_sleep.assert_awaited_with(60)
+    mock_sleep.assert_any_call(1.0)
+    mock_sleep.assert_awaited_with(60.0)

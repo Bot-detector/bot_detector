@@ -2,66 +2,59 @@ import asyncio
 import logging
 import time
 from collections import deque
+from collections.abc import Iterable
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
 
-class _Window:
-    """A single rolling window capping the number of recorded calls."""
+@dataclass(frozen=True)
+class Window:
+    """A rolling window capping the number of calls within an interval."""
 
-    def __init__(self, calls_per_interval: int, interval: int) -> None:
-        self.calls_per_interval = calls_per_interval
-        self.interval = interval
-        self.history: deque[int] = deque(maxlen=calls_per_interval)
+    count: int
+    interval_ms: int
 
-    def record(self, current_time: int) -> None:
-        self.history.append(current_time)
 
-    def sleep_time(self, current_time: int) -> int:
-        """Seconds until a free slot opens, zero if the window has capacity."""
-        if len(self.history) < self.calls_per_interval:
-            return 0
-        first_call = self.history[0]
-        time_span = current_time - first_call
-        if time_span < self.interval:
-            return self.interval - time_span
-        return 0
+DEFAULT_WINDOWS = (Window(count=60, interval_ms=60_000),)
 
 
 class RateLimiter:
-    def __init__(
-        self,
-        calls_per_interval: int = 60,
-        interval: int = 60,
-        extra_windows: list[tuple[int, int]] | None = None,
-    ) -> None:
+    def __init__(self, windows: Iterable[Window] | None = None) -> None:
         """
-        Rolling-window rate limiter.
+        Rolling-window rate limiter with millisecond resolution.
 
         Args:
-            calls_per_interval: Max calls allowed within `interval` seconds.
-            interval: Length of the primary window in seconds.
-            extra_windows: Additional (calls_per_interval, interval) windows.
-                A call only proceeds once every window has a free slot.
-        """
-        windows = [(calls_per_interval, interval)]
-        if extra_windows:
-            windows.extend(extra_windows)
-        self.windows = [_Window(calls, seconds) for calls, seconds in windows]
+            windows: Rate windows. A call only proceeds once every window
+                has a free slot. Defaults to 60 calls per 60 seconds.
 
-        # primary window, exposed for backwards compatibility
-        self.history = self.windows[0].history
-        self.interval = interval
+        Example:
+            RateLimiter(
+                windows=[
+                    Window(count=1200, interval_ms=60_000),
+                    Window(count=20, interval_ms=1_000),
+                ]
+            )
+        """
+        self.windows = tuple(windows) if windows is not None else DEFAULT_WINDOWS
+        self._history: dict[Window, deque[int]] = {
+            window: deque(maxlen=window.count) for window in self.windows
+        }
 
     async def check(self):
         """
         Checks if any rate limit is reached and waits if necessary.
         """
-        current_time = int(time.time())
-        for window in self.windows:
-            window.record(current_time)
-
-        sleep_time = max(window.sleep_time(current_time) for window in self.windows)
-        if sleep_time > 0:
-            logger.info(f"Rate limit reached. Sleeping for {sleep_time} seconds.")
-            await asyncio.sleep(sleep_time)
+        current_ms = int(time.time() * 1000)
+        sleep_ms = 0
+        for window, history in self._history.items():
+            history.append(current_ms)
+            if len(history) < window.count:
+                continue
+            time_span = current_ms - history[0]
+            if time_span < window.interval_ms:
+                sleep_ms = max(sleep_ms, window.interval_ms - time_span)
+        if sleep_ms > 0:
+            sleep_s = sleep_ms / 1000
+            logger.info(f"Rate limit reached. Sleeping for {sleep_s:.3f} seconds.")
+            await asyncio.sleep(sleep_s)

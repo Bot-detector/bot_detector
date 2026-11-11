@@ -19,7 +19,7 @@ from bot_detector.event_queue.structs import (
 )
 from bot_detector.proxy_manager import ProxyManager
 from bot_detector.proxy_manager import Settings as ProxySettings
-from bot_detector.rate_limiter import RateLimiter
+from bot_detector.rate_limiter import RateLimiter, Window
 from bot_detector.retry_tracker import RetryTracker
 from bot_detector.runemetrics_api import RuneMetrics, RuneMetricsResponse
 from bot_detector.runemetrics_api.exceptions import UnexpectedRedirection
@@ -359,12 +359,14 @@ async def main():
                 worker_id=worker_id,
                 proxy_manager=proxy_manager,
                 rate_limiter=RateLimiter(
-                    calls_per_interval=proxy_settings.MAX_CALLS,
-                    interval=proxy_settings.INTERVAL,
-                    extra_windows=[
-                        (
-                            proxy_settings.MAX_CALLS_PER_SECOND,
-                            proxy_settings.SECOND_INTERVAL,
+                    windows=[
+                        Window(
+                            count=proxy_settings.MAX_CALLS,
+                            interval_ms=proxy_settings.INTERVAL_MS,
+                        ),
+                        Window(
+                            count=proxy_settings.MAX_CALLS_PER_SECOND,
+                            interval_ms=proxy_settings.SECOND_INTERVAL_MS,
                         ),
                     ],
                 ),

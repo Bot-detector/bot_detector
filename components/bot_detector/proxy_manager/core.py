@@ -11,12 +11,12 @@ logger = logging.getLogger(__name__)
 
 class Settings(BaseSettings):
     PROXY_API_KEY: str = Field(...)
-    # per-worker rolling windows: at most MAX_CALLS per INTERVAL seconds and
-    # MAX_CALLS_PER_SECOND per SECOND_INTERVAL seconds
+    # per-worker rolling windows: at most MAX_CALLS per INTERVAL_MS and
+    # MAX_CALLS_PER_SECOND per SECOND_INTERVAL_MS (intervals in milliseconds)
     MAX_CALLS: int = 1200
-    INTERVAL: int = 60
+    INTERVAL_MS: int = 60_000
     MAX_CALLS_PER_SECOND: int = 20
-    SECOND_INTERVAL: int = 1
+    SECOND_INTERVAL_MS: int = 1_000
 
 
 class Ports(BaseModel):
