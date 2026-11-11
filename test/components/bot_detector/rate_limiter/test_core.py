@@ -109,3 +109,69 @@ async def test_history_is_sliding():
 
     assert len(limiter.history) == 3
     assert list(limiter.history) == [1000, 1001, 1002]
+
+
+@pytest.mark.asyncio
+async def test_extra_window_enforces_per_second_limit():
+    limiter = RateLimiter(
+        calls_per_interval=1200,
+        interval=60,
+        extra_windows=[(2, 1)],
+    )
+
+    mock_sleep = AsyncMock()
+    with (
+        patch.object(time, "time", return_value=1000),
+        patch.object(asyncio, "sleep", mock_sleep),
+    ):
+        await limiter.check()
+        mock_sleep.assert_not_called()
+
+        # second call is allowed, third is capped by the extra window
+        await limiter.check()
+        mock_sleep.assert_awaited_once_with(1)
+
+
+@pytest.mark.asyncio
+async def test_extra_window_does_not_block_spread_calls():
+    limiter = RateLimiter(
+        calls_per_interval=2,
+        interval=60,
+        extra_windows=[(2, 1)],
+    )
+
+    mock_sleep = AsyncMock()
+    time_values = [1000, 1061, 1122]
+    time_iter = iter(time_values)
+
+    with (
+        patch.object(time, "time", side_effect=lambda: next(time_iter)),
+        patch.object(asyncio, "sleep", mock_sleep),
+    ):
+        await limiter.check()
+        await limiter.check()
+        await limiter.check()
+
+    # calls spaced beyond both intervals pass without sleeping
+    mock_sleep.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_sleeps_for_longest_window():
+    limiter = RateLimiter(
+        calls_per_interval=1200,
+        interval=60,
+        extra_windows=[(2, 1)],
+    )
+
+    mock_sleep = AsyncMock()
+    with (
+        patch.object(time, "time", return_value=1000),
+        patch.object(asyncio, "sleep", mock_sleep),
+    ):
+        # exhaust both windows: extra (2 calls) and primary (1200 calls)
+        for _ in range(1200):
+            await limiter.check()
+
+    # only the last call exceeded both windows; primary demands the wait
+    mock_sleep.assert_awaited_with(60)

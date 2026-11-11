@@ -57,7 +57,12 @@ def _patch_common(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         core,
         "ProxySettings",
-        lambda: SimpleNamespace(MAX_CALLS=100, INTERVAL=60),
+        lambda: SimpleNamespace(
+            MAX_CALLS=100,
+            INTERVAL=60,
+            MAX_CALLS_PER_SECOND=20,
+            SECOND_INTERVAL=1,
+        ),
     )
     monkeypatch.setattr(
         core,

@@ -3,7 +3,7 @@ import time
 from typing import Literal, overload
 
 from aiohttp import ClientSession
-from osrs.utils import RateLimiter
+from bot_detector.rate_limiter import RateLimiter
 from pydantic import BaseModel
 
 from .exceptions import Undefined, UnexpectedRedirection

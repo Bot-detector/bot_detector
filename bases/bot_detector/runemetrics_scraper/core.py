@@ -19,6 +19,7 @@ from bot_detector.event_queue.structs import (
 )
 from bot_detector.proxy_manager import ProxyManager
 from bot_detector.proxy_manager import Settings as ProxySettings
+from bot_detector.rate_limiter import RateLimiter
 from bot_detector.retry_tracker import RetryTracker
 from bot_detector.runemetrics_api import RuneMetrics, RuneMetricsResponse
 from bot_detector.runemetrics_api.exceptions import UnexpectedRedirection
@@ -35,7 +36,6 @@ from bot_detector.runemetrics_scraper.metrics import (
 )
 from bot_detector.runemetrics_scraper.settings import Settings as ScraperSettings
 from bot_detector.structs import MetaData, PlayerStruct
-from osrs.utils import RateLimiter
 from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
@@ -352,14 +352,21 @@ async def main():
     await player_banned_producer.start()
 
     # start workers
+    proxy_settings = ProxySettings()  # type: ignore[call-arg]
     workers = [
         asyncio.create_task(
             work(
                 worker_id=worker_id,
                 proxy_manager=proxy_manager,
                 rate_limiter=RateLimiter(
-                    calls_per_interval=ProxySettings().MAX_CALLS,  # type: ignore[call-arg]
-                    interval=ProxySettings().INTERVAL,  # type: ignore[call-arg]
+                    calls_per_interval=proxy_settings.MAX_CALLS,
+                    interval=proxy_settings.INTERVAL,
+                    extra_windows=[
+                        (
+                            proxy_settings.MAX_CALLS_PER_SECOND,
+                            proxy_settings.SECOND_INTERVAL,
+                        ),
+                    ],
                 ),
                 player_nf_queue=player_nf_queue,
                 player_sc_producer=player_sc_producer,

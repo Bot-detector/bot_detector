@@ -286,9 +286,13 @@ async def work(
     player_sc_producer: QueueProducer[ScrapedStruct],
 ):
     retry_tracker = RetryTracker(base_delay=1.0, max_delay=300.0, decay_window=300.0)
+    proxy_settings = ProxySettings()  # type: ignore[call-arg]
     rate_limiter = RateLimiter(
-        calls_per_interval=ProxySettings().MAX_CALLS,  # type: ignore
-        interval=ProxySettings().INTERVAL,  # type: ignore
+        calls_per_interval=proxy_settings.MAX_CALLS,
+        interval=proxy_settings.INTERVAL,
+        extra_windows=[
+            (proxy_settings.MAX_CALLS_PER_SECOND, proxy_settings.SECOND_INTERVAL),
+        ],
     )
 
     async with build_session() as session:

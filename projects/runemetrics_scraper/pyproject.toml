@@ -8,7 +8,6 @@ version = "0.1.0"
 requires-python = ">=3.10"
 
 dependencies = [
-    "osrs==0.0.15",
     "pydantic-settings==2.7.0",
     "pydantic==2.10.4",
     "orjson==3.11.5",
@@ -30,6 +29,7 @@ packages = ["bot_detector"]
 "../../bases/bot_detector/runemetrics_scraper" = "bot_detector/runemetrics_scraper"
 "../../components/bot_detector/runemetrics_api" = "bot_detector/runemetrics_api"
 "../../components/bot_detector/proxy_manager" = "bot_detector/proxy_manager"
+"../../components/bot_detector/rate_limiter" = "bot_detector/rate_limiter"
 "../../components/bot_detector/event_queue" = "bot_detector/event_queue"
 "../../components/bot_detector/structs" = "bot_detector/structs"
 "../../components/bot_detector/logfmt" = "bot_detector/logfmt"
