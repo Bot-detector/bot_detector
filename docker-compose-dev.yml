@@ -350,6 +350,23 @@ services:
       mysql_setup:
         condition: service_completed_successfully
 
+  job_broadcaster:
+    container_name: job_broadcaster
+    image: bd/job_broadcaster:dev
+    build:
+      context: ./
+      dockerfile: ./projects/job_broadcaster/Dockerfile
+      target: dev
+    networks:
+      - botdetector-network
+    environment:
+      - DATABASE_URL=mysql+asyncmy://job-broadcaster:job_broadcaster_pw@mysql:3306/playerdata
+    env_file:
+      - .env
+    depends_on:
+      mysql_setup:
+        condition: service_completed_successfully
+
   worker_ban_migration:
     container_name: worker_ban_migration
     image: bd/worker_ban_migration:dev

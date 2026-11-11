@@ -60,4 +60,10 @@ GRANT SELECT ON playerdata.report_location TO `ban-migration`@`%`;
 GRANT SELECT ON playerdata.Players TO `ban-migration`@`%`;
 GRANT INSERT ON playerdata.report_archive TO `ban-migration`@`%`;
 
+/*job-broadcaster*/
+GRANT SELECT ON playerdata.Players TO `job-broadcaster`@`%`;
+GRANT SELECT ON playerdata.prediction_latest TO `job-broadcaster`@`%`;
+GRANT SELECT ON playerdata.highscore_data_latest TO `job-broadcaster`@`%`;
+GRANT UPDATE ON playerdata.Players TO `job-broadcaster`@`%`;
+
 FLUSH PRIVILEGES;
