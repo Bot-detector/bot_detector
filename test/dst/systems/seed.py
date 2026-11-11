@@ -13,6 +13,7 @@ _BASE_TS = 1_700_000_000
 _GOLDEN = 0x9E3779B97F4A7C15
 _M1 = 0xBF58476D1CE4E5B9
 _M2 = 0x94D049BB133111EB
+_MASK64 = 2**64 - 1
 
 _SKILLS = (
     "attack",
@@ -50,6 +51,12 @@ _EQUIP_KEYS = (
     "equip_hands_id",
     "equip_weapon_id",
     "equip_shield_id",
+)
+
+# report column salts then equipment salts (30 + index into _EQUIP_KEYS);
+# ordering must match the positional reads in ``reports``
+_REPORT_MIX_SALTS = (10, 12, 13, 14, 15, 16, 17, 18, 19) + tuple(
+    30 + i for i in range(len(_EQUIP_KEYS))
 )
 
 
@@ -119,25 +126,40 @@ def reports(
     if not pool:
         raise ValueError("player_ids must not be empty")
     n = len(pool)
+    # splitmix64 inlined on the 1M-row hot path: identical values to
+    # _mix(seed, i, salt) per salt, without 20 calls per row (the & mask
+    # equals % 2**64 for all ints, negatives included)
+    golden = _GOLDEN
+    m1 = _M1
+    m2 = _M2
+    mask = _MASK64
+    base_ts = _BASE_TS
     for i in range(count):
         reported = pool[i % n]
         reporter = pool[(i * 7_919 + seed) % n]
+        mixed: list[int] = []
+        push = mixed.append
+        for salt in _REPORT_MIX_SALTS:
+            x = (seed + i * golden + salt * m1) & mask
+            x = ((x ^ (x >> 30)) * m1) & mask
+            x = ((x ^ (x >> 27)) * m2) & mask
+            push(x ^ (x >> 31))
         row: dict[str, Any] = {
             "reporter_id": reporter,
             "reported_id": reported,
-            "manual_detect": _mix(seed, i, 10) % 2,
-            "region_id": _mix(seed, i, 12) % 100_000,
-            "x_coord": _mix(seed, i, 13) % 3_400,
-            "y_coord": _mix(seed, i, 14) % 3_400,
-            "z_coord": _mix(seed, i, 15) % 4,
-            "timestamp": _BASE_TS + _mix(seed, i, 16) % 2_592_000,
-            "on_members_world": _mix(seed, i, 17) % 2,
-            "on_pvp_world": _mix(seed, i, 18) % 2,
-            "world_number": 300 + _mix(seed, i, 19) % 700,
+            "manual_detect": mixed[0] % 2,
+            "region_id": mixed[1] % 100_000,
+            "x_coord": mixed[2] % 3_400,
+            "y_coord": mixed[3] % 3_400,
+            "z_coord": mixed[4] % 4,
+            "timestamp": base_ts + mixed[5] % 2_592_000,
+            "on_members_world": mixed[6] % 2,
+            "on_pvp_world": mixed[7] % 2,
+            "world_number": 300 + mixed[8] % 700,
         }
-        for salt, key in enumerate(_EQUIP_KEYS):
-            draw = _mix(seed, i, 30 + salt)
-            row[key] = None if draw % 4 == 0 else draw % 32_768
+        for offset, key in enumerate(_EQUIP_KEYS, start=9):
+            d = mixed[offset]
+            row[key] = None if d % 4 == 0 else d % 32_768
         yield row
 
 

@@ -162,6 +162,17 @@ class FaultSession:
         self.seed = seed
         self._ordinals: dict[str, int] = {}
         self.faults_raised: dict[str, int] = {}
+        # frozen config: bucket pcts never change, hoist them out of
+        # the per-statement check; stream names are cached per table
+        self._pcts = (
+            self.faults.deadlock_pct,
+            self.faults.lock_wait_timeout_pct,
+            self.faults.conn_lost_pct,
+            self.faults.too_many_conn_pct,
+            self.faults.temp_table_full_pct,
+            self.faults.dup_key_pct,
+        )
+        self._stream_cache: dict[str, str] = {}
 
     @property
     def faults_raised_total(self) -> int:
@@ -174,18 +185,13 @@ class FaultSession:
 
     def _check(self, table: str, dup_key_applies: bool) -> None:
         """Draw once for this op; raise the mapped error on a hit."""
-        stream = f"db:x:{table}"
+        stream = self._stream_cache.get(table)
+        if stream is None:
+            stream = f"db:x:{table}"
+            self._stream_cache[table] = stream
         ordinal = self._ordinals.get(stream, 0)
         self._ordinals[stream] = ordinal + 1
-        index = bucket(
-            draw(self.seed, stream, ordinal),
-            self.faults.deadlock_pct,
-            self.faults.lock_wait_timeout_pct,
-            self.faults.conn_lost_pct,
-            self.faults.too_many_conn_pct,
-            self.faults.temp_table_full_pct,
-            self.faults.dup_key_pct,
-        )
+        index = bucket(draw(self.seed, stream, ordinal), *self._pcts)
         errno = self._bucket_errno(index, ordinal, table, dup_key_applies)
         if errno is None:
             return

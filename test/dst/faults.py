@@ -4,13 +4,35 @@ Every fault decision derives from blake2b over ``(seed, stream,
 ordinal)``. The same triple yields the same outcome forever, in any
 draw order, in any process — no shared RNG state, so millions of ops
 across parallel shards stay reproducible (spec §4.1).
+
+``draw`` primes one blake2b per ``(seed, stream)`` prefix and copies it
+per call (hash streaming: ``blake2b(prefix + suffix)`` equals
+``primed.copy().update(suffix)``), so draws are byte-identical to
+hashing the full triple each time — just cheaper on million-op runs.
 """
 
 from hashlib import blake2b
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 DRAW_MAX = 2**64
+
+# primed prefix hashers keyed by (seed, stream); hash state is shared
+# and immutable by convention — callers must ``.copy()`` before update.
+# Streams per process are few (fault streams, topics x partitions), so
+# the cache is unbounded.
+_PRIMED: dict[tuple[int, str], Any] = {}
+
+
+def _primed(seed: int, stream: str) -> Any:
+    """Primed blake2b over the ``f"{seed}:{stream}:"`` prefix."""
+    key = (seed, stream)
+    h = _PRIMED.get(key)
+    if h is None:
+        h = blake2b(f"{seed}:{stream}:".encode(), digest_size=8)
+        _PRIMED[key] = h
+    return h
 
 
 def draw(seed: int, stream: str, ordinal: int) -> float:
@@ -24,7 +46,8 @@ def draw(seed: int, stream: str, ordinal: int) -> float:
     Returns:
         Uniform float in [0, 1).
     """
-    h = blake2b(f"{seed}:{stream}:{ordinal}".encode(), digest_size=8)
+    h = _primed(seed, stream).copy()
+    h.update(str(ordinal).encode())
     return int.from_bytes(h.digest(), "big") / DRAW_MAX
 
 
