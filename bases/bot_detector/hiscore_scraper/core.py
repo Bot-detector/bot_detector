@@ -290,6 +290,7 @@ async def work(
         calls_per_interval=ProxySettings().MAX_CALLS,  # type: ignore
         interval=ProxySettings().INTERVAL,  # type: ignore
     )
+    api = HiscoreOldSchoolAPI(rate_limiter=rate_limiter)
 
     async with build_session() as session:
         while True:
@@ -307,8 +308,6 @@ async def work(
                 continue
 
             player_data = player_to_scrape.player_data
-
-            api = HiscoreOldSchoolAPI(rate_limiter=rate_limiter)
 
             # metric: every time we scrape a player, we increment the counter
             total_counter.labels(proxy=_proxy).inc()
