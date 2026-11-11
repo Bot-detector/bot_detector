@@ -70,7 +70,7 @@ class _Table:
         ]
 
     def values(self, row: dict[str, Any], cols: tuple[str, ...]) -> tuple[Any, ...]:
-        return tuple(row[c] for c in cols)
+        return tuple([row[c] for c in cols])
 
     def find_dup(self, row: dict[str, Any]) -> DupKey | None:
         """(row_index, key_name, key_values) of the first violated key."""
@@ -86,9 +86,13 @@ class _Table:
         return None
 
     def append(self, row: dict[str, Any]) -> None:
+        self.append_keyed(row, self.values(row, self.schema.primary_key))
+
+    def append_keyed(self, row: dict[str, Any], key: DupKey) -> None:
+        """Append with an already-built pk tuple; updates all indexes."""
         idx = len(self.rows)
         self.rows.append(dict(row))
-        self.pk_index[self.values(row, self.schema.primary_key)] = idx
+        self.pk_index[key] = idx
         for cols, index in zip(
             self.schema.unique_constraints, self.unique_indexes, strict=True
         ):
@@ -145,11 +149,22 @@ class SimDB:
         return 1
 
     def insert_ignore(self, table: str, row: dict[str, Any]) -> int:
-        """INSERT IGNORE; dup is skipped, rowcount 0 instead of a raise."""
+        """INSERT IGNORE; dup is skipped, rowcount 0 instead of a raise.
+
+        Hot path (1M-row storms): builds the pk tuple once — plain
+        ``insert_ignore`` in ``find_dup`` + ``append`` would build it
+        twice. Dup check is boolean; no violation detail needed here.
+        """
         t = self._table(table)
-        if t.find_dup(row) is not None:
+        key = t.values(row, t.schema.primary_key)
+        if key in t.pk_index:
             return 0
-        t.append(row)
+        for cols, index in zip(
+            t.schema.unique_constraints, t.unique_indexes, strict=True
+        ):
+            if t.values(row, cols) in index:
+                return 0
+        t.append_keyed(row, key)
         return 1
 
     def upsert(self, table: str, row: dict[str, Any]) -> int:
