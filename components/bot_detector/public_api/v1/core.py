@@ -11,7 +11,7 @@ from bot_detector.public_api.v1.structs import (
     RegionID,
     RegionName,
 )
-from bot_detector.rate_limiter import RateLimiter
+from bot_detector.rate_limiter import RateLimiter, Window
 
 
 class LegacyApiClient:
@@ -27,7 +27,9 @@ class LegacyApiClient:
         self.session = session
         self.token = token
         self.base_url = base_url or self.DEFAULT_BASE_URL
-        self.limiter = limiter or RateLimiter()
+        self.limiter = limiter or RateLimiter(
+            windows=[Window(name="default", count=60, interval_ms=60_000)]
+        )
 
     @retry(max_attempts=3)
     async def get_project_stats(self) -> Any:

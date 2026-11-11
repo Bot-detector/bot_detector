@@ -22,7 +22,7 @@ from bot_detector.osrs_hs_api.exceptions import Err, Ok, PlayerDoesNotExist
 from bot_detector.osrs_hs_api.structs import PlayerStats
 from bot_detector.proxy_manager import ProxyManager
 from bot_detector.proxy_manager import Settings as ProxySettings
-from bot_detector.rate_limiter import RateLimiter
+from bot_detector.rate_limiter import RateLimiter, Window
 from bot_detector.retry_tracker import RetryTracker
 from bot_detector.structs import (
     HighscoreBaseStruct,
@@ -37,6 +37,7 @@ from .metrics import (
     fetch_outcome_latency_histogram,
     latency_histogram,
     not_found_counter,
+    on_rate_limit_wait,
     retry_counter,
     retry_delay_histogram,
     retry_histogram,
@@ -286,9 +287,21 @@ async def work(
     player_sc_producer: QueueProducer[ScrapedStruct],
 ):
     retry_tracker = RetryTracker(base_delay=1.0, max_delay=300.0, decay_window=300.0)
+    proxy_settings = ProxySettings()  # type: ignore[call-arg]
     rate_limiter = RateLimiter(
-        calls_per_interval=ProxySettings().MAX_CALLS,  # type: ignore
-        interval=ProxySettings().INTERVAL,  # type: ignore
+        windows=[
+            Window(
+                name="minute",
+                count=proxy_settings.MAX_CALLS,
+                interval_ms=proxy_settings.INTERVAL_MS,
+            ),
+            Window(
+                name="second",
+                count=proxy_settings.MAX_CALLS_PER_SECOND,
+                interval_ms=proxy_settings.SECOND_INTERVAL_MS,
+            ),
+        ],
+        on_wait=on_rate_limit_wait,
     )
 
     async with build_session() as session:

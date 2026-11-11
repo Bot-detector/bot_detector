@@ -13,7 +13,7 @@ from bot_detector.public_api.v2.structs import (
     PredictionResponse,
     ReportScoreResponse,
 )
-from bot_detector.rate_limiter import RateLimiter
+from bot_detector.rate_limiter import RateLimiter, Window
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,9 @@ class PublicApiClient:
     ):
         self.session = session
         self.base_url = base_url or self.DEFAULT_BASE_URL
-        self.limiter = limiter or RateLimiter()
+        self.limiter = limiter or RateLimiter(
+            windows=[Window(name="default", count=60, interval_ms=60_000)]
+        )
         self.token = token
         self.api_user = api_user
 
