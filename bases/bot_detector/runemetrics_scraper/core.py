@@ -26,6 +26,7 @@ from bot_detector.runemetrics_api.exceptions import UnexpectedRedirection
 from bot_detector.runemetrics_scraper.metrics import (
     error_counter,
     latency_histogram,
+    on_rate_limit_wait,
     player_update_errors,
     retry_counter,
     retry_delay_histogram,
@@ -361,14 +362,17 @@ async def main():
                 rate_limiter=RateLimiter(
                     windows=[
                         Window(
+                            name="minute",
                             count=proxy_settings.MAX_CALLS,
                             interval_ms=proxy_settings.INTERVAL_MS,
                         ),
                         Window(
+                            name="second",
                             count=proxy_settings.MAX_CALLS_PER_SECOND,
                             interval_ms=proxy_settings.SECOND_INTERVAL_MS,
                         ),
                     ],
+                    on_wait=on_rate_limit_wait,
                 ),
                 player_nf_queue=player_nf_queue,
                 player_sc_producer=player_sc_producer,

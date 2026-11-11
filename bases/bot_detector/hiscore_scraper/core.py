@@ -37,6 +37,7 @@ from .metrics import (
     fetch_outcome_latency_histogram,
     latency_histogram,
     not_found_counter,
+    on_rate_limit_wait,
     retry_counter,
     retry_delay_histogram,
     retry_histogram,
@@ -290,14 +291,17 @@ async def work(
     rate_limiter = RateLimiter(
         windows=[
             Window(
+                name="minute",
                 count=proxy_settings.MAX_CALLS,
                 interval_ms=proxy_settings.INTERVAL_MS,
             ),
             Window(
+                name="second",
                 count=proxy_settings.MAX_CALLS_PER_SECOND,
                 interval_ms=proxy_settings.SECOND_INTERVAL_MS,
             ),
         ],
+        on_wait=on_rate_limit_wait,
     )
 
     async with build_session() as session:
