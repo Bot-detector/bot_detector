@@ -16,9 +16,10 @@ CREATE TABLE Players (
   INDEX idx_ban_labels (label_jagex, possible_ban, confirmed_ban),
   UNIQUE KEY Unique_name (name)
 );
--- NOTE for existing deployments: run the index add manually (online DDL):
---   ALTER TABLE Players ADD INDEX idx_ban_labels (label_jagex, possible_ban, confirmed_ban);
--- init scripts only apply on a fresh datadir.
+-- idx_ban_labels is optional in production: job_broadcaster's reads do full
+-- scans without it (same as the legacy job) and its batched UPDATEs are
+-- PK-driven, so nothing depends on this index. Add it later if the read
+-- cost ever matters - it is transparent to the queries.
 
 CREATE TABLE migration_hs_v3 (
   player_id INT UNSIGNED NOT NULL
