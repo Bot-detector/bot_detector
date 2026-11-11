@@ -37,7 +37,9 @@ class BotDependencies:
                 session=self.session,
                 token=token,
                 base_url=base_url,
-                limiter=RateLimiter(windows=[Window(count=500, interval_ms=60_000)]),
+                limiter=RateLimiter(
+                    windows=[Window(name="minute", count=500, interval_ms=60_000)]
+                ),
             )
 
     def init_osrs_items(self, user_agent: str):

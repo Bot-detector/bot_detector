@@ -15,7 +15,9 @@ class HiscoreOldSchoolAPI:
         self.rate_limiter = (
             rate_limiter
             if rate_limiter is not None
-            else RateLimiter(windows=[Window(count=60, interval_ms=60_000)])
+            else RateLimiter(
+                windows=[Window(name="default", count=60, interval_ms=60_000)]
+            )
         )
 
     async def _fetch(

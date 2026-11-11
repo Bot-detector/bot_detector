@@ -28,7 +28,7 @@ class LegacyApiClient:
         self.token = token
         self.base_url = base_url or self.DEFAULT_BASE_URL
         self.limiter = limiter or RateLimiter(
-            windows=[Window(count=60, interval_ms=60_000)]
+            windows=[Window(name="default", count=60, interval_ms=60_000)]
         )
 
     @retry(max_attempts=3)

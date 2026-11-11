@@ -45,7 +45,7 @@ class RuneMetrics:
         self,
         proxy: str = "",
         rate_limiter: RateLimiter = RateLimiter(
-            windows=[Window(count=60, interval_ms=60_000)]
+            windows=[Window(name="default", count=60, interval_ms=60_000)]
         ),
     ) -> None:
         self.proxy = proxy
