@@ -1,3 +1,4 @@
+import logging
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -7,6 +8,7 @@ from bot_detector.database.ban_broadcast.interface import BanBroadcastInterface
 from bot_detector.discord_webhook import Embed
 from bot_detector.job_broadcaster import core
 from bot_detector.job_broadcaster.embeds import chunk_bots
+from bot_detector.wide_event import WideEventLogger
 from pydantic import ValidationError
 
 
@@ -31,7 +33,9 @@ def _make_repo(counts: BanCounts | None = None, bots: list[BannedBot] | None = N
         or BanCounts(total_bans=10, real_player_bans=3, no_data_bans=2)
     )
     repo.select_banned_bots = AsyncMock(return_value=bots or [])
-    repo.apply_bot_bans = AsyncMock(return_value=len(bots or []))
+    repo.apply_bot_bans = AsyncMock(
+        side_effect=lambda async_session, player_ids: len(player_ids)
+    )
     return repo
 
 
@@ -54,7 +58,9 @@ def _make_webhook(fail_on: set[str] | None = None):
 
 @pytest.mark.asyncio
 async def test_broadcast_applies_bans_and_posts_all_embeds():
-    bots = [BannedBot(name=f"bot{i}", prediction="vanilla") for i in range(5)]
+    bots = [
+        BannedBot(player_id=i, name=f"bot{i}", prediction="vanilla") for i in range(5)
+    ]
     repo = _make_repo(bots=bots)
     webhook = _make_webhook()
 
@@ -100,7 +106,9 @@ async def test_broadcast_no_bots_skips_names_and_completion():
 @pytest.mark.asyncio
 async def test_broadcast_chunks_names(monkeypatch):
     monkeypatch.setattr(core.asyncio, "sleep", AsyncMock(return_value=None))
-    bots = [BannedBot(name=f"bot{i}", prediction="vanilla") for i in range(6)]
+    bots = [
+        BannedBot(player_id=i, name=f"bot{i}", prediction="vanilla") for i in range(6)
+    ]
     repo = _make_repo(bots=bots)
     webhook = _make_webhook()
 
@@ -125,7 +133,7 @@ async def test_broadcast_webhook_failure_does_not_abort(monkeypatch):
     `except Exception: pass`, and still posted 'Bans Added!'. The port must
     keep going too - but surface the failure instead of hiding it."""
     monkeypatch.setattr(core.asyncio, "sleep", AsyncMock(return_value=None))
-    bots = [BannedBot(name="bot0", prediction="vanilla")]
+    bots = [BannedBot(player_id=0, name="bot0", prediction="vanilla")]
     repo = _make_repo(bots=bots)
     webhook = _make_webhook(fail_on={"All Ye Bots Lose All Hope!"})
 
@@ -145,7 +153,7 @@ async def test_broadcast_webhook_failure_does_not_abort(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_broadcast_role_mention_on_completion():
-    bots = [BannedBot(name="bot0", prediction="vanilla")]
+    bots = [BannedBot(player_id=0, name="bot0", prediction="vanilla")]
     repo = _make_repo(bots=bots)
     webhook = _make_webhook()
 
@@ -168,7 +176,7 @@ async def test_broadcast_bans_counter_reflects_apply_result():
     count what the UPDATE actually changed, ungated by embed logic."""
     from prometheus_client import REGISTRY
 
-    repo = _make_repo(bots=[BannedBot(name="bot0", prediction="vanilla")])
+    repo = _make_repo(bots=[BannedBot(player_id=0, name="bot0", prediction="vanilla")])
     repo.apply_bot_bans = AsyncMock(return_value=7)
 
     sample = "job_broadcaster_bans_applied_total"
@@ -255,14 +263,13 @@ class _FakeRepo(BanBroadcastInterface):
         await async_session.scalar("SELECT COUNT(*) no_data_bans")
         return BanCounts(total_bans=total, real_player_bans=0, no_data_bans=0)
 
-    async def select_banned_bots(self, async_session) -> list[BannedBot]:
-        await async_session.execute("SELECT name FROM Players")
-        return [BannedBot(name="bot0", prediction="vanilla")]
+    async def select_banned_bots(self, async_session, batch_size: int):
+        await async_session.execute("SELECT id FROM Players")
+        return [BannedBot(player_id=0, name="bot0", prediction="vanilla")]
 
-    async def apply_bot_bans(self, async_session) -> int:
+    async def apply_bot_bans(self, async_session, player_ids: list[int]) -> int:
         result = await async_session.execute(
-            "UPDATE Players pl JOIN prediction_latest pr ON pr.player_id = pl.id "
-            "SET pl.confirmed_ban = 1"
+            "UPDATE Players SET confirmed_ban = 1 WHERE id IN :ids"
         )
         return result.rowcount
 
@@ -288,13 +295,17 @@ async def test_broadcast_commits_ban_update_in_transaction():
 
 
 def test_chunk_bots_respects_max_names():
-    bots = [BannedBot(name=f"bot{i}", prediction="vanilla") for i in range(7)]
+    bots = [
+        BannedBot(player_id=i, name=f"bot{i}", prediction="vanilla") for i in range(7)
+    ]
     chunks = chunk_bots(bots=bots, max_names=3)
     assert [len(c) for c in chunks] == [3, 3, 1]
 
 
 def test_chunk_bots_respects_max_chars():
-    bots = [BannedBot(name="a" * 20, prediction="vanilla") for _ in range(5)]
+    bots = [
+        BannedBot(player_id=0, name="a" * 20, prediction="vanilla") for _ in range(5)
+    ]
     chunks = chunk_bots(bots=bots, max_names=50, max_chars=45)
     # two names (20 + 2 + 20 = 42 chars) fit, three (64 chars) do not
     assert [len(c) for c in chunks] == [2, 2, 1]
@@ -303,8 +314,8 @@ def test_chunk_bots_respects_max_chars():
 def test_chunk_bots_never_emits_empty_chunks():
     """Bug: a single over-limit name made chunk_bots append an empty chunk,
     producing an embed with an empty field (Discord rejects those)."""
-    long_name = BannedBot(name="x" * 1200, prediction="vanilla")
-    short = BannedBot(name="bot0", prediction="vanilla")
+    long_name = BannedBot(player_id=0, name="x" * 1200, prediction="vanilla")
+    short = BannedBot(player_id=0, name="bot0", prediction="vanilla")
     chunks = chunk_bots(bots=[long_name, short], max_names=50, max_chars=1000)
     assert all(len(chunk) > 0 for chunk in chunks)
     assert chunks == [[long_name], [short]]
@@ -313,7 +324,7 @@ def test_chunk_bots_never_emits_empty_chunks():
 def test_chunk_bots_rejects_degenerate_limits():
     """max_names=0 / max_chars=0 (env-overridable) used to emit one empty
     chunk plus one chunk per bot - hammering the webhook with junk."""
-    bots = [BannedBot(name="bot0", prediction="vanilla")]
+    bots = [BannedBot(player_id=0, name="bot0", prediction="vanilla")]
     with pytest.raises(ValueError):
         chunk_bots(bots=bots, max_names=0)
     with pytest.raises(ValueError):
@@ -354,7 +365,7 @@ def test_embed_builders_match_legacy_text():
     ]
     assert [f.value for f in totals.fields] == ["10", "3", "2", "5"]
 
-    names = build_names_embed(chunk=[BannedBot(name="a", prediction="p")])
+    names = build_names_embed(chunk=[BannedBot(player_id=0, name="a", prediction="p")])
     assert names.title == "All Ye Bots Lose All Hope!"
     assert names.description == "1 Accounts"
     assert names.fields[0].name == "Bans Being Added"
@@ -399,3 +410,414 @@ def test_entrypoints_exist():
     assert callable(core.run)
     assert callable(core.run_async)
     assert callable(core.main)
+
+
+# --- DB retry mechanisms -------------------------------------------------
+
+
+def _flaky_repo(fail_times: int, exc: Exception):
+    """Repo whose get_ban_counts fails `fail_times` times before succeeding."""
+    repo = _make_repo(bots=[BannedBot(player_id=0, name="bot0", prediction="vanilla")])
+    inner = repo.get_ban_counts
+    calls = {"n": 0}
+
+    async def _maybe_fail(async_session):
+        calls["n"] += 1
+        if calls["n"] <= fail_times:
+            raise exc
+        return await inner(async_session)
+
+    repo.get_ban_counts = AsyncMock(side_effect=_maybe_fail)
+    repo.calls = calls
+    return repo
+
+
+@pytest.mark.asyncio
+async def test_broadcast_retries_db_on_lock_wait_timeout(monkeypatch, caplog):
+    """Lock waits / deadlocks surface as OperationalError; the transaction
+    must be retried with backoff instead of killing the run."""
+    from sqlalchemy.exc import OperationalError
+
+    monkeypatch.setattr(core.asyncio, "sleep", AsyncMock(return_value=None))
+    caplog.set_level(logging.INFO)
+    repo = _flaky_repo(
+        fail_times=1,
+        exc=OperationalError(
+            "UPDATE Players ...", {}, Exception("Lock wait timeout exceeded")
+        ),
+    )
+    event = WideEventLogger(sample_ratio=0.0)
+
+    banned = await core.broadcast(
+        session_factory=_make_session_factory(),
+        repo=repo,
+        webhook=_make_webhook(),
+        webhook_url="http://hook",
+        db_backoff_seconds=0,
+        event=event,
+    )
+
+    assert banned == 1
+    assert repo.calls["n"] == 2
+    ctx = _dict_records(caplog)[0]
+    assert "db_retry_snapshot_attempt_1" in ctx
+
+
+@pytest.mark.asyncio
+async def test_broadcast_raises_after_exhausting_db_retries(monkeypatch):
+    from sqlalchemy.exc import OperationalError
+
+    monkeypatch.setattr(core.asyncio, "sleep", AsyncMock(return_value=None))
+    repo = _flaky_repo(
+        fail_times=99,
+        exc=OperationalError("UPDATE Players ...", {}, Exception("deadlock")),
+    )
+
+    with pytest.raises(OperationalError):
+        await core.broadcast(
+            session_factory=_make_session_factory(),
+            repo=repo,
+            webhook=_make_webhook(),
+            webhook_url="http://hook",
+            db_attempts=3,
+            db_backoff_seconds=0,
+            event=WideEventLogger(sample_ratio=0.0),
+        )
+
+    assert repo.calls["n"] == 3
+
+
+@pytest.mark.asyncio
+async def test_broadcast_does_not_retry_non_transient_db_errors(monkeypatch):
+    """Bad SQL / constraint violations are programming errors - retrying
+    them would just re-run the same failure."""
+    monkeypatch.setattr(core.asyncio, "sleep", AsyncMock(return_value=None))
+    repo = _flaky_repo(fail_times=99, exc=ValueError("bad predicate"))
+
+    with pytest.raises(ValueError):
+        await core.broadcast(
+            session_factory=_make_session_factory(),
+            repo=repo,
+            webhook=_make_webhook(),
+            webhook_url="http://hook",
+            db_attempts=3,
+            db_backoff_seconds=0,
+            event=WideEventLogger(sample_ratio=0.0),
+        )
+
+    assert repo.calls["n"] == 1
+
+
+@pytest.mark.asyncio
+async def test_broadcast_backoff_is_exponential(monkeypatch):
+    from sqlalchemy.exc import OperationalError
+
+    sleeps: list[float] = []
+
+    async def _fake_sleep(seconds):
+        sleeps.append(seconds)
+        return None
+
+    monkeypatch.setattr(core.asyncio, "sleep", _fake_sleep)
+    repo = _flaky_repo(
+        fail_times=2,
+        exc=OperationalError("UPDATE Players ...", {}, Exception("deadlock")),
+    )
+
+    await core.broadcast(
+        session_factory=_make_session_factory(),
+        repo=repo,
+        webhook=_make_webhook(),
+        webhook_url="http://hook",
+        db_attempts=3,
+        db_backoff_seconds=5.0,
+        event=WideEventLogger(sample_ratio=0.0),
+    )
+
+    assert sleeps == [5.0, 10.0]
+
+
+@pytest.mark.asyncio
+async def test_db_retries_counter_counts(monkeypatch):
+    from prometheus_client import REGISTRY
+    from sqlalchemy.exc import OperationalError
+
+    monkeypatch.setattr(core.asyncio, "sleep", AsyncMock(return_value=None))
+    sample = "job_broadcaster_db_retries_total"
+    before = REGISTRY.get_sample_value(sample) or 0
+    repo = _flaky_repo(
+        fail_times=1,
+        exc=OperationalError("UPDATE Players ...", {}, Exception("lock wait")),
+    )
+
+    await core.broadcast(
+        session_factory=_make_session_factory(),
+        repo=repo,
+        webhook=_make_webhook(),
+        webhook_url="http://hook",
+        db_backoff_seconds=0,
+        event=WideEventLogger(sample_ratio=0.0),
+    )
+
+    after = REGISTRY.get_sample_value(sample) or 0
+    assert after - before == 1
+
+
+@pytest.mark.asyncio
+async def test_broadcast_sets_short_lock_wait_timeout():
+    """Session-level innodb_lock_wait_timeout must be lowered so lock waits
+    fail fast into the retry loop instead of hanging ~50s."""
+    session = _FakeTxnSession()
+    factory = MagicMock(return_value=session)
+
+    await core.broadcast(
+        session_factory=factory,
+        repo=_FakeRepo(),
+        webhook=_make_webhook(),
+        webhook_url="http://hook",
+        db_lock_wait_timeout=10,
+        chunk_sleep_seconds=0,
+        event=WideEventLogger(sample_ratio=0.0),
+    )
+
+    assert any("innodb_lock_wait_timeout" in stmt for stmt in session.statements)
+
+
+# --- batched apply (lock-strategy) ---------------------------------------
+
+
+def _batch_flaky_repo(fail_batches: int, exc: Exception, bots: list[BannedBot]):
+    """Repo whose apply_bot_bans fails the first `fail_batches` batches."""
+    repo = _make_repo(bots=bots)
+    calls = {"n": 0}
+
+    async def _maybe_fail(async_session, player_ids):
+        calls["n"] += 1
+        if calls["n"] <= fail_batches:
+            raise exc
+        return len(player_ids)
+
+    repo.apply_bot_bans = AsyncMock(side_effect=_maybe_fail)
+    repo.calls = calls
+    return repo
+
+
+@pytest.mark.asyncio
+async def test_broadcast_applies_in_id_batches(monkeypatch):
+    """Bots must be applied in batches of db_batch_size - each batch its
+    own transaction - so lock windows stay short under contention."""
+    bots = [
+        BannedBot(player_id=i, name=f"bot{i}", prediction="vanilla") for i in range(5)
+    ]
+    repo = _batch_flaky_repo(fail_batches=0, exc=None, bots=bots)
+    monkeypatch.setattr(core.asyncio, "sleep", AsyncMock(return_value=None))
+
+    banned = await core.broadcast(
+        session_factory=_make_session_factory(),
+        repo=repo,
+        webhook=_make_webhook(),
+        webhook_url="http://hook",
+        db_batch_size=2,
+        chunk_sleep_seconds=0,
+        event=WideEventLogger(sample_ratio=0.0),
+    )
+
+    assert banned == 5
+    assert repo.apply_bot_bans.await_count == 3
+    sizes = [len(c.kwargs["player_ids"]) for c in repo.apply_bot_bans.await_args_list]
+    assert sizes == [2, 2, 1]
+
+
+@pytest.mark.asyncio
+async def test_broadcast_retries_batch_on_lock_wait(monkeypatch):
+    from sqlalchemy.exc import OperationalError
+
+    monkeypatch.setattr(core.asyncio, "sleep", AsyncMock(return_value=None))
+    bots = [BannedBot(player_id=0, name="bot0", prediction="vanilla")]
+    repo = _batch_flaky_repo(
+        fail_batches=1,
+        exc=OperationalError("UPDATE Players ...", {}, Exception("Lock wait timeout")),
+        bots=bots,
+    )
+
+    banned = await core.broadcast(
+        session_factory=_make_session_factory(),
+        repo=repo,
+        webhook=_make_webhook(),
+        webhook_url="http://hook",
+        db_backoff_seconds=0,
+        chunk_sleep_seconds=0,
+        event=WideEventLogger(sample_ratio=0.0),
+    )
+
+    assert banned == 1
+    assert repo.calls["n"] == 2
+
+
+@pytest.mark.asyncio
+async def test_broadcast_batch_failure_aborts_before_announce(monkeypatch):
+    """If any batch exhausts retries, the run must raise BEFORE posting any
+    embed - a partial apply is never announced, and the next run (which
+    re-selects confirmed_ban = 0) announces the remainder."""
+    from sqlalchemy.exc import OperationalError
+
+    monkeypatch.setattr(core.asyncio, "sleep", AsyncMock(return_value=None))
+    bots = [
+        BannedBot(player_id=i, name=f"bot{i}", prediction="vanilla") for i in range(4)
+    ]
+    repo = _batch_flaky_repo(
+        fail_batches=99,
+        exc=OperationalError("UPDATE Players ...", {}, Exception("deadlock")),
+        bots=bots,
+    )
+    webhook = _make_webhook()
+
+    with pytest.raises(OperationalError):
+        await core.broadcast(
+            session_factory=_make_session_factory(),
+            repo=repo,
+            webhook=webhook,
+            webhook_url="http://hook",
+            db_attempts=2,
+            db_batch_size=2,
+            db_backoff_seconds=0,
+            chunk_sleep_seconds=0,
+            event=WideEventLogger(sample_ratio=0.0),
+        )
+
+    assert webhook.posts == []
+
+
+def _dict_records(caplog) -> list[dict]:
+    return [r.msg for r in caplog.records if isinstance(r.msg, dict)]
+
+
+@pytest.mark.asyncio
+async def test_broadcast_emits_force_logged_wide_event(caplog):
+    """Runs that applied bans must emit one structured wide event (log_reason
+    = force), carrying db + webhook context, regardless of sampling."""
+    from bot_detector.wide_event import WideEventLogger
+
+    caplog.set_level(logging.INFO)
+    bots = [BannedBot(player_id=0, name="bot0", prediction="vanilla")]
+    event = WideEventLogger(sample_ratio=0.0)  # sampling off: force must win
+
+    await core.broadcast(
+        session_factory=_make_session_factory(),
+        repo=_make_repo(bots=bots),
+        webhook=_make_webhook(),
+        webhook_url="http://hook",
+        chunk_sleep_seconds=0,
+        event=event,
+    )
+
+    events = _dict_records(caplog)
+    assert len(events) == 1
+    ctx = events[0]
+    assert ctx["log_reason"] == "force"
+    assert ctx["db"] == {
+        "total_bans": 10,
+        "real_player_bans": 3,
+        "no_data_bans": 2,
+        "bots_selected": 1,
+        "bans_applied": 1,
+    }
+    assert ctx["webhook"] == {
+        "totals_failed": False,
+        "names_chunks": 1,
+        "names_failed": 0,
+        "complete_failed": False,
+    }
+
+
+@pytest.mark.asyncio
+async def test_broadcast_quiet_run_respects_sampling(caplog):
+    """No bans applied and no failures -> emission is up to the sampler."""
+    from bot_detector.wide_event import WideEventLogger
+
+    caplog.set_level(logging.INFO)
+    event = WideEventLogger(sample_ratio=0.0)
+
+    await core.broadcast(
+        session_factory=_make_session_factory(),
+        repo=_make_repo(bots=[]),
+        webhook=_make_webhook(),
+        webhook_url="http://hook",
+        chunk_sleep_seconds=0,
+        event=event,
+    )
+
+    assert _dict_records(caplog) == []
+
+
+@pytest.mark.asyncio
+async def test_broadcast_webhook_failure_force_logs(caplog):
+    """A failed post must surface in the wide event even with zero bans,
+    else a broken webhook is invisible whenever sampling skips the run."""
+    from bot_detector.wide_event import WideEventLogger
+
+    caplog.set_level(logging.INFO)
+    event = WideEventLogger(sample_ratio=0.0)
+    repo = _make_repo(bots=[])
+    webhook = _make_webhook(fail_on={"Pending Bans Stats"})
+
+    await core.broadcast(
+        session_factory=_make_session_factory(),
+        repo=repo,
+        webhook=webhook,
+        webhook_url="http://hook",
+        chunk_sleep_seconds=0,
+        event=event,
+    )
+
+    events = _dict_records(caplog)
+    assert len(events) == 1
+    assert events[0]["log_reason"] == "force"
+    assert events[0]["webhook"]["totals_failed"] is True
+
+
+@pytest.mark.asyncio
+async def test_broadcast_error_lands_in_wide_event(caplog):
+    """DB failures are recorded in the wide event at error level, then
+    re-raised so the container exit code reflects the failed run."""
+    from bot_detector.wide_event import WideEventLogger
+
+    caplog.set_level(logging.INFO)
+    event = WideEventLogger(sample_ratio=0.0)
+    repo = _make_repo()
+    repo.get_ban_counts = AsyncMock(side_effect=RuntimeError("db down"))
+
+    with pytest.raises(RuntimeError, match="db down"):
+        await core.broadcast(
+            session_factory=_make_session_factory(),
+            repo=repo,
+            webhook=_make_webhook(),
+            webhook_url="http://hook",
+            chunk_sleep_seconds=0,
+            event=event,
+        )
+
+    events = _dict_records(caplog)
+    assert len(events) == 1
+    assert events[0]["error"] == {"message": "db down"}
+
+
+@pytest.mark.asyncio
+async def test_broadcast_context_is_reset_after_run(caplog):
+    """The token pattern must leave the logger's context empty after the
+    run; stale state would leak into the next event in a long-lived process."""
+    from bot_detector.wide_event import WideEventLogger
+
+    caplog.set_level(logging.INFO)
+    event = WideEventLogger(sample_ratio=1.0)
+
+    await core.broadcast(
+        session_factory=_make_session_factory(),
+        repo=_make_repo(bots=[]),
+        webhook=_make_webhook(),
+        webhook_url="http://hook",
+        chunk_sleep_seconds=0,
+        event=event,
+    )
+
+    assert event.get() == {}

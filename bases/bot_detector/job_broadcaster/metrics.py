@@ -15,6 +15,11 @@ bans_applied_counter = Counter(
     documentation="Number of player bans applied (confirmed_ban set)",
 )
 
+db_retries_counter = Counter(
+    name="job_broadcaster_db_retries",
+    documentation="Number of DB transaction retries after transient errors",
+)
+
 embeds_sent_counter = Counter(
     name="job_broadcaster_embeds_sent",
     documentation="Number of Discord embeds posted successfully",

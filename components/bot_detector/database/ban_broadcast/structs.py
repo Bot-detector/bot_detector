@@ -12,5 +12,6 @@ class BanCounts(BaseModel):
 class BannedBot(BaseModel):
     """A player predicted as a bot and pending ban application."""
 
+    player_id: int
     name: str
     prediction: str

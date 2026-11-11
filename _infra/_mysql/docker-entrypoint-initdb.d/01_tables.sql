@@ -13,8 +13,12 @@ CREATE TABLE Players (
   hardcore_ironman BOOLEAN DEFAULT NULL,
   ultimate_ironman BOOLEAN DEFAULT NULL,
   normalized_name VARCHAR(50),
+  INDEX idx_ban_labels (label_jagex, possible_ban, confirmed_ban),
   UNIQUE KEY Unique_name (name)
 );
+-- NOTE for existing deployments: run the index add manually (online DDL):
+--   ALTER TABLE Players ADD INDEX idx_ban_labels (label_jagex, possible_ban, confirmed_ban);
+-- init scripts only apply on a fresh datadir.
 
 CREATE TABLE migration_hs_v3 (
   player_id INT UNSIGNED NOT NULL

@@ -11,9 +11,13 @@ class BanBroadcastInterface(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    async def select_banned_bots(self, async_session: AsyncSession) -> list[BannedBot]:
+    async def select_banned_bots(
+        self, async_session: AsyncSession, batch_size: int
+    ) -> list[BannedBot]:
         raise NotImplementedError()
 
     @abstractmethod
-    async def apply_bot_bans(self, async_session: AsyncSession) -> int:
+    async def apply_bot_bans(
+        self, async_session: AsyncSession, player_ids: list[int]
+    ) -> int:
         raise NotImplementedError()

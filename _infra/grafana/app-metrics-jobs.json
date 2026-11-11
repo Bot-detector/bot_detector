@@ -373,6 +373,18 @@
           "legendFormat": "embeds sent",
           "range": true,
           "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum (rate(job_broadcaster_db_retries_total[5m]))",
+          "instant": false,
+          "legendFormat": "db retries",
+          "range": true,
+          "refId": "C"
         }
       ],
       "title": "broadcaster bans applied / embeds sent [5m]",

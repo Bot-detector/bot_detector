@@ -32,3 +32,4 @@ packages = ["bot_detector"]
 "../../components/bot_detector/database" = "bot_detector/database"
 "../../components/bot_detector/discord_webhook" = "bot_detector/discord_webhook"
 "../../components/bot_detector/logfmt" = "bot_detector/logfmt"
+"../../components/bot_detector/wide_event" = "bot_detector/wide_event"
