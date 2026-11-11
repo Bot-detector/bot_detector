@@ -16,6 +16,9 @@ class KafkaProducerConfig(BaseModel):
     partition_key_fn: Optional[Callable[[Any], bytes | str]] = None
     MAX_PRODUCE_RETRIES: int = 3
     MAX_PRODUCE_RETRY_BACKOFF: int = 60
+    # drop null-valued fields from model_dump() payloads; consumers
+    # rehydrate Optionals as None, so slim payloads validate identically
+    exclude_none: bool = False
 
 
 class KafkaConfig(BaseModel):

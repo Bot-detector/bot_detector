@@ -1,3 +1,5 @@
+from datetime import datetime
+from typing import Optional
 from unittest.mock import AsyncMock, patch
 
 import orjson
@@ -12,12 +14,20 @@ from bot_detector.event_queue.core.errors import (
     ProducerConfigError,
     ProducerNotStartedError,
 )
+from bot_detector.event_queue.structs import ToScrapeStruct
+from bot_detector.structs import MetaData, PlayerStruct
 from pydantic import BaseModel
 
 
 class PlayerScraped(BaseModel):
     id: int
     username: str
+    score: int
+
+
+class PlayerWithNulls(BaseModel):
+    id: int
+    username: Optional[str] = None
     score: int
 
 
@@ -249,3 +259,129 @@ async def test_producer_put_without_config():
     result = await adapter.put([PlayerScraped(id=1, username="Alice", score=100)])
 
     assert isinstance(result, ProducerConfigError)
+
+
+@pytest.mark.asyncio
+async def test_producer_exclude_none_drops_null_fields():
+    config = KafkaConfig(
+        topic="players",
+        bootstrap_servers="localhost:9092",
+        consumer=False,
+        producer=True,
+        consumer_config=None,
+        producer_config=KafkaProducerConfig(exclude_none=True),
+    )
+    adapter = AIOKafkaProducerAdapter(PlayerWithNulls, config)
+    adapter.producer = AsyncMock()
+    adapter.producer.send = AsyncMock()
+
+    await adapter.put([PlayerWithNulls(id=1, username=None, score=100)])
+
+    adapter.producer.send.assert_called_once_with(
+        topic="players",
+        value={"id": 1, "score": 100},
+        key=None,
+    )
+
+
+@pytest.mark.asyncio
+async def test_producer_exclude_none_keeps_set_fields():
+    config = KafkaConfig(
+        topic="players",
+        bootstrap_servers="localhost:9092",
+        consumer=False,
+        producer=True,
+        consumer_config=None,
+        producer_config=KafkaProducerConfig(exclude_none=True),
+    )
+    adapter = AIOKafkaProducerAdapter(PlayerWithNulls, config)
+    adapter.producer = AsyncMock()
+    adapter.producer.send = AsyncMock()
+
+    await adapter.put([PlayerWithNulls(id=1, username="Alice", score=100)])
+
+    adapter.producer.send.assert_called_once_with(
+        topic="players",
+        value={"id": 1, "username": "Alice", "score": 100},
+        key=None,
+    )
+
+
+@pytest.mark.asyncio
+async def test_producer_default_keeps_null_fields():
+    config = KafkaConfig(
+        topic="players",
+        bootstrap_servers="localhost:9092",
+        consumer=False,
+        producer=True,
+        consumer_config=None,
+        producer_config=KafkaProducerConfig(),
+    )
+    adapter = AIOKafkaProducerAdapter(PlayerWithNulls, config)
+    adapter.producer = AsyncMock()
+    adapter.producer.send = AsyncMock()
+
+    await adapter.put([PlayerWithNulls(id=1, username=None, score=100)])
+
+    adapter.producer.send.assert_called_once_with(
+        topic="players",
+        value={"id": 1, "username": None, "score": 100},
+        key=None,
+    )
+
+
+def _to_scrape_player(player_id: int, **optionals) -> ToScrapeStruct:
+    player = PlayerStruct(
+        id=player_id,
+        name=f"player-{player_id}",
+        created_at=datetime(2024, 1, 1),
+        **optionals,
+    )
+    return ToScrapeStruct(
+        metadata=MetaData(version=1, source="test"),
+        player_data=player,
+    )
+
+
+def test_to_scrape_slim_payload_round_trips_to_full_struct():
+    """Exclude-none serialization must not change the rehydrated struct.
+
+    Producers drop the always-null PlayerStruct optionals
+    (ironman, hardcore_ironman, ultimate_ironman, normalized_name)
+    from players.to_scrape payloads; consumers validate with the same
+    pydantic model, whose Optionals default back to None.
+    """
+    full = _to_scrape_player(
+        9,
+        ironman=None,
+        hardcore_ironman=None,
+        ultimate_ironman=None,
+        normalized_name=None,
+    )
+
+    slim_bytes = orjson.dumps(full.model_dump(exclude_none=True))
+
+    # the slim payload really omits the null-valued keys
+    dumped = orjson.loads(slim_bytes)
+    slim_player = dumped["player_data"]
+    assert "ironman" not in slim_player
+    assert "hardcore_ironman" not in slim_player
+    assert "ultimate_ironman" not in slim_player
+    assert "normalized_name" not in slim_player
+
+    rehydrated = ToScrapeStruct.model_validate(dumped)
+    # slim bytes and full bytes rehydrate to the same struct
+    assert rehydrated == ToScrapeStruct.model_validate(full.model_dump())
+    assert rehydrated.player_data == full.player_data
+
+
+def test_to_scrape_slim_payload_keeps_set_optional_fields():
+    """exclude_none drops nulls only: set optionals must survive."""
+    full = _to_scrape_player(10, ironman=True)
+
+    slim_bytes = orjson.dumps(full.model_dump(exclude_none=True))
+
+    rehydrated = ToScrapeStruct.model_validate(orjson.loads(slim_bytes))
+
+    assert rehydrated.player_data.ironman is True
+    assert rehydrated == full

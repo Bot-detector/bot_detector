@@ -292,7 +292,10 @@ async def main():
             bootstrap_servers=bootstrap_servers,
             producer=True,
             consumer=False,
-            producer_config=KafkaProducerConfig(partition_key_fn=partition_key_fn),
+            producer_config=KafkaProducerConfig(
+                partition_key_fn=partition_key_fn,
+                exclude_none=True,
+            ),
         ),
     )
     if isinstance(player_queue, Exception):
