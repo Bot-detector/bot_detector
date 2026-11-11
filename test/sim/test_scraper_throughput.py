@@ -184,6 +184,68 @@ def test_batched_names_lift_the_commit_cap():
     assert card.messages_consumed == pytest.approx(card.consumed / 10, rel=0.05)
 
 
+def test_single_connection_serializes_broker_round_trips():
+    card = run(
+        duration_s=120.0,
+        not_found_pct=0.0,
+        kafka_connection_limit=1,
+    )
+    print(card.summary())
+
+    # one connection for fetch + commit round trips: serial path per
+    # message is 2ms fetch + 5ms commit -> cap ~143/s, well below the
+    # ~435/s fleet demand
+    assert card.binding == "consumer"
+    assert card.consumer_cap_s == pytest.approx(1.0 / 0.007, rel=0.05)
+    assert card.throughput_s == pytest.approx(142.9, rel=0.15)
+
+    # batching 10 names per message amortizes the shared connection the
+    # same way it amortizes the commit lock: fleet binds again
+    batched = run(
+        duration_s=120.0,
+        not_found_pct=0.0,
+        kafka_connection_limit=1,
+        names_per_message=10,
+    )
+    assert batched.binding == "fleet"
+    assert batched.throughput_s == pytest.approx(435.0, rel=0.12)
+
+
+def test_dropping_null_fields_shrinks_messages_not_throughput():
+    # cheap broker so the fleet (not the commit lock) binds and the
+    # bandwidth effect is isolated
+    full = run(
+        duration_s=90.0,
+        not_found_pct=0.0,
+        commit_cost_s=0.0005,
+        fetch_cost_s=0.001,
+    )
+    slim = run(
+        duration_s=90.0,
+        not_found_pct=0.0,
+        commit_cost_s=0.0005,
+        fetch_cost_s=0.001,
+        exclude_none_fields=True,
+    )
+    print(
+        f"avg name bytes: full={full.avg_name_bytes:.0f}B "
+        f"slim={slim.avg_name_bytes:.0f}B "
+        f"({100 * (1 - slim.avg_name_bytes / full.avg_name_bytes):.1f}% smaller)"
+    )
+
+    # dropping the 4 null fields (ironman/hardcore_ironman/
+    # ultimate_ironman/normalized_name) trims ~30% of message bytes
+    assert slim.avg_name_bytes < full.avg_name_bytes
+    assert 0.60 < slim.avg_name_bytes / full.avg_name_bytes < 0.95
+    assert full.bytes_transferred > 0 and slim.bytes_transferred > 0
+
+    # at a 100 MB/s link (800 Mbps default) the ~100B saving is
+    # microseconds per message: throughput stays fetch-bound and equal
+    assert full.binding == "fleet" and slim.binding == "fleet"
+    assert slim.throughput_s == pytest.approx(full.throughput_s, rel=0.10)
+    assert full.kafka_fetch_failures == 0 and slim.kafka_fetch_failures == 0
+
+
 def test_starved_feed_leaves_workers_blocked_in_get_one():
     card = run(
         duration_s=90.0,

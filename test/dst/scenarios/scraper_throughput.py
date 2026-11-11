@@ -14,7 +14,10 @@ Only the I/O seams are replaced:
   the machine's serial core. commit models the adapter's per-message
   commit as a broker RTT under a single-flight lock, because one
   consumer instance serializes every worker's commit; names served
-  from a fetched batch commit nothing.
+  from a fetched batch commit nothing. Broker RTTs ride the machine's
+  Network model (latency, jitter, `kafka_bandwidth_mbps` transfer
+  time, packet loss, partition) through a `kafka_connection_limit`
+  connection pool (0 = unlimited).
 - jagex: SimHiscoreAPI draws per-fetch outcomes on a seeded RNG:
   success (~success_latency_s), not_found (slow, ~not_found_latency_s,
   the 404 path) and transient errors (requeue + retry backoff).
@@ -42,6 +45,7 @@ import os
 import random
 from collections import deque
 from collections.abc import Callable, Coroutine
+from contextlib import nullcontext
 from datetime import datetime
 from typing import Any
 
@@ -110,6 +114,20 @@ class ScraperThroughputConfig(BaseModel):
     # names packed per kafka message (prod idea: batches of 10). One
     # fetch RTT + one commit per message; parse stays per name.
     names_per_message: int = Field(default=1, ge=1)
+    # simulated broker network link: 0 connections = unlimited pool;
+    # 1 serializes the consumer's fetch and commit round trips on a
+    # single connection. RTTs ride the machine's Network model, so
+    # scenario NetworkConfig (mean/jitter/bandwidth/packet loss) and
+    # machine.network.partition() apply to broker traffic as well.
+    kafka_connection_limit: int = Field(default=0, ge=0)
+    kafka_payload_bytes: int = Field(default=512, ge=1)
+    # broker link bandwidth: 800 Mbps = 100 MB/s (prod-plausible LAN link).
+    # Transfer time per message = bytes * 8 / bandwidth, on top of the
+    # explicit RTT costs.
+    kafka_bandwidth_mbps: float = Field(default=800.0, gt=0.0)
+    # drop null fields (ironman/hardcore_ironman/ultimate_ironman/
+    # normalized_name) from serialized messages to shrink them
+    exclude_none_fields: bool = False
     # simulated jagex fetch outcomes; prod calibration (Nov 2026):
     # overall fetch p50 ~1.7s (the not_found median - it is the majority
     # outcome), p99 ~5s, not_found share 1.2/2.2 ~ 54.5%
@@ -175,6 +193,10 @@ class ScraperThroughputReport(BaseModel):
     outcomes: OutcomeCounts
     latency: dict[str, FetchLatencyStat]
     commits: int
+    avg_name_bytes: float
+    bytes_transferred: int
+    kafka_fetch_failures: int
+    kafka_commit_failures: int
     throughput_s: float
     fleet_cap_s: float
     consumer_cap_s: float
@@ -186,6 +208,11 @@ class ScraperThroughputReport(BaseModel):
 
     def summary(self) -> str:
         """Human-readable slowness breakdown for logs and test output."""
+        link_note = (
+            "single connection serializes fetch+commit RTTs"
+            if self.config.kafka_connection_limit == 1
+            else "fetch RTT + parse run concurrently"
+        )
         lines = [
             f"throughput {self.throughput_s:.1f}/s over {self.duration_s:.0f}s "
             f"({self.workers} workers, {self.partitions} partitions, "
@@ -197,8 +224,13 @@ class ScraperThroughputReport(BaseModel):
                 f"consumer serial stage: commit RTT "
                 f"{self.config.commit_cost_s * 1000:.2f}ms per message "
                 f"({self.config.names_per_message} names/message = "
-                f"{self.consumer_serial_s * 1000:.3f}ms/player; "
-                f"fetch RTT + parse run concurrently)"
+                f"{self.consumer_serial_s * 1000:.3f}ms/player; {link_note})"
+            ),
+            (
+                f"broker link: {self.config.kafka_bandwidth_mbps:.0f} Mbps, "
+                f"avg name {self.avg_name_bytes:.0f}B, "
+                f"transferred {self.bytes_transferred / 1e6:.1f}MB, "
+                f"fetch failures {self.kafka_fetch_failures}"
             ),
             f"mean iteration {self.mean_iteration_s:.3f}s",
             "worker-time shares:",
@@ -302,8 +334,13 @@ class SimKafka:
         self._pending: deque[bytes] = deque()  # names left in the fetched batch
         self._uncommitted = 0  # fetched messages awaiting their one commit
         self._commit_lock = asyncio.Lock()
+        limit = config.kafka_connection_limit
+        self._connections: asyncio.Semaphore | None = (
+            asyncio.Semaphore(limit) if limit > 0 else None
+        )
         self._pacer: asyncio.Task[None] | None = None
-        self._pool = build_payload_pool(config.pool_size)
+        self._pool = build_payload_pool(config.pool_size, config.exclude_none_fields)
+        self.avg_name_bytes = sum(len(p) for p in self._pool) / len(self._pool)
         self._pool_cursor = 0
         self._out_batch: list[bytes] = []
         self._round_robin = 0
@@ -314,6 +351,9 @@ class SimKafka:
         self.consumed = 0
         self.messages_consumed = 0
         self.commits = 0
+        self.bytes_transferred = 0
+        self.fetch_failures = 0
+        self.commit_failures = 0
         self.produced_per_partition = [0] * config.partitions
         self.consumed_per_partition = [0] * config.partitions
 
@@ -394,8 +434,19 @@ class SimKafka:
         t0 = self.state.now()
         partition, _offset, payloads = await self._delivery.get()
         t_data = self.state.now()
-        if self.config.fetch_cost_s > 0.0:
-            await asyncio.sleep(self.config.fetch_cost_s)
+        connection: asyncio.Semaphore | nullcontext = (
+            self._connections if self._connections is not None else nullcontext()
+        )
+        async with connection:
+            if self.config.fetch_cost_s > 0.0:
+                await asyncio.sleep(self.config.fetch_cost_s)
+            n_bytes = sum(len(p) for p in payloads)
+            io = await self.machine.network.fetch(n_bytes=n_bytes)
+            self.bytes_transferred += n_bytes
+        if io.error is not None:
+            # dropped fetch: the worker's error path stalls it for 10s
+            self.fetch_failures += 1
+            return io.error
         self._pending.extend(payloads[1:])
         self._uncommitted += 1
         self.messages_consumed += 1
@@ -417,12 +468,22 @@ class SimKafka:
             return
         stage = self.state.stage("commit")
         t0 = self.state.now()
-        async with self._commit_lock:
-            t_locked = self.state.now()
-            if self.config.commit_cost_s > 0.0:
-                await asyncio.sleep(self.config.commit_cost_s)
-            self.commits += 1
-            self._uncommitted -= 1
+        connection: asyncio.Semaphore | nullcontext = (
+            self._connections if self._connections is not None else nullcontext()
+        )
+        async with connection:
+            async with self._commit_lock:
+                t_locked = self.state.now()
+                if self.config.commit_cost_s > 0.0:
+                    await asyncio.sleep(self.config.commit_cost_s)
+                io = await self.machine.network.fetch(n_bytes=64)
+                self.bytes_transferred += 64
+                if io.error is not None:
+                    # failed commit: the offset stays owed for retry
+                    self.commit_failures += 1
+                else:
+                    self.commits += 1
+                    self._uncommitted -= 1
         stage.add(self.state.now() - t0, blocked_s=t_locked - t0)
 
     async def produce(self, message: BaseModel, key: str | None = None) -> None:
@@ -433,7 +494,11 @@ class SimKafka:
             await self.machine.cpu.work(
                 self.config.serialize_cost_s, what="kafka-serialize"
             )
-        payload = orjson.dumps(message.model_dump())
+        payload = orjson.dumps(
+            message.model_dump(exclude_none=True)
+            if self.config.exclude_none_fields
+            else message.model_dump()
+        )
         if self.config.produce_cost_s > 0.0:
             await asyncio.sleep(self.config.produce_cost_s)
         partition = self._partition(key)
@@ -591,7 +656,7 @@ class SimHiscoreAPI:
         return Ok(value=stats, latency=latency)
 
 
-def build_payload_pool(pool_size: int) -> list[bytes]:
+def build_payload_pool(pool_size: int, exclude_none: bool = False) -> list[bytes]:
     """Deterministic serialized ToScrapeStruct records, cycled by offset."""
     pool: list[bytes] = []
     for i in range(pool_size):
@@ -604,7 +669,12 @@ def build_payload_pool(pool_size: int) -> list[bytes]:
             metadata=MetaData(version=1, source="sim"),
             player_data=player,
         )
-        pool.append(orjson.dumps(record.model_dump()))
+        dump = (
+            record.model_dump(exclude_none=True)
+            if exclude_none
+            else record.model_dump()
+        )
+        pool.append(orjson.dumps(dump))
     return pool
 
 
@@ -631,7 +701,11 @@ async def main(**kwargs) -> ScraperThroughputReport:
         machine = Machine(
             MachineConfig(
                 seed=config.machine_seed,
-                network=NetworkConfig(mean_ms=0.01, jitter_ms=0.005),
+                network=NetworkConfig(
+                    mean_ms=0.01,
+                    jitter_ms=0.005,
+                    bandwidth_mbps=config.kafka_bandwidth_mbps,
+                ),
             )
         )
         state = RunState(machine)
@@ -725,8 +799,13 @@ async def main(**kwargs) -> ScraperThroughputReport:
         fleet_cap_s = config.workers / mean_active_s if mean_active_s > 0 else 0.0
         # the single-flight stage on the shared consumer is the commit
         # round trip, paid once per kafka message; batching names per
-        # message amortizes it. fetch RTT and parse run concurrently.
-        consumer_serial_s = config.commit_cost_s / config.names_per_message
+        # message amortizes it. With a single broker connection the
+        # fetch RTT serializes behind the commit RTT too. fetch RTT,
+        # parse and bandwidth transfer otherwise run concurrently.
+        per_message_serial_s = config.commit_cost_s + (
+            config.fetch_cost_s if config.kafka_connection_limit == 1 else 0.0
+        )
+        consumer_serial_s = per_message_serial_s / config.names_per_message
         consumer_cap_s = (
             1.0 / consumer_serial_s if consumer_serial_s > 0 else float("inf")
         )
@@ -776,6 +855,10 @@ async def main(**kwargs) -> ScraperThroughputReport:
             outcomes=state.outcomes,
             latency=latency_stats,
             commits=broker.commits,
+            avg_name_bytes=broker.avg_name_bytes,
+            bytes_transferred=broker.bytes_transferred,
+            kafka_fetch_failures=broker.fetch_failures,
+            kafka_commit_failures=broker.commit_failures,
             throughput_s=throughput_s,
             fleet_cap_s=fleet_cap_s,
             consumer_cap_s=consumer_cap_s,
