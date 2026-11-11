@@ -70,4 +70,4 @@ namespace_packages = true
 explicit_package_bases = true
 mypy_path = ["components", "bases", "development/dst/src"]
 # other bricks have pre-existing errors; extend as they get cleaned up
-files = ["bases/bot_detector/firehose"]
+files = ["bases/bot_detector/firehose", "bases/bot_detector/job_broadcaster"]

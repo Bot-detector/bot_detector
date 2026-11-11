@@ -8,3 +8,4 @@ CREATE USER `job-hs-migration`@`%` IDENTIFIED BY 'job_hs_migration_pw';
 CREATE USER `api-public`@`%` IDENTIFIED BY 'api_public_pw';
 CREATE USER `job-prune-reports`@`%` IDENTIFIED BY 'job_prune_reports_pw';
 CREATE USER `ban-migration`@`%` IDENTIFIED BY 'ban_migration_pw';
+CREATE USER `job-broadcaster`@`%` IDENTIFIED BY 'job_broadcaster_pw';
