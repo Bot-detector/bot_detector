@@ -110,7 +110,7 @@ class AIOKafkaProducerAdapter(
                 try:
                     await self.producer.send(
                         topic=self.config.topic,
-                        value=message.model_dump(),
+                        value=message.model_dump(exclude_none=_config.exclude_none),
                         key=key,
                     )
                     break

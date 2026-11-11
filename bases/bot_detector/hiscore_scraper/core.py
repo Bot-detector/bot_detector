@@ -399,7 +399,12 @@ async def main():
             bootstrap_servers=b_server,
             producer=True,
             consumer=True,
-            producer_config=KafkaProducerConfig(partition_key_fn=None),
+            # slim payloads: always-null PlayerStruct optionals cost
+            # ~1/3 of each message; consumers rehydrate them as None
+            producer_config=KafkaProducerConfig(
+                partition_key_fn=None,
+                exclude_none=True,
+            ),
             consumer_config=KafkaConsumerConfig(group_id="scraper"),
         ),
     )
