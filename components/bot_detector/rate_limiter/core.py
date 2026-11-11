@@ -2,7 +2,6 @@ import asyncio
 import logging
 import time
 from collections import deque
-from collections.abc import Iterable
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -16,17 +15,14 @@ class Window:
     interval_ms: int
 
 
-DEFAULT_WINDOWS = (Window(count=60, interval_ms=60_000),)
-
-
 class RateLimiter:
-    def __init__(self, windows: Iterable[Window] | None = None) -> None:
+    def __init__(self, windows: list[Window]) -> None:
         """
         Rolling-window rate limiter with millisecond resolution.
 
         Args:
             windows: Rate windows. A call only proceeds once every window
-                has a free slot. Defaults to 60 calls per 60 seconds.
+                has a free slot.
 
         Example:
             RateLimiter(
@@ -36,7 +32,7 @@ class RateLimiter:
                 ]
             )
         """
-        self.windows = tuple(windows) if windows is not None else DEFAULT_WINDOWS
+        self.windows = tuple(windows)
         self._history: dict[Window, deque[int]] = {
             window: deque(maxlen=window.count) for window in self.windows
         }

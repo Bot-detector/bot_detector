@@ -7,10 +7,14 @@ from bot_detector.rate_limiter import RateLimiter, Window
 
 
 @pytest.mark.asyncio
-async def test_default_config():
-    limiter = RateLimiter()
+async def test_windows_are_kept_in_order():
+    windows = [
+        Window(count=1200, interval_ms=60_000),
+        Window(count=20, interval_ms=1_000),
+    ]
+    limiter = RateLimiter(windows=windows)
 
-    assert limiter.windows == (Window(count=60, interval_ms=60_000),)
+    assert limiter.windows == tuple(windows)
 
 
 @pytest.mark.asyncio

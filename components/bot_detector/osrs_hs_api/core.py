@@ -2,7 +2,7 @@ import time
 from typing import Optional
 
 from aiohttp import ClientSession
-from bot_detector.rate_limiter import RateLimiter
+from bot_detector.rate_limiter import RateLimiter, Window
 
 from .exceptions import Err, Ok, PlayerDoesNotExist, Result, UnexpectedRedirection
 from .structs import PlayerStats
@@ -12,7 +12,11 @@ class HiscoreOldSchoolAPI:
     url = "https://secure.runescape.com/m=hiscore_oldschool/index_lite.json"
 
     def __init__(self, rate_limiter: Optional[RateLimiter] = None) -> None:
-        self.rate_limiter = rate_limiter if rate_limiter is not None else RateLimiter()
+        self.rate_limiter = (
+            rate_limiter
+            if rate_limiter is not None
+            else RateLimiter(windows=[Window(count=60, interval_ms=60_000)])
+        )
 
     async def _fetch(
         self,
