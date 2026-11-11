@@ -1,5 +1,6 @@
 import datetime
 
+import orjson
 import pytest
 from bot_detector.event_queue.structs import (
     ToScrapeBatchStruct,
@@ -125,3 +126,56 @@ def test_batch_struct_rejects_legacy_payload():
                 "player_data": make_player().model_dump(),
             }
         )
+
+
+def test_slim_batch_payload_round_trips_to_full_message():
+    """Exclude-none serialization must not change the rehydrated batch.
+
+    Producers serialize batches with exclude_none=True, dropping the
+    always-null PlayerStruct optionals (ironman, hardcore_ironman,
+    ultimate_ironman, normalized_name); consumers validate with the
+    same pydantic model, whose Optionals default back to None.
+    """
+    player = PlayerStruct(
+        id=9,
+        name="player-9",
+        created_at=datetime.datetime(2024, 1, 1),
+        ironman=None,
+        hardcore_ironman=None,
+        ultimate_ironman=None,
+        normalized_name=None,
+    )
+    full = ToScrapeBatchStruct(metadata=make_metadata(), players=[player])
+
+    slim_bytes = orjson.dumps(full.model_dump(exclude_none=True))
+
+    # the slim payload really omits the null-valued keys
+    dumped = orjson.loads(slim_bytes)
+    slim_player = dumped["players"][0]
+    assert "ironman" not in slim_player
+    assert "hardcore_ironman" not in slim_player
+    assert "ultimate_ironman" not in slim_player
+    assert "normalized_name" not in slim_player
+
+    rehydrated = ToScrapeMessage.model_validate(dumped)
+    # slim bytes and full bytes rehydrate to the same message
+    assert rehydrated == ToScrapeMessage.model_validate(full.model_dump())
+    assert rehydrated.players[0] == player
+
+
+def test_slim_batch_payload_keeps_set_optional_fields():
+    """exclude_none drops nulls only: set optionals must survive."""
+    player = PlayerStruct(
+        id=10,
+        name="player-10",
+        created_at=datetime.datetime(2024, 1, 1),
+        ironman=True,
+    )
+    full = ToScrapeBatchStruct(metadata=make_metadata(), players=[player])
+
+    slim_bytes = orjson.dumps(full.model_dump(exclude_none=True))
+
+    rehydrated = ToScrapeMessage.model_validate(orjson.loads(slim_bytes))
+
+    assert rehydrated.players[0].ironman is True
+    assert rehydrated == ToScrapeMessage.model_validate(full.model_dump())
