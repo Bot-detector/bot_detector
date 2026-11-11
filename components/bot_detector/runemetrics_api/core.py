@@ -3,7 +3,7 @@ import time
 from typing import Literal, overload
 
 from aiohttp import ClientSession
-from osrs.utils import RateLimiter
+from bot_detector.rate_limiter import RateLimiter, Window
 from pydantic import BaseModel
 
 from .exceptions import Undefined, UnexpectedRedirection
@@ -44,7 +44,9 @@ class RuneMetrics:
     def __init__(
         self,
         proxy: str = "",
-        rate_limiter: RateLimiter = RateLimiter(),
+        rate_limiter: RateLimiter = RateLimiter(
+            windows=[Window(name="default", count=60, interval_ms=60_000)]
+        ),
     ) -> None:
         self.proxy = proxy
         self.rate_limiter = rate_limiter
