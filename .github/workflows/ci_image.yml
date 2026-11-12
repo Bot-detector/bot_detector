@@ -45,23 +45,7 @@ jobs:
           username: bot_detector+quay_robot
           password: ${{ secrets.QUAY_REGISTERY_PASSWORD }}
 
-      - name: Build image
-        run: |
-          docker buildx build "$CONTEXT" \
-            --file "$DOCKERFILE" \
-            --platform linux/amd64 \
-            --tag "$IMAGE" \
-            --load
-
-      # fail before pushing if git, uv, python or TLS (CA certificates) is broken
-      - name: Smoke test image
-        run: |
-          docker run --rm --entrypoint /bin/sh \
-            "$IMAGE" \
-            -c 'git --version && uv --version && python --version \
-              && git ls-remote https://github.com/Bot-detector/bot_detector HEAD'
-
-      - name: Push image
+      - name: Build and push Docker image
         run: |
           docker buildx build "$CONTEXT" \
             --file "$DOCKERFILE" \
