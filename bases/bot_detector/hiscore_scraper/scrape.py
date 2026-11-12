@@ -18,7 +18,7 @@ from pydantic import ValidationError
 logger = logging.getLogger(__name__)
 
 
-def _proxy_label(proxy: str) -> str:
+def proxy_label(proxy: str) -> str:
     """Host:port of a proxy URL, without credentials."""
     if "@" in proxy:
         return proxy.split("@", 1)[1]
@@ -41,7 +41,7 @@ async def scrape_player(
     if isinstance(result, Ok):
         latency_histogram.labels(proxy=proxy).observe(result.latency)
         fetch_outcome_latency_histogram.labels(
-            proxy=_proxy_label(proxy), outcome="success"
+            proxy=proxy_label(proxy), outcome="success"
         ).observe(result.latency)
         return result.value, None
     elif isinstance(result, Err):
@@ -50,7 +50,7 @@ async def scrape_player(
                 "not_found" if isinstance(result.error, PlayerDoesNotExist) else "error"
             )
             fetch_outcome_latency_histogram.labels(
-                proxy=_proxy_label(proxy), outcome=outcome
+                proxy=proxy_label(proxy), outcome=outcome
             ).observe(result.latency)
         return None, result.error
     else:
