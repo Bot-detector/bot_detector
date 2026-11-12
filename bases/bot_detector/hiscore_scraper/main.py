@@ -35,7 +35,6 @@ async def main():
     proxy_manager = ProxyManager(api_key=ProxySettings().PROXY_API_KEY)  # type: ignore
     proxies = await proxy_manager.fetch_proxies()
 
-    # initialize kafka producers and consumers
     b_server = KafkaSettings().bootstrap_servers
     player_ts_queue = QueueFactory.create_queue(
         model=ToScrapeStruct,
@@ -110,8 +109,6 @@ async def main():
             batch_size=settings.CONSUME_BATCH_SIZE,
         )
     ]
-    # one shared session for the whole pool; the connector limit must
-    # cover the pool or aiohttp's default (100) binds first
     session = build_session(connector_limit=settings.CONNECTION_LIMIT)
     stages += [
         fetch(
@@ -155,4 +152,3 @@ def run():
 
 if __name__ == "__main__":
     run()
-    # test if cicd runs

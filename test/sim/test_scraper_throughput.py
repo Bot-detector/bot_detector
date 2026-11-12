@@ -6,25 +6,14 @@ against a 4-partition simulated broker and a simulated Jagex API,
 then answers "where is the pipeline slow" with four caps:
 
 - the consumer serial path: one commit RTT per `consume_batch_size`
-  players (the old per-message commit used to cap the fleet at
-  1/commit_rtt);
+  players;
 - the fetch pool: Little's law, fetchers / mean fetch latency;
 - the per-proxy rate ceilings: proxies x 20 req/s;
 - the feed rate itself.
 
-Expectations encoded here (computed in the report, asserted within
-tolerance):
-
-- the batched commit leaves the consumer cap orders of magnitude above
-  the pool, so the crawl-mix pool binds on fetch latency: ~1250/s
-  (1800 fetchers / 250 proxies) vs the ~450-worker fleet's ~300/s,
-  with a cheap commit path;
-- scarce proxies bind the pool on the shared rate windows instead
-  (proxies x 20/s), proving the pool actually uses the rate budget;
-- fetch latency distributions reproduce the prod calibration:
-  mixture p50 ~1.7s, p99 ~5s;
-- a starved feed (below every cap) paces consumption at exactly the
-  feed rate.
+Prod calibration (Nov 2026): crawl-mix pool ~1250/s; a starved feed
+paces consumption at exactly the feed rate; fetch latency distributions
+reproduce the observed mixture p50 ~1.7s, p99 ~5s.
 """
 
 import math
@@ -149,9 +138,8 @@ def test_rate_limit_caps_the_pool_when_proxies_are_scarce():
     print(card.summary())
 
     # 1800 fetchers over 8 proxies demand ~1800/s, but each proxy's
-    # shared window binds: with reservation-based check(), throughput
-    # pins to the nominal 8 x 20 = 160/s cap from below - the old
-    # check-in-time accounting leaked bursts ~20% past it
+    # shared window binds: throughput pins to the nominal
+    # 8 x 20 = 160/s cap from below
     assert card.binding == "rate"
     assert card.rate_cap_s == pytest.approx(160.0)
     assert card.throughput_s == pytest.approx(160.0, rel=0.05)

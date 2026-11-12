@@ -73,14 +73,14 @@ class RateLimiter:
         scheduled_ms = now_ms
         blocked: list[Window] = []
         # window freeing the latest; it dictates the sleep duration
-        binding: tuple[Window, int] | None = None
+        binding: Window | None = None
         for window, history in self._history.items():
             if len(history) < window.count:
                 continue
             free_at = history[0] + window.interval_ms
             if free_at > scheduled_ms:
                 scheduled_ms = free_at
-                binding = (window, free_at)
+                binding = window
             if free_at > now_ms:
                 blocked.append(window)
         for history in self._history.values():
@@ -92,7 +92,7 @@ class RateLimiter:
         wait_s = wait_ms / 1000
         if self.on_wait is not None:
             self.on_wait(
-                WaitEvent(blocked=tuple(blocked), binding=binding[0], wait_s=wait_s)
+                WaitEvent(blocked=tuple(blocked), binding=binding, wait_s=wait_s)
             )
-        logger.info(f"Rate limit reached. Waiting {wait_s:.3f} seconds for a slot.")
+        logger.debug(f"Rate limit reached. Waiting {wait_s:.3f} seconds for a slot.")
         await asyncio.sleep(wait_s)

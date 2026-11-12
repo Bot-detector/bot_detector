@@ -6,6 +6,7 @@ from aiohttp import ClientSession
 from bot_detector.event_queue.structs import ToScrapeStruct
 from bot_detector.hiscore_scraper.metrics import (
     error_counter,
+    on_rate_limit_wait,
     retry_counter,
     retry_delay_histogram,
     retry_histogram,
@@ -28,21 +29,17 @@ logger = logging.getLogger(__name__)
 # the next scrape attempt
 ROTATE_COOLDOWN_S = 10.0
 
-# idle sleep when no proxy is available
 NO_PROXY_SLEEP_S = 10.0
 
 
 class ProxyRuntime:
     """Per-proxy scraping state shared across the fetch pool.
 
-    One worker used to equal one proxy, so worker-scoped rate windows and
-    retry tracking were accidentally per-proxy. With a pool of fetchers
-    sharing proxies, that state must be keyed by proxy or N fetchers on
-    one proxy would silently allow N x the rate limit. All lookups are
-    get-or-create without awaits, so they are race-free under asyncio.
-
-    RetryTracker is int-keyed (it is shared with runemetrics), so each
-    proxy gets a stable synthetic id.
+    Rate windows and retry tracking are keyed by proxy: N fetchers on
+    one proxy would otherwise silently allow N x the rate limit. All
+    lookups are get-or-create without awaits, so they are race-free
+    under asyncio. RetryTracker is int-keyed (it is shared with
+    runemetrics), so each proxy gets a stable synthetic id.
     """
 
     def __init__(self, proxy_manager: ProxyManager) -> None:
@@ -70,11 +67,13 @@ class ProxyRuntime:
         """The proxy's shared rate limiter."""
         limiter = self._limiters.get(proxy)
         if limiter is None:
-            limiter = RateLimiter(windows=list(self._windows), on_wait=None)
+            limiter = RateLimiter(
+                windows=list(self._windows), on_wait=on_rate_limit_wait
+            )
             self._limiters[proxy] = limiter
         return limiter
 
-    def api(self, proxy: str, session: ClientSession) -> HiscoreOldSchoolAPI:
+    def api(self, proxy: str) -> HiscoreOldSchoolAPI:
         """The API client bound to the proxy's shared rate limiter."""
         api = self._apis.get(proxy)
         if api is None:
@@ -106,7 +105,7 @@ def record_failure(runtime: ProxyRuntime, proxy: str) -> float:
     """Records a failed attempt and returns the proxy's backoff delay.
 
     Metrics + tracker update only; the caller owns the sleep so the
-    backoff paces its own fetch slot, like the old per-worker loop did.
+    backoff paces its own fetch slot.
     """
     _proxy = proxy_label(proxy)
     tracker, tracker_id = runtime.tracker(proxy)
@@ -117,7 +116,7 @@ def record_failure(runtime: ProxyRuntime, proxy: str) -> float:
     retry_counter.labels(proxy=_proxy).inc()
     retry_histogram.labels(proxy=_proxy).observe(retry_count)
     retry_delay_histogram.labels(proxy=_proxy).observe(delay)
-    logger.warning(f"[{proxy_label(proxy)}]: backing off {delay:.2f}s")
+    logger.warning(f"[{_proxy}]: backing off {delay:.2f}s")
     return delay
 
 
@@ -157,7 +156,7 @@ async def fetch(
         player_stats, scrape_error = await scrape_player(
             player=player_data,
             session=session,
-            api=runtime.api(proxy, session),
+            api=runtime.api(proxy),
             proxy=proxy,
         )
 
@@ -178,8 +177,8 @@ async def fetch(
             )
             continue
 
-        # 407 from the proxy: rotate the pool, let it settle, then fall
-        # through to the generic error path (same shape as the old loop)
+        # 407 from the proxy: rotate the pool and let it settle, then
+        # fall through to the generic error path
         if isinstance(scrape_error, aiohttp.ClientHttpProxyError):
             if scrape_error.status == 407:
                 logger.warning(f"[fetcher-{fetcher_id}]: Rotating proxies.")

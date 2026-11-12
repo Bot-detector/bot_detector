@@ -206,7 +206,4 @@ async def test_proxy_runtime_shares_state_per_proxy():
     assert tracker_a1 is tracker_a2 and id_a1 == id_a2
     assert tracker_a1 is not tracker_b and id_a1 != id_b
 
-    session = AsyncMock()
-    assert runtime.api("user@proxy-a:1", session) is runtime.api(
-        "user@proxy-a:1", session
-    )
+    assert runtime.api("user@proxy-a:1") is runtime.api("user@proxy-a:1")

@@ -27,12 +27,12 @@ async def process(
     player_nf_producer: QueueProducer[NotFoundStruct],
     player_sc_producer: QueueProducer[ScrapedStruct],
 ):
-    """Processor stage: turns fetch outcomes into Kafka side effects.
+    """Turns fetch outcomes into Kafka side effects.
 
     CPU + Kafka only (transform, produce): never stalls on Jagex. The
-    fetch pool owns outcome branching, this stage owns durability: every
-    failure path ends in a Kafka requeue, so at-least-once delivery is
-    preserved exactly like the old fused loop.
+    fetch pool owns outcome branching, this stage owns durability:
+    every failure path ends in a Kafka requeue, so delivery is
+    at-least-once.
     """
     while True:
         result = await results_queue.get()
@@ -69,4 +69,6 @@ async def process(
         error = await produce_player_scraped(player_sc_producer, scraped_data)
         if error:
             logger.error(f"{log_prefix}: {error}")
-            await produce_player_to_scrape(player_ts_queue, player_data)
+            requeue_error = await produce_player_to_scrape(player_ts_queue, player_data)
+            if requeue_error:
+                logger.error(f"{log_prefix}: {requeue_error}")

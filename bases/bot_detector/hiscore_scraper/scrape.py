@@ -31,11 +31,7 @@ async def scrape_player(
     api: HiscoreOldSchoolAPI,
     proxy: str,
 ) -> tuple[PlayerStats | None, Exception | None]:
-    """
-    Scrape player stats from hiscores.
-    Returns a tuple of (PlayerStats | None, Exception | None).
-    Caller handles error-based logic (retry, not_found, proxy refresh).
-    """
+    """Scrapes player stats; caller handles retry, not_found and proxy refresh."""
     result = await api.get(player=player.name, session=session, proxy=proxy)
 
     if isinstance(result, Ok):
@@ -70,9 +66,8 @@ async def transform_player_stats(
     skills = {s.name: s.xp for s in player_stats.skills if s.xp > 0}
     activities = {a.name: a.score for a in player_stats.activities if a.score > 0}
 
-    hiscore_data, error = None, None
     try:
-        hiscore_data = ScrapedStruct(
+        return ScrapedStruct(
             metadata=MetaData(version=1, source="hiscore_scraper"),
             player_data=player,
             highscore_data=HighscoreBaseStruct(
@@ -83,10 +78,8 @@ async def transform_player_stats(
                 time_to_live=date.today() + timedelta(days=30),
             ),
         )
-        return hiscore_data
     except ValidationError as e:
-        error = e.json()
-        logger.error(error)
+        logger.error(e.json())
         error = await produce_player_to_scrape(player_ts_producer, player)
         if error:
             logger.error(f"Failed to requeue player after transform failure: {error}")
