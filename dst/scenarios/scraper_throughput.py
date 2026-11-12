@@ -104,9 +104,9 @@ class ScraperThroughputConfig(BaseModel):
     """One simulated pipeline run: feed shape, broker costs, jagex mix."""
 
     duration_s: float = Field(default=120.0, gt=0.0)
-    fetchers: int = Field(default=1024, ge=1)
-    processors: int = Field(default=8, ge=1)
-    proxies: int = Field(default=450, ge=1)
+    fetchers: int = Field(default=1800, ge=1)
+    processors: int = Field(default=16, ge=1)
+    proxies: int = Field(default=250, ge=1)
     consume_batch_size: int = Field(default=200, ge=1)
     task_queue_maxsize: int = Field(default=2000, ge=1)
     results_queue_maxsize: int = Field(default=2000, ge=1)

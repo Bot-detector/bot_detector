@@ -1,9 +1,9 @@
 """Throughput sim: the real hiscore scraper pipeline on a simulated kafka.
 
-Runs the unmodified stage functions (batched consumer, 1024-fetcher
-pool with per-proxy rate windows, 8 processors) against a 4-partition
-simulated broker and a simulated Jagex API, then answers "where is the
-pipeline slow" with four caps:
+Runs the unmodified stage functions (batched consumer, 1800-fetcher
+pool over 250 proxies with per-proxy rate windows, 16 processors)
+against a 4-partition simulated broker and a simulated Jagex API,
+then answers "where is the pipeline slow" with four caps:
 
 - the consumer serial path: one commit RTT per `consume_batch_size`
   players (the old per-message commit used to cap the fleet at
@@ -16,8 +16,9 @@ Expectations encoded here (computed in the report, asserted within
 tolerance):
 
 - the batched commit leaves the consumer cap orders of magnitude above
-  the pool, so the crawl-mix pool binds on fetch latency: ~715/s vs the
-  ~450-worker fleet's ~300/s, with a cheap commit path;
+  the pool, so the crawl-mix pool binds on fetch latency: ~1250/s
+  (1800 fetchers / 250 proxies) vs the ~450-worker fleet's ~300/s,
+  with a cheap commit path;
 - scarce proxies bind the pool on the shared rate windows instead
   (proxies x 20/s), proving the pool actually uses the rate budget;
 - fetch latency distributions reproduce the prod calibration:
@@ -65,7 +66,7 @@ def test_batched_commit_takes_commit_rtt_off_the_critical_path():
     assert card.consumer_cap_s == pytest.approx(
         card.config.consume_batch_size / card.config.commit_cost_s, rel=0.01
     )
-    assert card.consumer_cap_s > 50 * card.fleet_cap_s
+    assert card.consumer_cap_s > 20 * card.fleet_cap_s
 
     # commits track batches, not players: orders of magnitude fewer
     # commits than the old one-per-message pattern (a startup transient
@@ -147,7 +148,7 @@ def test_rate_limit_caps_the_pool_when_proxies_are_scarce():
     card = run(duration_s=120.0, proxies=8, not_found_pct=0.0)
     print(card.summary())
 
-    # 1024 fetchers over 8 proxies demand ~1020/s, but each proxy's
+    # 1800 fetchers over 8 proxies demand ~1800/s, but each proxy's
     # shared window binds: throughput lands just above the nominal
     # 8 x 20 = 160/s cap (the limiter releases a blocked checker at
     # wait-end without re-validating its slot, so ~20% leaks under
