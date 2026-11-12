@@ -1,0 +1,23 @@
+name: sim
+
+on:
+  schedule:
+    # nightly at 04:00 UTC
+    - cron: "0 4 * * *"
+  push:
+    branches: [develop]
+    paths:
+      - "test/sim/**"
+      - "dst/**"
+      - "components/**"
+      - "bases/**"
+  workflow_dispatch:
+
+jobs:
+  tests:
+    runs-on: [self-hosted, "hetzner"]
+    container:
+      image: ghcr.io/astral-sh/uv:bookworm-slim
+    steps:
+      - uses: actions/checkout@v6
+      - run: uv run pytest test/sim -v --durations=0 -n auto --dist worksteal

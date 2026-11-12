@@ -5,42 +5,55 @@ covers a simulated day finishes in milliseconds of wall time. Every
 run replays: the same seed and the same arguments give the same
 result, down to individual messages, kicks, and close codes.
 
-The toolkit lives under `development/` and imports the product. The
-product never imports DST.
+The toolkit lives at the repo root (`dst/`) and imports the product.
+The product never imports DST.
 
 ## Layout
 
 ```
-development/dst/
+dst/                importable as `dst` (repo root is on pytest's pythonpath)
 ├── README.md
-└── src/dst/         importable as `dst` (development/dst/src is on sys.path)
-    ├── __init__.py
-    ├── clock.py         VirtualClock: the one source of simulated time
-    ├── loop.py          VirtualEventLoop: asyncio on the clock
-    ├── timepatch.py     virtual_time(): sync time module patch
-    ├── runner.py        run(): drive a scenario, return a SimResult
-    ├── main.py          CLI launcher
-    ├── units.py         KB / MB / GB byte constants
-    ├── machine/         Machine: the resource model of the box
-    │   ├── cpu.py           work accounting, cores, background load
-    │   ├── memory.py        RAM accounting and pressure
-    │   ├── network.py       latency, bandwidth, packet loss, partitions
-    │   ├── disk.py          latency and failures
-    │   ├── processes.py     gc-pause / freeze shaped stall injection
-    │   ├── randomness.py    one seeded RNG behind every draw
-    │   ├── config.py        per-subsystem config models
-    │   └── results.py       CpuGrant, IoResult, IoError
-    ├── systems/         simulated outside world
-    │   ├── fake_kafka.py
-    │   └── fake_firehose_clients.py
-    └── scenarios/       product-on-DST wiring, one module per app
-        ├── kafka_smoke.py
-        └── firehose.py
+├── __init__.py
+├── clock.py            VirtualClock: the one source of simulated time
+├── loop.py             VirtualEventLoop: asyncio on the clock
+├── timepatch.py        virtual_time(): sync time module patch
+├── runner.py           run(): drive a scenario, return a SimResult
+├── main.py             CLI launcher
+├── testing.py          Scorecard, invariants, replay_check helpers
+├── payloads.py         deterministic serialized payload pools
+├── faults.py           seeded fault draws
+├── units.py            KB / MB / GB byte constants
+├── machine/            Machine: the resource model of the box
+│   ├── cpu.py              work accounting, cores, background load
+│   ├── memory.py           RAM accounting and pressure
+│   ├── network.py          latency, bandwidth, packet loss, partitions
+│   ├── disk.py             latency and failures
+│   ├── processes.py        gc-pause / freeze shaped stall injection
+│   ├── randomness.py       one seeded RNG behind every draw
+│   ├── config.py           per-subsystem config models
+│   └── results.py          CpuGrant, IoResult, IoError
+├── systems/            simulated outside world
+│   ├── fake_kafka.py
+│   ├── fake_firehose_clients.py
+│   ├── sim_broker.py
+│   ├── sim_db.py
+│   ├── db_faults.py
+│   └── seed.py
+└── scenarios/          product-on-DST wiring, one module per app
+    ├── kafka_smoke.py
+    ├── firehose.py
+    ├── join_storm.py
+    ├── keyed.py
+    ├── reports_delay.py
+    ├── db_insert_storm.py
+    ├── kafka_drain_1m.py
+    └── scraper_throughput.py
 ```
 
-`development/dst/src` is on the import path for pytest (pytest.ini
-`pythonpath`), for pyright (`pyrightconfig.json` `extraPaths`), and at
-runtime through `_bot_detector.pth` in the venv site-packages.
+The repo root is on the import path for pytest (pytest.ini
+`pythonpath`), so `import dst` resolves here. The scenario tests that
+exercise it live in `test/sim/` and run nightly via
+`.github/workflows/sim.yml` (`make test-sim`).
 
 ## Architecture
 
@@ -238,8 +251,12 @@ reports prove the replay. A difference names the nondeterminism.
 ## Testing
 
 ```sh
-uv run pytest test/development/dst -q
+uv run pytest test/sim -q
 ```
+
+The sim suite is excluded from the default `uv run pytest` unit run
+(pytest.ini testpaths) and from PR CI; it runs nightly and on demand
+via `.github/workflows/sim.yml`.
 
 The suite covers the clock, the loop, the machine, both systems, the
 launcher, and both scenarios. It asserts parity, ordering, kick
