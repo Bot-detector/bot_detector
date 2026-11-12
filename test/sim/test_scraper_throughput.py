@@ -149,14 +149,12 @@ def test_rate_limit_caps_the_pool_when_proxies_are_scarce():
     print(card.summary())
 
     # 1800 fetchers over 8 proxies demand ~1800/s, but each proxy's
-    # shared window binds: throughput lands just above the nominal
-    # 8 x 20 = 160/s cap (the limiter releases a blocked checker at
-    # wait-end without re-validating its slot, so ~20% leaks under
-    # contention - pre-existing RateLimiter semantics, invisible in the
-    # old one-request-per-second-per-proxy fleet)
+    # shared window binds: with reservation-based check(), throughput
+    # pins to the nominal 8 x 20 = 160/s cap from below - the old
+    # check-in-time accounting leaked bursts ~20% past it
     assert card.binding == "rate"
     assert card.rate_cap_s == pytest.approx(160.0)
-    assert card.rate_cap_s <= card.throughput_s <= 1.35 * card.rate_cap_s
+    assert card.throughput_s == pytest.approx(160.0, rel=0.05)
 
     # fetcher slots pile up inside the limiter's check()
     assert card.stages["rate_limit"].share_pct > 30.0

@@ -891,6 +891,13 @@ async def main(**kwargs) -> ScraperThroughputReport:
         scraper_processor.transform_player_stats = original_transform
 
         consumed = broker.consumed
+        # throughput counts completed fetches, not consumed names: the
+        # pipeline buffers names between consume and fetch outcome
+        # (task_queue, results_queue, one in-flight fetch per fetcher),
+        # so consumed overstates the fetch rate by buffer / duration
+        fetched = (
+            state.outcomes.scraped + state.outcomes.not_found + state.outcomes.errors
+        )
         busy_s = sum(stage.total_s for stage in state.stages.values())
         active_s = busy_s - sum(
             stage.blocked_s
@@ -919,7 +926,7 @@ async def main(**kwargs) -> ScraperThroughputReport:
         )
         # per-proxy windows bind at MAX_CALLS_PER_SECOND each
         rate_cap_s = float(config.proxies * ProxySettings().MAX_CALLS_PER_SECOND)
-        throughput_s = consumed / config.duration_s
+        throughput_s = fetched / config.duration_s
 
         caps = {
             "feed": float(config.feed_rate_s),

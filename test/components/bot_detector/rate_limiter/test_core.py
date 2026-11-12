@@ -55,51 +55,25 @@ async def test_no_sleep_before_limit():
 
 
 @pytest.mark.asyncio
-async def test_sleep_when_full_and_within_interval():
-    limiter = RateLimiter(windows=[Window(name="minute", count=3, interval_ms=60_000)])
-
-    mock_sleep = AsyncMock()
-    with (
-        patch.object(time, "time", return_value=1_000.0),
-        patch.object(asyncio, "sleep", mock_sleep),
-    ):
-        await limiter.check()
-        await limiter.check()
-        mock_sleep.assert_not_called()
-
-        await limiter.check()
-        mock_sleep.assert_awaited_once_with(60.0)
-
-
-@pytest.mark.asyncio
-async def test_no_sleep_when_full_but_outside_interval():
-    limiter = RateLimiter(windows=[Window(name="minute", count=3, interval_ms=10_000)])
-
-    mock_sleep = AsyncMock()
-    with (
-        patch.object(time, "time", _time_stub([1_000.0, 1_003.0, 1_011.0])),
-        patch.object(asyncio, "sleep", mock_sleep),
-    ):
-        await limiter.check()
-        await limiter.check()
-        mock_sleep.assert_not_called()
-
-        await limiter.check()
-        mock_sleep.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_sleep_duration_calculation():
+async def test_window_capacity_admits_count_calls():
+    """`count` calls pass immediately; the next one reserves a future slot."""
     limiter = RateLimiter(windows=[Window(name="minute", count=2, interval_ms=60_000)])
 
     mock_sleep = AsyncMock()
     with (
-        patch.object(time, "time", _time_stub([1_000.0, 1_020.0])),
+        patch.object(time, "time", _time_stub([1_000.0, 1_020.0, 1_020.0])),
         patch.object(asyncio, "sleep", mock_sleep),
     ):
+        # both slots of the window are free: no sleep, even though the
+        # two calls are only 20s apart
         await limiter.check()
         mock_sleep.assert_not_called()
 
+        await limiter.check()
+        mock_sleep.assert_not_called()
+
+        # third call: the window is full, the oldest reservation frees
+        # at 1000 + 60 = 1060
         await limiter.check()
         mock_sleep.assert_awaited_once_with(40.0)
 
@@ -110,30 +84,39 @@ async def test_sleeps_sub_second_intervals():
 
     mock_sleep = AsyncMock()
     with (
-        patch.object(time, "time", _time_stub([1_000.0, 1_000.3])),
+        patch.object(time, "time", _time_stub([1_000.0, 1_000.3, 1_000.3])),
         patch.object(asyncio, "sleep", mock_sleep),
     ):
         await limiter.check()
         mock_sleep.assert_not_called()
 
         await limiter.check()
+        mock_sleep.assert_not_called()
+
+        # third call waits for the first reservation to expire at 1000.5
+        await limiter.check()
         mock_sleep.assert_awaited_once_with(0.2)
 
 
 @pytest.mark.asyncio
-async def test_history_is_sliding():
+async def test_reservations_slide_with_the_window():
     limiter = RateLimiter(windows=[Window(name="minute", count=2, interval_ms=10_000)])
 
     mock_sleep = AsyncMock()
     with (
-        patch.object(time, "time", _time_stub([1_000.0, 1_005.0, 1_011.0])),
+        patch.object(time, "time", _time_stub([1_000.0, 1_005.0, 1_011.0, 1_011.0])),
         patch.object(asyncio, "sleep", mock_sleep),
     ):
         await limiter.check()
         await limiter.check()
-        mock_sleep.assert_awaited_once_with(5.0)
+        mock_sleep.assert_not_called()
 
-        # the call at t=1000 slid out of the window: spans 6s
+        # the call at t=1000 slid out of the window (1000 + 10s = 1010
+        # has passed): the slot is free again
+        await limiter.check()
+        mock_sleep.assert_not_called()
+
+        # the next free slot is the second reservation + 10s = 1015
         await limiter.check()
         mock_sleep.assert_awaited_with(4.0)
 
@@ -153,9 +136,11 @@ async def test_multiple_windows_cap_shortest_interval():
         patch.object(asyncio, "sleep", mock_sleep),
     ):
         await limiter.check()
+        await limiter.check()
         mock_sleep.assert_not_called()
 
-        # second call is allowed, third is capped by the 1s window
+        # both slots of the 1s window are taken: the third call waits
+        # for the oldest reservation to expire at 1000 + 1s
         await limiter.check()
         mock_sleep.assert_awaited_once_with(1.0)
 
@@ -196,8 +181,9 @@ async def test_sleeps_for_longest_window():
         patch.object(time, "time", return_value=1_000.0),
         patch.object(asyncio, "sleep", mock_sleep),
     ):
-        # exhaust both windows: the 1s window first, then the 60s window
-        for _ in range(5):
+        # exhaust both windows: the 1s window first (calls 3-5 queue
+        # behind its reservations), then the 60s window binds
+        for _ in range(6):
             await limiter.check()
 
     mock_sleep.assert_any_call(1.0)
@@ -219,16 +205,18 @@ async def test_on_wait_reports_blocked_and_binding():
         patch.object(time, "time", return_value=1_000.0),
         patch.object(asyncio, "sleep", AsyncMock()),
     ):
-        # call 2 exhausts the second window, call 3 exhausts both
-        for _ in range(3):
+        # calls 1-2 fill both windows without waiting; call 3 queues
+        # behind the second window's reservations, call 4 hits the
+        # exhausted minute window
+        for _ in range(4):
             await limiter.check()
 
     assert len(events) == 2
 
-    second_only = events[0]
-    assert [w.name for w in second_only.blocked] == ["second"]
-    assert second_only.binding.name == "second"
-    assert second_only.wait_s == 1.0
+    first = events[0]
+    assert [w.name for w in first.blocked] == ["second"]
+    assert first.binding.name == "second"
+    assert first.wait_s == 1.0
 
     both = events[1]
     assert [w.name for w in both.blocked] == ["minute", "second"]
@@ -251,3 +239,54 @@ async def test_no_wait_event_when_unlimited():
             await limiter.check()
 
     assert events == []
+
+
+@pytest.mark.asyncio
+async def test_concurrent_callers_never_overshoot_the_window():
+    """The reservation guarantee under contention: at most `count`
+    calls fire within any `interval` span, no matter how many callers
+    hammer check() at once. The old check-in-time accounting leaked
+    bursts past the window in this exact scenario."""
+    limiter = RateLimiter(windows=[Window(name="burst", count=10, interval_ms=1_000)])
+    fire_times: list[float] = []
+
+    async def caller() -> None:
+        await limiter.check()
+        fire_times.append(time.perf_counter())
+
+    await asyncio.gather(*[caller() for _ in range(40)])
+
+    assert len(fire_times) == 40
+    ordered = sorted(fire_times)
+    # calls i and i+10 must be at least one window apart, or 11 calls
+    # would have fired inside a single 1s window
+    for i in range(len(ordered) - 10):
+        assert ordered[i + 10] - ordered[i] >= 0.99
+
+
+@pytest.mark.asyncio
+async def test_concurrent_callers_wake_staggered():
+    """Blocked callers reserve successive slots instead of all waking
+    at once. The guarantee is the window bound, not perfect spacing:
+    with count=2, callers may share a slot, but callers two apart must
+    be a full interval apart (else 3 calls fired inside the window)."""
+    limiter = RateLimiter(windows=[Window(name="burst", count=2, interval_ms=1_000)])
+
+    # exhaust the window synchronously
+    await limiter.check()
+    await limiter.check()
+
+    waits: list[float] = []
+
+    async def caller() -> None:
+        start = time.perf_counter()
+        await limiter.check()
+        waits.append(time.perf_counter() - start)
+
+    await asyncio.gather(*[caller() for _ in range(4)])
+
+    # two waiters may share a slot (the bound is count per interval,
+    # not perfect spacing), so equal sleeps land in arbitrary order
+    ordered = sorted(waits)
+    assert ordered[2] - ordered[0] >= 0.95
+    assert ordered[3] - ordered[1] >= 0.95
