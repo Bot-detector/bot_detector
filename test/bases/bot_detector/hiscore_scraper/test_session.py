@@ -10,7 +10,7 @@ import re
 import pytest
 from aiohttp import web
 from aiohttp.test_utils import TestServer
-from bot_detector.hiscore_scraper import core
+from bot_detector.hiscore_scraper.session import build_session
 
 # any quoted-empty cookie is poison (aiohttp >= 3.12.7 quoting); Jagex
 # currently only issues empties for JGSTAFFNAME/JGSTAFFPASS, this catches
@@ -46,7 +46,7 @@ async def test_build_session_sends_no_cookies():
     server = TestServer(app)
     await server.start_server()
     try:
-        session = core.build_session()
+        session = build_session()
         async with session:
             await session.get(str(server.make_url("/set")))
             await session.get(str(server.make_url("/check")))
@@ -90,7 +90,7 @@ async def test_build_session_keeps_user_agent():
     server = TestServer(app)
     await server.start_server()
     try:
-        session = core.build_session()
+        session = build_session()
         async with session:
             await session.get(str(server.make_url("/check")))
     finally:
