@@ -1,4 +1,4 @@
-name: hiscore_scraper
+name: scraper_hiscore
 
 on:
   push:

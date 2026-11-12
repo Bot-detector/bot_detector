@@ -1,4 +1,4 @@
-name: runemetrics_scraper
+name: scraper_runemetrics
 
 on:
   push:
