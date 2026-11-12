@@ -5,6 +5,7 @@ hiscores "down" page as a 302 -> /community, and the API must detect it via
 resp.history.
 """
 
+import socket
 from unittest.mock import AsyncMock, patch
 
 import aiohttp
@@ -16,6 +17,18 @@ from bot_detector.osrs_hs_api.exceptions import (
     PlayerDoesNotExist,
     UnexpectedRedirection,
 )
+
+
+def closed_port() -> int:
+    """An ephemeral port with no listener: connect is refused at once.
+
+    Hard-coding a privileged port hangs behind firewalls that DROP
+    instead of REJECT (30s+ connect timeout); a fresh bind-then-close
+    socket fails with a connection-level ClientError everywhere.
+    """
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
 
 
 def _valid_hiscore_payload():
@@ -116,11 +129,13 @@ async def test_get_server_error(monkeypatch: pytest.MonkeyPatch):
 
 @pytest.mark.asyncio
 async def test_get_connection_error(monkeypatch: pytest.MonkeyPatch):
-    # port 1 on localhost is closed: connect must fail with a client error.
+    # a port with no listener: connect must fail with a client error.
     # Depending on the OS this surfaces as ClientConnectorError (refused) or
     # ConnectionTimeoutError (filtered/dropped); both are aiohttp ClientErrors.
     api = HiscoreOldSchoolAPI()
-    monkeypatch.setattr(HiscoreOldSchoolAPI, "url", "http://127.0.0.1:1/hiscore")
+    monkeypatch.setattr(
+        HiscoreOldSchoolAPI, "url", f"http://127.0.0.1:{closed_port()}/hiscore"
+    )
     async with aiohttp.ClientSession() as session:
         result = await api.get("player", session)
 
@@ -226,7 +241,7 @@ async def test_server_error_records_latency(monkeypatch: pytest.MonkeyPatch):
 @pytest.mark.asyncio
 async def test_connection_error_records_latency():
     api = HiscoreOldSchoolAPI()
-    api.url = "http://127.0.0.1:1/hiscore"
+    api.url = f"http://127.0.0.1:{closed_port()}/hiscore"
     async with aiohttp.ClientSession() as session:
         result = await api.get("player", session)
 
@@ -261,7 +276,7 @@ async def test_get_with_proxy_passes_to_session(
 async def test_get_with_dead_proxy_returns_err():
     # a proxy that refuses connections surfaces as an Err result
     api = HiscoreOldSchoolAPI()
-    dead_proxy = "http://user:pass@127.0.0.1:1"
+    dead_proxy = f"http://user:pass@127.0.0.1:{closed_port()}"
     async with aiohttp.ClientSession() as session:
         result = await api.get("player", session, proxy=dead_proxy)
 

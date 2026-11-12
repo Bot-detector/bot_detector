@@ -46,6 +46,7 @@ dev = [
     "ruff==0.15.22",
     "pytest-asyncio>=0.25.0",
     "pytest-cov>=6.1.1",
+    "pytest-xdist>=3.6.1",
     "mypy>=1.19.1",
     "pyright>=1.1.408",
     "tomli-w>=1.2.0",
@@ -68,6 +69,6 @@ allow-direct-references = true
 # (import-untyped, no py.typed markers)
 namespace_packages = true
 explicit_package_bases = true
-mypy_path = ["components", "bases", "development/dst/src"]
+mypy_path = ["components", "bases", "dst"]
 # other bricks have pre-existing errors; extend as they get cleaned up
 files = ["bases/bot_detector/firehose", "bases/bot_detector/job_broadcaster"]
