@@ -41,8 +41,42 @@ jobs:
       image: ghcr.io/astral-sh/uv:bookworm-slim
     steps:
       - uses: actions/checkout@v6
-      # explicit unit paths (bases + components): the DST sim suite is
-      # excluded here and runs nightly via sim.yml. serial on purpose:
-      # the unit suite is import-bound, workers cost more than they
-      # save (18.6s under xdist vs 7.9s serial on 24 cores)
-      - run: uv run pytest test/bases/bot_detector test/components/bot_detector -v --durations=0
+        # full history is needed to compute the merge-base with develop
+        with:
+          fetch-depth: 0
+      - name: select affected tests
+        id: sel
+        shell: bash
+        run: |
+          # baseline = branch point vs develop (PRs test exactly their own
+          # changes), or the previous commit when develop itself is pushed
+          if [[ "$GITHUB_REF_NAME" == "develop" ]]; then
+            BASE="HEAD^1"
+          else
+            BASE="origin/develop"
+          fi
+          BASELINE=$(git merge-base HEAD "$BASE")
+
+          # changed bricks + every brick that imports them (--deps)
+          CHANGED=$(uv run poly diff \
+            --since "$BASELINE" \
+            --bricks --deps --short)
+          echo "changed bricks: $CHANGED"
+
+          # brick name -> mirrored test dir
+          DIRS=()
+          IFS=',' read -ra BRICKS <<< "$CHANGED"
+          for brick in "${BRICKS[@]}"; do
+            [[ -n "$brick" ]] || continue
+            for root in components bases; do
+              dir="test/$root/bot_detector/$brick"
+              if [[ -d "$dir" ]]; then
+                DIRS+=("$dir")
+                break
+              fi
+            done
+          done
+          printf 'args=%s\n' "${DIRS[*]}" >> "$GITHUB_OUTPUT"
+      - name: tests
+        if: steps.sel.outputs.args != ''
+        run: uv run pytest ${{ steps.sel.outputs.args }} -v --durations=0
