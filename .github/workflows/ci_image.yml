@@ -11,6 +11,12 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  IMAGE: quay.io/bot_detector/cicd:py3.12-trixie-slim
+  DOCKERFILE: _infra/_cicd/py3.12-trixie-slim/Dockerfile
+  CONTEXT: _infra/_cicd/py3.12-trixie-slim
+  BASE: ghcr.io/astral-sh/uv:python3.12-trixie-slim@sha256:d4a752dd52f42e0c508bb0b6a912f15922bb32e42f66af30671c3fdc0d759f21
+
 jobs:
   build_image:
     runs-on: [self-hosted, "hetzner"]
@@ -28,17 +34,29 @@ jobs:
       - name: Build image
         run: |
           docker build \
-            --file _infra/_uv_python312_trixie_slim_git/Dockerfile \
-            --tag quay.io/bot_detector/uv-python3.12-trixie-slim-git:latest \
-            _infra/_uv_python312_trixie_slim_git
+            --file "$DOCKERFILE" \
+            --tag "$IMAGE" \
+            "$CONTEXT"
 
       # fail before pushing if git, uv, python or TLS (CA certificates) is broken
       - name: Smoke test image
         run: |
           docker run --rm --entrypoint /bin/sh \
-            quay.io/bot_detector/uv-python3.12-trixie-slim-git:latest \
+            "$IMAGE" \
             -c 'git --version && uv --version && python --version \
               && git ls-remote https://github.com/Bot-detector/bot_detector HEAD'
 
+      # push via buildx so the manifest carries OCI annotations
       - name: Push image
-        run: docker push quay.io/bot_detector/uv-python3.12-trixie-slim-git:latest
+        run: |
+          docker buildx build --push \
+            --platform linux/amd64 \
+            --file "$DOCKERFILE" \
+            --tag "$IMAGE" \
+            --annotation "org.opencontainers.image.base.name=$BASE" \
+            --annotation "org.opencontainers.image.base.digest=$BASE" \
+            --annotation "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/tree/$GITHUB_REF_NAME/_infra/_cicd/py3.12-trixie-slim" \
+            --annotation "org.opencontainers.image.description=CI job container: uv + python 3.12 + git (debian trixie slim)" \
+            --annotation "org.opencontainers.image.created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --annotation "org.opencontainers.image.revision=$GITHUB_SHA" \
+            "$CONTEXT"
