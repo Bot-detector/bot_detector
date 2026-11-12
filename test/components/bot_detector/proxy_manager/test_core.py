@@ -5,7 +5,15 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from bot_detector.proxy_manager import ProxyManager
 
+# these four exercise the real Webshare API on purpose: they need a key
+# and network access, so they self-skip everywhere else (CI unit runs)
+needs_live_proxy_api = pytest.mark.skipif(
+    not os.environ.get("PROXY_API_KEY"),
+    reason="integration test: needs PROXY_API_KEY and the real Webshare API",
+)
 
+
+@needs_live_proxy_api
 @pytest.mark.asyncio
 async def test_fetch_proxies():
     """
@@ -22,6 +30,7 @@ async def test_fetch_proxies():
     assert len(proxies) > 0, "No proxies were fetched"
 
 
+@needs_live_proxy_api
 @pytest.mark.asyncio
 async def test_get_proxy():
     """
@@ -43,6 +52,7 @@ async def test_get_proxy():
     assert proxy is not None, "Failed to retrieve proxy by index"
 
 
+@needs_live_proxy_api
 @pytest.mark.asyncio
 async def test_rotate_proxies():
     """
@@ -69,6 +79,7 @@ async def test_rotate_proxies():
     assert len(proxies_before) == len(proxies_after)
 
 
+@needs_live_proxy_api
 @pytest.mark.asyncio
 async def test_get_proxy_index_error():
     """

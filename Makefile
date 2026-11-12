@@ -48,8 +48,11 @@ docker-restart: uv-cache## restart containers
 	$(DOCKER_ENV) docker compose -f 'docker-compose.yml' down
 	$(DOCKER_ENV) docker compose -f 'docker-compose.yml' up -d --build
 
-test: restart ## restart containers & test
+test: restart ## restart containers & run unit tests (sim runs separately)
 	uv run pytest
+
+test-sim: ## run the DST simulation suite (no containers needed, slow)
+	uv run pytest test/sim
 	
 test-verbose: restart ## restart containers & test
 	uv run pytest -s

@@ -41,5 +41,8 @@ jobs:
       image: ghcr.io/astral-sh/uv:bookworm-slim
     steps:
       - uses: actions/checkout@v6
-      - run: |
-          uv run pytest -v --durations=0 --cov --cov-report=xml
+      # explicit unit paths (bases + components): the DST sim suite is
+      # excluded here and runs nightly via sim.yml. serial on purpose:
+      # the unit suite is import-bound, workers cost more than they
+      # save (18.6s under xdist vs 7.9s serial on 24 cores)
+      - run: uv run pytest test/bases/bot_detector test/components/bot_detector -v --durations=0
