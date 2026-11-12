@@ -51,7 +51,9 @@ def test_one_million_run_invariants_and_wall_budget():
     assert card.subscores.loss == 1.0
     assert card.subscores.drain == 1.0
     assert card.score == 1.0
-    assert wall_s < 60.0
+    # budget stays 50s: post-optimization the 1M run lands ~15s on dev
+    # machines, ~42s extrapolated on the hetzner CI runner (d2e9fb6)
+    assert wall_s < 50.0
 
 
 def test_zero_dup_and_deadlock_produces_clean_run():
