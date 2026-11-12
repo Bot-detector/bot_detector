@@ -31,9 +31,13 @@ jobs:
           username: bot_detector+quay_robot
           password: ${{ secrets.QUAY_REGISTERY_PASSWORD }}
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build image
         run: |
-          docker build \
+          docker buildx build --load \
+            --platform linux/amd64 \
             --file "$DOCKERFILE" \
             --tag "$IMAGE" \
             "$CONTEXT"
