@@ -1,6 +1,6 @@
 """The real hiscore scraper worker fleet on the DST virtual clock.
 
-`work()` from `bot_detector.hiscore_scraper.core` runs unmodified: the
+`work()` from `bot_detector.hiscore_scraper.worker` runs unmodified: the
 same get_proxy -> get_one -> commit -> scrape -> transform -> produce
 loop, the real RateLimiter (per-worker 20/s + 1200/min windows), the
 real RetryTracker backoff and the real Queue/QueueProducer wrappers.
@@ -63,7 +63,7 @@ from bot_detector.event_queue.structs import (  # noqa: E402
     ScrapedStruct,
     ToScrapeStruct,
 )
-from bot_detector.hiscore_scraper import core as scraper_core  # noqa: E402
+from bot_detector.hiscore_scraper import worker as scraper_worker  # noqa: E402
 from bot_detector.osrs_hs_api.exceptions import (  # noqa: E402
     Err,
     Ok,
@@ -730,14 +730,14 @@ async def main(**kwargs) -> ScraperThroughputReport:
         SimHiscoreAPI.state = state
         SimHiscoreAPI.rng = rng
         SimHiscoreAPI.sigma = math.log(config.latency_p99_over_p50) / Z_99
-        original_api = scraper_core.HiscoreOldSchoolAPI
-        original_transform = scraper_core.transform_player_stats
-        original_handle_retry = scraper_core.handle_retry
-        scraper_core.HiscoreOldSchoolAPI = SimHiscoreAPI  # type: ignore[assignment]
-        scraper_core.transform_player_stats = _timed(
+        original_api = scraper_worker.HiscoreOldSchoolAPI
+        original_transform = scraper_worker.transform_player_stats
+        original_handle_retry = scraper_worker.handle_retry
+        scraper_worker.HiscoreOldSchoolAPI = SimHiscoreAPI  # type: ignore[assignment]
+        scraper_worker.transform_player_stats = _timed(
             state, "transform", original_transform
         )
-        scraper_core.handle_retry = _timed(state, "retry", original_handle_retry)
+        scraper_worker.handle_retry = _timed(state, "retry", original_handle_retry)
 
         proxy_manager = SimProxyManager(config.workers, state)
         await ts_queue.start()
@@ -750,7 +750,7 @@ async def main(**kwargs) -> ScraperThroughputReport:
 
         async def guarded(i: int) -> None:
             try:
-                await scraper_core.work(
+                await scraper_worker.work(
                     worker_id=i,
                     proxy_manager=proxy_manager,  # type: ignore[arg-type]
                     player_ts_queue=ts_queue,
@@ -782,9 +782,9 @@ async def main(**kwargs) -> ScraperThroughputReport:
             )
 
         # restore the seams so other scenarios in the process see product code
-        scraper_core.HiscoreOldSchoolAPI = original_api
-        scraper_core.transform_player_stats = original_transform
-        scraper_core.handle_retry = original_handle_retry
+        scraper_worker.HiscoreOldSchoolAPI = original_api
+        scraper_worker.transform_player_stats = original_transform
+        scraper_worker.handle_retry = original_handle_retry
 
         consumed = broker.consumed
         busy_s = sum(stage.total_s for stage in state.stages.values())
