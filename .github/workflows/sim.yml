@@ -2,8 +2,8 @@ name: sim
 
 on:
   schedule:
-    # nightly at 03:17 UTC, off the top-of-hour cron rush
-    - cron: "17 3 * * *"
+    # nightly at 04:00 UTC
+    - cron: "0 4 * * *"
   push:
     branches: [develop]
     paths:
