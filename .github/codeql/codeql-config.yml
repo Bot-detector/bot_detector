@@ -1,0 +1,16 @@
+name: "CodeQL config: high-fidelity queries only"
+
+# The default security suite runs, then everything below high precision
+# (medium, low) is filtered out. Only very-high and high precision
+# queries remain.
+query-filters:
+  - exclude:
+      precision: medium
+  - exclude:
+      precision: low
+
+paths-ignore:
+  - "test/**"
+  - "dst/**"
+  - "development/**"
+  - "_infra/**"
