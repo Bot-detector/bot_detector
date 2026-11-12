@@ -1,0 +1,43 @@
+name: ci_image
+
+on:
+  workflow_dispatch:
+
+# avoid two overlapping pushes to the same tag
+concurrency:
+  group: ci_image
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build_image:
+    runs-on: [self-hosted, "hetzner"]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Login to Quay.io
+        uses: docker/login-action@v3
+        with:
+          registry: quay.io
+          username: bot_detector+quay_robot
+          password: ${{ secrets.QUAY_REGISTERY_PASSWORD }}
+
+      - name: Build image
+        run: |
+          docker build \
+            --file _infra/_uv_git/Dockerfile \
+            --tag quay.io/bot_detector/ci-uv-git:bookworm-slim \
+            _infra/_uv_git
+
+      # fail before pushing if git or uv is broken in the image
+      - name: Smoke test image
+        run: |
+          docker run --rm --entrypoint /bin/sh \
+            quay.io/bot_detector/ci-uv-git:bookworm-slim \
+            -c 'git --version && uv --version'
+
+      - name: Push image
+        run: docker push quay.io/bot_detector/ci-uv-git:bookworm-slim
