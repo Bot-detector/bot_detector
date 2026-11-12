@@ -10,6 +10,8 @@ on:
 jobs:
   lock_file:
     runs-on: [self-hosted, "hetzner"]
+    permissions:
+      contents: read
     container:
       image: quay.io/bot_detector/cicd:py3.12-trixie-slim
     steps:
@@ -19,6 +21,8 @@ jobs:
   linting:
     runs-on: [self-hosted, "hetzner"]
     needs: [lock_file]
+    permissions:
+      contents: read
     container:
       image: quay.io/bot_detector/cicd:py3.12-trixie-slim
     steps:
@@ -28,6 +32,8 @@ jobs:
   formatting:
     runs-on: [self-hosted, "hetzner"]
     needs: [lock_file]
+    permissions:
+      contents: read
     container:
       image: quay.io/bot_detector/cicd:py3.12-trixie-slim
     steps:
@@ -37,6 +43,8 @@ jobs:
   tests:
     runs-on: [self-hosted, "hetzner"]
     needs: [lock_file]
+    permissions:
+      contents: read
     container:
       image: quay.io/bot_detector/cicd:py3.12-trixie-slim
     steps:
@@ -46,18 +54,25 @@ jobs:
           fetch-depth: 0
       - name: Configure Git safe directory
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      - name: select affected tests
-        id: sel
+      - name: select and run affected tests
         shell: bash
         run: |
-          # baseline = branch point vs develop (PRs test exactly their own
-          # changes), or the previous commit when develop itself is pushed
-          if [[ "$GITHUB_REF_NAME" == "develop" ]]; then
+          # baseline for a develop push: the push event's before SHA, which
+          # covers multi-commit pushes. workflow_dispatch has no before, and
+          # force pushes can orphan it, so fall back to the last commit.
+          BEFORE="${{ github.event.before }}"
+          if [[ "$GITHUB_REF_NAME" == "develop" ]] \
+            && [[ -n "$BEFORE" ]] \
+            && [[ "$BEFORE" != "0000000000000000000000000000000000000000" ]] \
+            && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            BASE="$BEFORE"
+          elif [[ "$GITHUB_REF_NAME" == "develop" ]]; then
             BASE="HEAD^1"
           else
             BASE="origin/develop"
           fi
           BASELINE=$(git merge-base HEAD "$BASE")
+          echo "baseline: $BASELINE"
 
           # changed bricks + every brick that imports them (--deps)
           CHANGED=$(uv run poly diff \
@@ -78,7 +93,9 @@ jobs:
               fi
             done
           done
-          printf 'args=%s\n' "${DIRS[*]}" >> "$GITHUB_OUTPUT"
-      - name: tests
-        if: steps.sel.outputs.args != ''
-        run: uv run pytest ${{ steps.sel.outputs.args }} -v --durations=0
+
+          if [[ ${#DIRS[@]} -eq 0 ]]; then
+            echo "no affected test dirs; skipping pytest"
+            exit 0
+          fi
+          uv run pytest "${DIRS[@]}" -v --durations=0
