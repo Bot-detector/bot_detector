@@ -10,6 +10,8 @@ on:
 jobs:
   lock_file:
     runs-on: [self-hosted, "hetzner"]
+    permissions:
+      contents: read
     container:
       image: quay.io/bot_detector/cicd:py3.12-trixie-slim
     steps:
@@ -19,6 +21,8 @@ jobs:
   linting:
     runs-on: [self-hosted, "hetzner"]
     needs: [lock_file]
+    permissions:
+      contents: read
     container:
       image: quay.io/bot_detector/cicd:py3.12-trixie-slim
     steps:
@@ -28,6 +32,8 @@ jobs:
   formatting:
     runs-on: [self-hosted, "hetzner"]
     needs: [lock_file]
+    permissions:
+      contents: read
     container:
       image: quay.io/bot_detector/cicd:py3.12-trixie-slim
     steps:
@@ -37,37 +43,41 @@ jobs:
   tests:
     runs-on: [self-hosted, "hetzner"]
     needs: [lock_file]
+    permissions:
+      contents: read
     container:
       image: quay.io/bot_detector/cicd:py3.12-trixie-slim
     steps:
       - uses: actions/checkout@v6
-        # full history is needed to compute the merge-base with develop
         with:
           fetch-depth: 0
-      - name: select affected tests
-        id: sel
+
+      - name: Configure Git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Select and run affected tests
         shell: bash
         run: |
-          # baseline = branch point vs develop (PRs test exactly their own
-          # changes), or the previous commit when develop itself is pushed
-          if [[ "$GITHUB_REF_NAME" == "develop" ]]; then
-            BASE="HEAD^1"
-          else
-            BASE="origin/develop"
+          BASE="origin/develop"
+          if [[ "$GITHUB_REF_NAME" == develop ]]; then
+            BASE="${{ github.event.before }}"
+            [[ -n "$BASE" && "$BASE" != "0000000000000000000000000000000000000000" ]] \
+              && git cat-file -e "$BASE^{commit}" 2>/dev/null \
+              || BASE="HEAD^1"
           fi
-          BASELINE=$(git merge-base HEAD "$BASE")
 
-          # changed bricks + every brick that imports them (--deps)
-          CHANGED=$(uv run poly diff \
-            --since "$BASELINE" \
-            --bricks --deps --short)
+          BASELINE=$(git merge-base HEAD "$BASE") || {
+            echo "::error::cannot resolve merge-base between HEAD and $BASE"
+            exit 1
+          }
+          echo "baseline: $BASELINE"
+
+          CHANGED=$(uv run poly diff --since "$BASELINE" --bricks --deps --short)
           echo "changed bricks: $CHANGED"
 
-          # brick name -> mirrored test dir
           DIRS=()
           IFS=',' read -ra BRICKS <<< "$CHANGED"
           for brick in "${BRICKS[@]}"; do
-            [[ -n "$brick" ]] || continue
             for root in components bases; do
               dir="test/$root/bot_detector/$brick"
               if [[ -d "$dir" ]]; then
@@ -76,7 +86,9 @@ jobs:
               fi
             done
           done
-          printf 'args=%s\n' "${DIRS[*]}" >> "$GITHUB_OUTPUT"
-      - name: tests
-        if: steps.sel.outputs.args != ''
-        run: uv run pytest ${{ steps.sel.outputs.args }} -v --durations=0
+
+          if ((${#DIRS[@]})); then
+            uv run pytest "${DIRS[@]}" -v --durations=0
+          else
+            echo "No affected tests."
+          fi
