@@ -49,42 +49,35 @@ jobs:
       image: quay.io/bot_detector/cicd:py3.12-trixie-slim
     steps:
       - uses: actions/checkout@v6
-        # full history is needed to compute the merge-base with develop
         with:
           fetch-depth: 0
-      - name: Configure Git safe directory
+
+      - name: Configure Git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      - name: select and run affected tests
+
+      - name: Select and run affected tests
         shell: bash
         run: |
-          # baseline for a develop push: the push event's before SHA, which
-          # covers multi-commit pushes. workflow_dispatch has no before, and
-          # force pushes can orphan it, so fall back to the last commit.
-          BEFORE="${{ github.event.before }}"
-          if [[ "$GITHUB_REF_NAME" == "develop" ]] \
-            && [[ -n "$BEFORE" ]] \
-            && [[ "$BEFORE" != "0000000000000000000000000000000000000000" ]] \
-            && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
-            BASE="$BEFORE"
-          elif [[ "$GITHUB_REF_NAME" == "develop" ]]; then
-            BASE="HEAD^1"
-          else
-            BASE="origin/develop"
+          BASE="origin/develop"
+          if [[ "$GITHUB_REF_NAME" == develop ]]; then
+            BASE="${{ github.event.before }}"
+            [[ -n "$BASE" && "$BASE" != "0000000000000000000000000000000000000000" ]] \
+              && git cat-file -e "$BASE^{commit}" 2>/dev/null \
+              || BASE="HEAD^1"
           fi
-          BASELINE=$(git merge-base HEAD "$BASE")
+
+          BASELINE=$(git merge-base HEAD "$BASE") || {
+            echo "::error::cannot resolve merge-base between HEAD and $BASE"
+            exit 1
+          }
           echo "baseline: $BASELINE"
 
-          # changed bricks + every brick that imports them (--deps)
-          CHANGED=$(uv run poly diff \
-            --since "$BASELINE" \
-            --bricks --deps --short)
+          CHANGED=$(uv run poly diff --since "$BASELINE" --bricks --deps --short)
           echo "changed bricks: $CHANGED"
 
-          # brick name -> mirrored test dir
           DIRS=()
           IFS=',' read -ra BRICKS <<< "$CHANGED"
           for brick in "${BRICKS[@]}"; do
-            [[ -n "$brick" ]] || continue
             for root in components bases; do
               dir="test/$root/bot_detector/$brick"
               if [[ -d "$dir" ]]; then
@@ -94,8 +87,8 @@ jobs:
             done
           done
 
-          if [[ ${#DIRS[@]} -eq 0 ]]; then
-            echo "no affected test dirs; skipping pytest"
-            exit 0
+          if ((${#DIRS[@]})); then
+            uv run pytest "${DIRS[@]}" -v --durations=0
+          else
+            echo "No affected tests."
           fi
-          uv run pytest "${DIRS[@]}" -v --durations=0
