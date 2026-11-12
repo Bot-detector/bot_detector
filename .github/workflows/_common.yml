@@ -11,7 +11,7 @@ jobs:
   lock_file:
     runs-on: [self-hosted, "hetzner"]
     container:
-      image: ghcr.io/astral-sh/uv:bookworm-slim
+      image: quay.io/bot_detector/ci-uv-git:bookworm-slim
     steps:
       - uses: actions/checkout@v6
       - run: cd ${{ inputs.project_dir }} && uv lock --locked
@@ -20,7 +20,7 @@ jobs:
     runs-on: [self-hosted, "hetzner"]
     needs: [lock_file]
     container:
-      image: ghcr.io/astral-sh/uv:bookworm-slim
+      image: quay.io/bot_detector/ci-uv-git:bookworm-slim
     steps:
       - uses: actions/checkout@v6
       - run: uvx ruff@0.15.22 check .
@@ -29,7 +29,7 @@ jobs:
     runs-on: [self-hosted, "hetzner"]
     needs: [lock_file]
     container:
-      image: ghcr.io/astral-sh/uv:bookworm-slim
+      image: quay.io/bot_detector/ci-uv-git:bookworm-slim
     steps:
       - uses: actions/checkout@v6
       - run: uvx ruff@0.15.22 format --check .
@@ -38,7 +38,7 @@ jobs:
     runs-on: [self-hosted, "hetzner"]
     needs: [lock_file]
     container:
-      image: ghcr.io/astral-sh/uv:bookworm-slim
+      image: quay.io/bot_detector/ci-uv-git:bookworm-slim
     steps:
       - uses: actions/checkout@v6
         # full history is needed to compute the merge-base with develop
