@@ -7,17 +7,44 @@ from bot_detector.event_queue.structs import (
     ScrapedStruct,
     ToScrapeStruct,
 )
+from bot_detector.hiscore_scraper.errors import dump_error
 from bot_detector.hiscore_scraper.metrics import not_found_counter
 from bot_detector.hiscore_scraper.producers import (
     produce_not_found,
     produce_player_scraped,
     produce_player_to_scrape,
 )
-from bot_detector.hiscore_scraper.scrape import transform_player_stats
+from bot_detector.hiscore_scraper.scrape import proxy_label, transform_player_stats
 from bot_detector.hiscore_scraper.structs import FetchResult
 from bot_detector.osrs_hs_api.exceptions import PlayerDoesNotExist
+from bot_detector.wide_event import WideEventLogger
 
 logger = logging.getLogger(__name__)
+wide_event = WideEventLogger()
+
+
+def _force_log() -> None:
+    wide_event.add({"force_log": True})
+
+
+def _emit() -> None:
+    """Emits one wide event per fetch result.
+
+    Produce failures log at error, scrape failures at warning; the
+    remaining outcomes log at info when forced or sampled.
+    """
+    ctx = wide_event.get()
+    force_log = bool(ctx.pop("force_log", False))
+    if "produce_errors" in ctx:
+        logger.error(ctx)
+    elif "scrape_error" in ctx:
+        logger.warning(ctx)
+    elif force_log:
+        ctx.update({"log_reason": "force"})
+        logger.info(ctx)
+    elif wide_event.sample():
+        ctx.update({"log_reason": "sample"})
+        logger.info(ctx)
 
 
 async def process(
@@ -29,46 +56,70 @@ async def process(
 ):
     """Turns fetch outcomes into Kafka side effects.
 
-    CPU + Kafka only (transform, produce): never stalls on Jagex. The
-    fetch pool owns outcome branching, this stage owns durability:
-    every failure path ends in a Kafka requeue, so delivery is
-    at-least-once.
+    Each result emits one wide event: player/proxy context, the
+    outcome, and errors dumped to JSON (text fallback) when present.
     """
     while True:
         result = await results_queue.get()
         player_data = result.player
-        log_prefix = f"[processor-{processor_id}][{player_data.name}]"
+        token = wide_event.set({})
+        try:
+            wide_event.add(
+                {
+                    "processor": processor_id,
+                    "player": {"id": player_data.id, "name": player_data.name},
+                    "proxy": proxy_label(result.proxy),
+                }
+            )
 
-        if result.error is not None:
-            if isinstance(result.error, PlayerDoesNotExist):
-                not_found_counter.labels(proxy=result.proxy).inc()
-                player_data.possible_ban = True
-                error = await produce_not_found(player_nf_producer, player_data)
+            if result.error is not None:
+                if isinstance(result.error, PlayerDoesNotExist):
+                    not_found_counter.labels(proxy=result.proxy).inc()
+                    player_data.possible_ban = True
+                    wide_event.add({"outcome": "not_found"})
+                    error = await produce_not_found(player_nf_producer, player_data)
+                    if error:
+                        wide_event.add(
+                            {"produce_errors": {"not_found": dump_error(error)}}
+                        )
+                    continue
+
+                wide_event.add(
+                    {"outcome": "error", "scrape_error": dump_error(result.error)}
+                )
+                error = await produce_player_to_scrape(player_ts_queue, player_data)
                 if error:
-                    logger.error(f"{log_prefix}: {error}")
+                    wide_event.add({"produce_errors": {"to_scrape": dump_error(error)}})
                 continue
 
-            logger.warning(f"{log_prefix}: {result.error=}")
-            error = await produce_player_to_scrape(player_ts_queue, player_data)
+            assert result.stats is not None  # for mypy
+            wide_event.add({"outcome": "success"})
+            scraped_data = await transform_player_stats(
+                player_stats=result.stats,
+                player=player_data,
+                player_ts_producer=player_ts_queue,
+            )
+            if scraped_data is None:
+                # transform already logged and requeued the player
+                wide_event.add({"outcome": "transform_failed"})
+                _force_log()
+                continue
+
+            error = await produce_player_scraped(player_sc_producer, scraped_data)
             if error:
-                logger.error(f"{log_prefix}: {error}")
-            continue
-
-        assert result.stats is not None  # for mypy
-        scraped_data = await transform_player_stats(
-            player_stats=result.stats,
-            player=player_data,
-            player_ts_producer=player_ts_queue,
-        )
-        if scraped_data is None:
-            # transform already requeued the player to players.to_scrape;
-            # a backoff sleep here would stall every fetch result, so the
-            # Kafka round trip is the retry pacing
-            continue
-
-        error = await produce_player_scraped(player_sc_producer, scraped_data)
-        if error:
-            logger.error(f"{log_prefix}: {error}")
-            requeue_error = await produce_player_to_scrape(player_ts_queue, player_data)
-            if requeue_error:
-                logger.error(f"{log_prefix}: {requeue_error}")
+                wide_event.add(
+                    {
+                        "outcome": "error",
+                        "produce_errors": {"scraped": dump_error(error)},
+                    }
+                )
+                requeue_error = await produce_player_to_scrape(
+                    player_ts_queue, player_data
+                )
+                if requeue_error:
+                    wide_event.add(
+                        {"produce_errors": {"to_scrape": dump_error(requeue_error)}}
+                    )
+        finally:
+            _emit()
+            wide_event.reset(token)
