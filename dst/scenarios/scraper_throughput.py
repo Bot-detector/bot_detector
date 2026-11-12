@@ -1,33 +1,34 @@
-"""The real hiscore scraper worker fleet on the DST virtual clock.
+"""The real hiscore scraper pipeline on the DST virtual clock.
 
-`work()` from `bot_detector.hiscore_scraper.worker` runs unmodified: the
-same get_proxy -> get_one -> commit -> scrape -> transform -> produce
-loop, the real RateLimiter (per-worker 20/s + 1200/min windows), the
-real RetryTracker backoff and the real Queue/QueueProducer wrappers.
-Only the I/O seams are replaced:
+The scraper runs as three stages wired by bounded asyncio queues:
+consume -> task_queue -> fetch pool -> results_queue -> processors.
+The real stage functions from `bot_detector.hiscore_scraper` run
+unmodified: `consumer.consume` (batched get_many + one commit per
+batch), the fetch loop `fetcher.fetch` (per-proxy RateLimiter windows
+of 20/s + 1200/min, RetryTracker backoff, sticky proxy assignment) and
+`processor.process` (transform + kafka produce). Only the I/O seams are
+replaced:
 
 - kafka: a SimKafka broker per topic with `partitions` (prod: 4)
   fed at `feed_rate_s` names per virtual second, packed
-  `names_per_message` names per kafka message. get_one models the
-  single shared consumer the fleet pulls from: blocked wait for data,
-  per-message fetch RTT, then real orjson+pydantic parsing charged to
-  the machine's serial core. commit models the adapter's per-message
-  commit as a broker RTT under a single-flight lock, because one
-  consumer instance serializes every worker's commit; names served
-  from a fetched batch commit nothing. Broker RTTs ride the machine's
-  Network model (latency, jitter, `kafka_bandwidth_mbps` transfer
-  time, packet loss, partition) through a `kafka_connection_limit`
-  connection pool (0 = unlimited).
+  `names_per_message` names per kafka message. One consumer task pulls
+  `consume_batch_size` names per get_many; the commit models the real
+  per-batch commit as a single broker RTT that clears every fetched
+  message at once. Broker RTTs ride the machine's Network model
+  (latency, jitter, `kafka_bandwidth_mbps` transfer time, packet loss,
+  partition) through a `kafka_connection_limit` connection pool
+  (0 = unlimited).
 - jagex: SimHiscoreAPI draws per-fetch outcomes on a seeded RNG:
   success (~success_latency_s), not_found (slow, ~not_found_latency_s,
   the 404 path) and transient errors (requeue + retry backoff).
-- proxies: an in-memory manager with one proxy per worker.
+- proxies: an in-memory manager with `proxies` proxies; fetchers are
+  assigned sticky by index modulo the pool size, so each proxy's rate
+  windows are shared by fetchers/proxies fetchers.
 
-The scenario answers "where is the scraper slow" with two lenses:
-worker-time stage shares (where the fleet's time goes) and the
-consumer serial path (the per-message commit round trip is the one
-single-flight stage on the shared consumer, so it caps the whole
-fleet at 1/commit_rtt; fetch RTT and parse CPU run concurrently).
+The scenario answers "where is the pipeline slow" with two lenses:
+stage-time shares (where pipeline time goes) and the binding cap among
+feed, consumer serial path, fetch pool (Little's law: fetchers / mean
+fetch latency) and the per-proxy rate ceilings (proxies x 20/s).
 
 Latency calibration (prod, Nov 2026): overall fetch p50 ~ 1.7s,
 p99 ~ 5s, and not_found runs ~20% ahead of found (share 1.2/2.2
@@ -63,7 +64,11 @@ from bot_detector.event_queue.structs import (  # noqa: E402
     ScrapedStruct,
     ToScrapeStruct,
 )
-from bot_detector.hiscore_scraper import worker as scraper_worker  # noqa: E402
+from bot_detector.hiscore_scraper import consumer as scraper_consumer  # noqa: E402
+from bot_detector.hiscore_scraper import fetcher as scraper_fetcher  # noqa: E402
+from bot_detector.hiscore_scraper import processor as scraper_processor  # noqa: E402
+from bot_detector.hiscore_scraper.fetcher import ProxyRuntime  # noqa: E402
+from bot_detector.hiscore_scraper.structs import FetchResult  # noqa: E402
 from bot_detector.osrs_hs_api.exceptions import (  # noqa: E402
     Err,
     Ok,
@@ -74,6 +79,7 @@ from bot_detector.osrs_hs_api.structs import (  # noqa: E402
     PlayerStats,
     Skill,
 )
+from bot_detector.proxy_manager import Settings as ProxySettings  # noqa: E402
 from bot_detector.rate_limiter import RateLimiter, Window  # noqa: E402
 from bot_detector.structs import MetaData, PlayerStruct  # noqa: E402
 from pydantic import BaseModel, Field, ValidationError, model_validator  # noqa: E402
@@ -95,10 +101,15 @@ def _pct(sorted_samples: list[float], q: float) -> float:
 
 
 class ScraperThroughputConfig(BaseModel):
-    """One simulated fleet run: feed shape, broker costs, jagex mix."""
+    """One simulated pipeline run: feed shape, broker costs, jagex mix."""
 
-    duration_s: float = Field(default=240.0, gt=0.0)
-    workers: int = Field(default=450, ge=1)
+    duration_s: float = Field(default=120.0, gt=0.0)
+    fetchers: int = Field(default=1800, ge=1)
+    processors: int = Field(default=16, ge=1)
+    proxies: int = Field(default=250, ge=1)
+    consume_batch_size: int = Field(default=200, ge=1)
+    task_queue_maxsize: int = Field(default=2000, ge=1)
+    results_queue_maxsize: int = Field(default=2000, ge=1)
     pool_size: int = Field(default=2_000, ge=1)
     feed_rate_s: int = Field(default=2_000, gt=0)
     partitions: int = Field(default=4, ge=1)
@@ -175,11 +186,13 @@ class FetchLatencyStat(BaseModel):
 
 
 class ScraperThroughputReport(BaseModel):
-    """End state of one run plus the two slowness lenses."""
+    """End state of one run plus the slowness lenses."""
 
     config: ScraperThroughputConfig
     duration_s: float
-    workers: int
+    fetchers: int
+    processors: int
+    proxies: int
     partitions: int
     feed_produced: int
     requeues: int
@@ -201,9 +214,10 @@ class ScraperThroughputReport(BaseModel):
     fleet_cap_s: float
     consumer_cap_s: float
     consumer_serial_s: float
+    rate_cap_s: float
     binding: str
     mean_iteration_s: float
-    busy_worker_s: float
+    busy_stage_s: float
     stages: dict[str, StageStat]
 
     def summary(self) -> str:
@@ -211,20 +225,22 @@ class ScraperThroughputReport(BaseModel):
         link_note = (
             "single connection serializes fetch+commit RTTs"
             if self.config.kafka_connection_limit == 1
-            else "fetch RTT + parse run concurrently"
+            else "fetch RTT and parse CPU run concurrently"
         )
         lines = [
             f"throughput {self.throughput_s:.1f}/s over {self.duration_s:.0f}s "
-            f"({self.workers} workers, {self.partitions} partitions, "
+            f"({self.fetchers} fetchers, {self.processors} processors, "
+            f"{self.proxies} proxies, {self.partitions} partitions, "
             f"consumed {self.consumed} names in {self.messages_consumed} "
             f"messages, backlog {self.backlog})",
             f"caps/s: binding={self.binding} consumer={self.consumer_cap_s:.1f} "
-            f"fleet={self.fleet_cap_s:.1f} feed={self.config.feed_rate_s}",
+            f"fleet={self.fleet_cap_s:.1f} rate={self.rate_cap_s:.1f} "
+            f"feed={self.config.feed_rate_s}",
             (
-                f"consumer serial stage: commit RTT "
-                f"{self.config.commit_cost_s * 1000:.2f}ms per message "
-                f"({self.config.names_per_message} names/message = "
-                f"{self.consumer_serial_s * 1000:.3f}ms/player; {link_note})"
+                f"consumer serial path: commit RTT "
+                f"{self.config.commit_cost_s * 1000:.2f}ms per batch of "
+                f"{self.config.consume_batch_size} "
+                f"({self.consumer_serial_s * 1000:.3f}ms/player; {link_note})"
             ),
             (
                 f"broker link: {self.config.kafka_bandwidth_mbps:.0f} Mbps, "
@@ -233,7 +249,7 @@ class ScraperThroughputReport(BaseModel):
                 f"fetch failures {self.kafka_fetch_failures}"
             ),
             f"mean iteration {self.mean_iteration_s:.3f}s",
-            "worker-time shares:",
+            "stage-time shares:",
         ]
         for name, stage in sorted(self.stages.items(), key=lambda kv: -kv[1].total_s):
             blocked = (
@@ -284,7 +300,6 @@ class RunState:
                 "fetch",
                 "transform",
                 "produce",
-                "retry",
             )
         }
         self.outcomes = OutcomeCounts()
@@ -458,11 +473,64 @@ class SimKafka:
         stage.add(self.state.now() - t0, blocked_s=t_data - t0)
         return record
 
-    async def commit(self) -> None:
-        """One in-flight commit per consumer: RTT under the lock.
+    async def consume_many(self, count: int) -> list[ToScrapeStruct] | Exception:
+        """Bulk consumer fetch: aiokafka's getmany returns up to
+        `count` buffered records with one broker round trip, so the
+        fetch RTT and the transfer amortize over the whole batch; each
+        name still pays orjson+pydantic parse on the serial core. The
+        blocked wait models the consumer parking when the feed is slow.
+        """
+        stage = self.state.stage("kafka_get")
+        t0 = self.state.now()
+        partition, _offset, payloads = await self._delivery.get()
+        t_data = self.state.now()
+        batches = [(partition, payloads)]
+        # buffered drain: messages already delivered cost no extra RTT
+        while len(batches) < count:
+            try:
+                p, _o, pl = self._delivery.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+            batches.append((p, pl))
 
-        Each fetched message owes exactly one offset commit; names
-        served from its buffer commit nothing.
+        connection: asyncio.Semaphore | nullcontext = (
+            self._connections if self._connections is not None else nullcontext()
+        )
+        async with connection:
+            if self.config.fetch_cost_s > 0.0:
+                await asyncio.sleep(self.config.fetch_cost_s)
+            n_bytes = sum(len(p) for _, pls in batches for p in pls)
+            io = await self.machine.network.fetch(n_bytes=n_bytes)
+            self.bytes_transferred += n_bytes
+        if io.error is not None:
+            self.fetch_failures += 1
+            return io.error
+
+        for p, pls in batches:
+            self._uncommitted += 1
+            self.messages_consumed += 1
+            self.consumed_per_partition[p] += len(pls)
+
+        out: list[ToScrapeStruct] = []
+        for _p, pls in batches:
+            for payload in pls:
+                record = await self._parse(payload)
+                if isinstance(record, Exception):
+                    # matches the real adapter: a poison record aborts
+                    # the batch, offsets stay uncommitted, redelivery
+                    # follows
+                    return record
+                self.consumed += 1
+                out.append(record)
+        stage.add(self.state.now() - t0, blocked_s=t_data - t0)
+        return out
+
+    async def commit(self) -> None:
+        """One broker RTT that clears every fetched message at once.
+
+        The pipeline commits once per consume batch, so all messages
+        fetched since the last commit are covered by a single round
+        trip; that is what takes the commit RTT off the per-player path.
         """
         if self._uncommitted <= 0:
             return
@@ -479,11 +547,11 @@ class SimKafka:
                 io = await self.machine.network.fetch(n_bytes=64)
                 self.bytes_transferred += 64
                 if io.error is not None:
-                    # failed commit: the offset stays owed for retry
+                    # failed commit: the offsets stay owed for retry
                     self.commit_failures += 1
                 else:
                     self.commits += 1
-                    self._uncommitted -= 1
+                    self._uncommitted = 0
         stage.add(self.state.now() - t0, blocked_s=t_locked - t0)
 
     async def produce(self, message: BaseModel, key: str | None = None) -> None:
@@ -537,13 +605,7 @@ class SimQueueBackend(QueueBackendProtocol[ToScrapeStruct]):
         return await self._kafka.consume_one()
 
     async def get_many(self, count: int) -> list[ToScrapeStruct] | Exception:
-        out: list[ToScrapeStruct] = []
-        for _ in range(count):
-            record = await self._kafka.consume_one()
-            if isinstance(record, Exception):
-                return record
-            out.append(record)
-        return out
+        return await self._kafka.consume_many(count)
 
     async def commit(self) -> Exception | None:
         await self._kafka.commit()
@@ -572,7 +634,12 @@ class SimProducerBackend(QueueBackendProducerProtocol[BaseModel]):
 
 
 class SimProxyManager:
-    """In-memory stand-in: one proxy per worker, rotation is a counter."""
+    """In-memory stand-in: `proxies` proxies in a flat list, rotation is a counter.
+
+    get_proxy(None) returns the whole list, matching the real manager,
+    because fetchers read the list each iteration and pick their sticky
+    index modulo its length.
+    """
 
     def __init__(self, count: int, state: RunState) -> None:
         self.proxy_list = [f"http://user:pass@sim{i}.proxy:1080" for i in range(count)]
@@ -583,9 +650,12 @@ class SimProxyManager:
         self, index: int | None = None
     ) -> tuple[str | list[str] | None, Exception | None]:
         stage = self.state.stage("proxy_get")
-        if index is None or not (0 <= index < len(self.proxy_list)):
+        if index is None:
+            stage.calls += 1  # no virtual cost: a lock and a list copy
+            return list(self.proxy_list), None
+        if not (0 <= index < len(self.proxy_list)):
             return None, IndexError("proxy index out of range")
-        stage.calls += 1  # no virtual cost: a lock and a list index
+        stage.calls += 1
         return self.proxy_list[index], None
 
     async def rotate_proxies(self) -> None:
@@ -595,8 +665,9 @@ class SimProxyManager:
 class SimHiscoreAPI:
     """Jagex stand-in: seeded per-fetch outcomes and latencies.
 
-    The rate limiter stays real (work() builds it from ProxySettings
-    defaults); check() time is accounted so rate-limit waits show up in
+    The rate limiter stays real (ProxyRuntime builds one per proxy from
+    ProxySettings defaults, shared by every fetcher assigned to that
+    proxy); check() time is accounted so rate-limit waits show up in
     the stage shares.
     """
 
@@ -694,7 +765,7 @@ def _timed(
 
 
 async def main(**kwargs) -> ScraperThroughputReport:
-    """Run the real scraper fleet against the simulated broker."""
+    """Run the real scraper pipeline against the simulated broker."""
     config = ScraperThroughputConfig(**kwargs)
     with virtual_time():
         logging.getLogger("bot_detector").setLevel(logging.ERROR)
@@ -725,68 +796,108 @@ async def main(**kwargs) -> ScraperThroughputReport:
             SimProducerBackend(scraped_broker), name="players.scraped"
         )
 
-        # patch the base's I/O seams; work() itself runs unmodified
+        # patch the base's I/O seams; the stage functions run unmodified
         SimHiscoreAPI.config = config
         SimHiscoreAPI.state = state
         SimHiscoreAPI.rng = rng
         SimHiscoreAPI.sigma = math.log(config.latency_p99_over_p50) / Z_99
-        original_api = scraper_worker.HiscoreOldSchoolAPI
-        original_transform = scraper_worker.transform_player_stats
-        original_handle_retry = scraper_worker.handle_retry
-        scraper_worker.HiscoreOldSchoolAPI = SimHiscoreAPI  # type: ignore[assignment]
-        scraper_worker.transform_player_stats = _timed(
+        original_api = scraper_fetcher.HiscoreOldSchoolAPI
+        original_transform = scraper_processor.transform_player_stats
+        scraper_fetcher.HiscoreOldSchoolAPI = SimHiscoreAPI  # type: ignore[assignment]
+        scraper_processor.transform_player_stats = _timed(
             state, "transform", original_transform
         )
-        scraper_worker.handle_retry = _timed(state, "retry", original_handle_retry)
 
-        proxy_manager = SimProxyManager(config.workers, state)
+        proxy_manager = SimProxyManager(config.proxies, state)
+        runtime = ProxyRuntime(proxy_manager=proxy_manager)  # type: ignore[arg-type]
         await ts_queue.start()
         await nf_producer.start()
         await sc_producer.start()
 
-        # a crashed work() task must fail the run, not silently shrink
-        # the fleet (every dead worker looks like a throughput drop)
-        worker_errors: list[BaseException] = []
+        task_queue: asyncio.Queue[ToScrapeStruct] = asyncio.Queue(
+            maxsize=config.task_queue_maxsize
+        )
+        results_queue: asyncio.Queue[FetchResult] = asyncio.Queue(
+            maxsize=config.results_queue_maxsize
+        )
 
-        async def guarded(i: int) -> None:
-            try:
-                await scraper_worker.work(
-                    worker_id=i,
-                    proxy_manager=proxy_manager,  # type: ignore[arg-type]
+        # a crashed stage task must fail the run, not silently shrink
+        # the pipeline (a dead stage looks like a throughput drop)
+        stage_errors: list[BaseException] = []
+
+        def guarded(coro: Coroutine[Any, Any, None], name: str) -> asyncio.Task:
+            async def run() -> None:
+                try:
+                    await coro
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:  # surface sim-wiring bugs
+                    stage_errors.append(exc)
+
+            return asyncio.create_task(run(), name=name)
+
+        stages = [
+            guarded(
+                scraper_consumer.consume(
                     player_ts_queue=ts_queue,
-                    player_nf_producer=nf_producer,  # type: ignore[arg-type]
-                    player_sc_producer=sc_producer,  # type: ignore[arg-type]
-                )
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:  # surface sim-wiring bugs
-                worker_errors.append(exc)
-
-        workers = [
-            asyncio.create_task(guarded(i), name=f"scraper-worker-{i}")
-            for i in range(config.workers)
+                    task_queue=task_queue,
+                    batch_size=config.consume_batch_size,
+                ),
+                name="scraper-consumer",
+            )
         ]
+        for fetcher_id in range(config.fetchers):
+            stages.append(
+                guarded(
+                    scraper_fetcher.fetch(
+                        fetcher_id=fetcher_id,
+                        runtime=runtime,
+                        task_queue=task_queue,
+                        results_queue=results_queue,
+                        session=None,  # type: ignore[arg-type]
+                    ),
+                    name=f"scraper-fetcher-{fetcher_id}",
+                )
+            )
+        for processor_id in range(config.processors):
+            stages.append(
+                guarded(
+                    scraper_processor.process(
+                        processor_id=processor_id,
+                        results_queue=results_queue,
+                        player_ts_queue=ts_queue,
+                        player_nf_producer=nf_producer,  # type: ignore[arg-type]
+                        player_sc_producer=sc_producer,  # type: ignore[arg-type]
+                    ),
+                    name=f"scraper-processor-{processor_id}",
+                )
+            )
 
         await asyncio.sleep(config.duration_s)
 
-        for task in workers:
-            task.cancel()
-        await asyncio.gather(*workers, return_exceptions=True)
+        for stage_task in stages:
+            stage_task.cancel()
+        await asyncio.gather(*stages, return_exceptions=True)
         await ts_queue.stop()
         await nf_producer.stop()
         await sc_producer.stop()
-        if worker_errors:
+        if stage_errors:
             raise RuntimeError(
-                f"{len(worker_errors)} worker tasks crashed, first: "
-                f"{worker_errors[0]!r}"
+                f"{len(stage_errors)} stage tasks crashed, first: {stage_errors[0]!r}"
             )
 
         # restore the seams so other scenarios in the process see product code
-        scraper_worker.HiscoreOldSchoolAPI = original_api
-        scraper_worker.transform_player_stats = original_transform
-        scraper_worker.handle_retry = original_handle_retry
+        scraper_fetcher.HiscoreOldSchoolAPI = original_api
+        scraper_processor.transform_player_stats = original_transform
 
         consumed = broker.consumed
+        # throughput counts completed fetches, not consumed names: the
+        # pipeline buffers names between consume and fetch outcome
+        # (task_queue, results_queue, one in-flight fetch per fetcher),
+        # so consumed overstates the fetch rate by buffer / duration
+        fetched = (
+            state.outcomes.scraped + state.outcomes.not_found + state.outcomes.errors
+        )
         busy_s = sum(stage.total_s for stage in state.stages.values())
         active_s = busy_s - sum(
             stage.blocked_s
@@ -796,25 +907,32 @@ async def main(**kwargs) -> ScraperThroughputReport:
         iterations = max(consumed, 1)
         mean_active_s = active_s / iterations
         mean_iteration_s = busy_s / iterations
-        fleet_cap_s = config.workers / mean_active_s if mean_active_s > 0 else 0.0
-        # the single-flight stage on the shared consumer is the commit
-        # round trip, paid once per kafka message; batching names per
-        # message amortizes it. With a single broker connection the
-        # fetch RTT serializes behind the commit RTT too. fetch RTT,
-        # parse and bandwidth transfer otherwise run concurrently.
-        per_message_serial_s = config.commit_cost_s + (
+        # Little's law over the fetch pool: slots / mean per-player time
+        # actually spent by the pool (rate-limit waits, proxy lookups and
+        # fetch latency; transform and produce belong to the processors)
+        fleet_cap_s = config.fetchers / mean_active_s if mean_active_s > 0 else 0.0
+        # the consumer's only serial work is now one commit RTT and (on
+        # a single broker connection) one fetch RTT per consume batch:
+        # both amortize over batch x names_per_message players. Parse
+        # stays per player on the buffered drain.
+        per_batch_serial_s = config.commit_cost_s + (
             config.fetch_cost_s if config.kafka_connection_limit == 1 else 0.0
         )
-        consumer_serial_s = per_message_serial_s / config.names_per_message
+        consumer_serial_s = per_batch_serial_s / (
+            config.names_per_message * config.consume_batch_size
+        )
         consumer_cap_s = (
             1.0 / consumer_serial_s if consumer_serial_s > 0 else float("inf")
         )
-        throughput_s = consumed / config.duration_s
+        # per-proxy windows bind at MAX_CALLS_PER_SECOND each
+        rate_cap_s = float(config.proxies * ProxySettings().MAX_CALLS_PER_SECOND)
+        throughput_s = fetched / config.duration_s
 
         caps = {
             "feed": float(config.feed_rate_s),
             "consumer": consumer_cap_s,
             "fleet": fleet_cap_s,
+            "rate": rate_cap_s,
         }
         binding = min(caps, key=caps.get)  # type: ignore[arg-type]
 
@@ -841,7 +959,9 @@ async def main(**kwargs) -> ScraperThroughputReport:
         return ScraperThroughputReport(
             config=config,
             duration_s=config.duration_s,
-            workers=config.workers,
+            fetchers=config.fetchers,
+            processors=config.processors,
+            proxies=config.proxies,
             partitions=config.partitions,
             feed_produced=broker.feed_produced,
             requeues=broker.requeues,
@@ -863,8 +983,9 @@ async def main(**kwargs) -> ScraperThroughputReport:
             fleet_cap_s=fleet_cap_s,
             consumer_cap_s=consumer_cap_s,
             consumer_serial_s=consumer_serial_s,
+            rate_cap_s=rate_cap_s,
             binding=binding,
             mean_iteration_s=mean_iteration_s,
-            busy_worker_s=busy_s,
+            busy_stage_s=busy_s,
             stages=stages,
         )

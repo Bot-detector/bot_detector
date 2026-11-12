@@ -57,29 +57,42 @@ class RateLimiter:
 
     async def check(self):
         """
-        Checks if any rate limit is reached and waits if necessary.
+        Reserves a call slot in every window, sleeping until it opens.
+
+        A reservation is recorded for the time the call will actually
+        fire, not for check-in time: a full window frees its next slot
+        at oldest + interval. At most `count` reservations exist in any
+        `interval` span, so concurrent callers cannot overshoot the
+        limit, and they wake spaced out instead of in one herd.
+        Uncontended calls reserve `now` and return without sleeping.
+
+        The compute + append section has no await, so it is atomic under
+        asyncio; no lock is needed.
         """
-        current_ms = int(time.time() * 1000)
+        now_ms = int(time.time() * 1000)
+        scheduled_ms = now_ms
         blocked: list[Window] = []
-        # window with the longest wait; it dictates the sleep duration
-        binding: tuple[Window, int] | None = None
+        # window freeing the latest; it dictates the sleep duration
+        binding: Window | None = None
         for window, history in self._history.items():
-            history.append(current_ms)
             if len(history) < window.count:
                 continue
-            time_span = current_ms - history[0]
-            if time_span < window.interval_ms:
+            free_at = history[0] + window.interval_ms
+            if free_at > scheduled_ms:
+                scheduled_ms = free_at
+                binding = window
+            if free_at > now_ms:
                 blocked.append(window)
-                wait_ms = window.interval_ms - time_span
-                if binding is None or wait_ms > binding[1]:
-                    binding = (window, wait_ms)
-        if binding is None:
+        for history in self._history.values():
+            history.append(scheduled_ms)
+        wait_ms = scheduled_ms - now_ms
+        if wait_ms <= 0:
             return
 
-        wait_s = binding[1] / 1000
+        wait_s = wait_ms / 1000
         if self.on_wait is not None:
             self.on_wait(
-                WaitEvent(blocked=tuple(blocked), binding=binding[0], wait_s=wait_s)
+                WaitEvent(blocked=tuple(blocked), binding=binding, wait_s=wait_s)
             )
-        logger.info(f"Rate limit reached. Sleeping for {wait_s:.3f} seconds.")
+        logger.debug(f"Rate limit reached. Waiting {wait_s:.3f} seconds for a slot.")
         await asyncio.sleep(wait_s)
