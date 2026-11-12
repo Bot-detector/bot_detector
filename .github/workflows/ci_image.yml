@@ -28,16 +28,17 @@ jobs:
       - name: Build image
         run: |
           docker build \
-            --file _infra/_uv_git/Dockerfile \
-            --tag quay.io/bot_detector/ci-uv-git:bookworm-slim \
-            _infra/_uv_git
+            --file _infra/_uv_python312_trixie_slim_git/Dockerfile \
+            --tag quay.io/bot_detector/uv-python3.12-trixie-slim-git:latest \
+            _infra/_uv_python312_trixie_slim_git
 
-      # fail before pushing if git or uv is broken in the image
+      # fail before pushing if git, uv, python or TLS (CA certificates) is broken
       - name: Smoke test image
         run: |
           docker run --rm --entrypoint /bin/sh \
-            quay.io/bot_detector/ci-uv-git:bookworm-slim \
-            -c 'git --version && uv --version'
+            quay.io/bot_detector/uv-python3.12-trixie-slim-git:latest \
+            -c 'git --version && uv --version && python --version \
+              && git ls-remote https://github.com/Bot-detector/bot_detector HEAD'
 
       - name: Push image
-        run: docker push quay.io/bot_detector/ci-uv-git:bookworm-slim
+        run: docker push quay.io/bot_detector/uv-python3.12-trixie-slim-git:latest

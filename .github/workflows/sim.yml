@@ -17,7 +17,7 @@ jobs:
   tests:
     runs-on: [self-hosted, "hetzner"]
     container:
-      image: quay.io/bot_detector/ci-uv-git:bookworm-slim
+      image: quay.io/bot_detector/uv-python3.12-trixie-slim-git:latest
     steps:
       - uses: actions/checkout@v6
       - run: uv run pytest test/sim -v --durations=0 -n auto --dist worksteal
