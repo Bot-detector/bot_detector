@@ -1,9 +1,7 @@
-"""Join-storm scenario: staggered joins, grace drops, kick waves."""
-
 import pytest
 
 import dst as dst_mod
-from dst.scenarios import join_storm
+from dst.scenarios import firehose_join_storm as join_storm
 
 
 def run(**kwargs) -> join_storm.JoinStormReport:

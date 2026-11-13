@@ -1,12 +1,10 @@
-"""Firehose-on-DST scenario: parity, determinism, kick path, faults."""
-
 import asyncio
 
 import pytest
 from pydantic import ValidationError
 
 import dst as dst
-import dst.scenarios.firehose as fh
+import dst.scenarios.firehose_parity as fh
 
 
 def run(**kwargs) -> fh.FirehoseReport:

@@ -1,16 +1,3 @@
-"""Counter-based fault draws: pure, order-free, shard-safe.
-
-Every fault decision derives from blake2b over ``(seed, stream,
-ordinal)``. The same triple yields the same outcome forever, in any
-draw order, in any process — no shared RNG state, so millions of ops
-across parallel shards stay reproducible (spec §4.1).
-
-``draw`` primes one blake2b per ``(seed, stream)`` prefix and copies it
-per call (hash streaming: ``blake2b(prefix + suffix)`` equals
-``primed.copy().update(suffix)``), so draws are byte-identical to
-hashing the full triple each time — just cheaper on million-op runs.
-"""
-
 from hashlib import blake2b
 from typing import Any
 
@@ -26,7 +13,11 @@ _PRIMED: dict[tuple[int, str], Any] = {}
 
 
 def _primed(seed: int, stream: str) -> Any:
-    """Primed blake2b over the ``f"{seed}:{stream}:"`` prefix."""
+    """Primed blake2b over the ``f"{seed}:{stream}:"`` prefix.
+
+    Hash streaming makes ``primed.copy().update(suffix)`` byte-identical
+    to hashing the full triple, just cheaper per call.
+    """
     key = (seed, stream)
     h = _PRIMED.get(key)
     if h is None:
@@ -37,6 +28,11 @@ def _primed(seed: int, stream: str) -> Any:
 
 def draw(seed: int, stream: str, ordinal: int) -> float:
     """Draw one uniform float in [0, 1) from the counter-based engine.
+
+    Counter-based: blake2b over ``(seed, stream, ordinal)``, no shared
+    RNG state. The same triple yields the same outcome forever, in any
+    draw order, in any process, so millions of ops across parallel
+    shards stay reproducible.
 
     Args:
         seed: Run-level seed everything derives from.
@@ -57,7 +53,7 @@ def bucket(draw_value: float, *pcts: float) -> int:
     Args:
         draw_value: Uniform float in [0, 1) from :func:`draw`.
         pcts: Bucket percentages in the documented draw order for the
-            surface (spec §3 tables). Each pct is a share of [0, 100).
+            surface. Each pct is a share of [0, 100).
 
     Returns:
         Index of the bucket the draw lands in, or ``-1`` when the draw
@@ -72,7 +68,21 @@ def bucket(draw_value: float, *pcts: float) -> int:
 
 
 class KafkaFaultConfig(BaseModel):
-    """Pct knobs for broker faults (spec §3.2), draw order fixed."""
+    """Pct knobs for broker faults, draw order fixed.
+
+    Absorbs the retired queue-based kafka fake's knobs
+    (error/poison/slow + slow_s):
+    ``error_pct`` is the transient retryable broker error, and the
+    fetch surface resolves one draw against one fixed bucket order:
+
+    ``fetch_timeout -> consumer_stopped -> poison -> slow_fetch ->
+    error`` (slow is a latency, not a failure: it sleeps
+    ``slow_fetch_s`` then delivers). Produce resolves
+    ``buffer_timeout -> closed``. The ``commit_*``/``outage`` knobs
+    are reserved for the commit/outage wave: defined and
+    budget-validated, but no surface draws them yet (outage is
+    scenario-driven via ``SimFeedKafka.set_down``).
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -83,6 +93,8 @@ class KafkaFaultConfig(BaseModel):
     poison_pct: float = Field(default=0.0, ge=0.0, le=100.0)
     slow_fetch_pct: float = Field(default=0.0, ge=0.0, le=100.0)
     slow_fetch_s: float = Field(default=1.0, ge=0.0)
+    error_pct: float = Field(default=0.0, ge=0.0, le=100.0)
+    # reserved for the commit/outage wave: no surface draws these yet
     commit_fail_pct: float = Field(default=0.0, ge=0.0, le=100.0)
     commit_timeout_pct: float = Field(default=0.0, ge=0.0, le=100.0)
     outage_pct: float = Field(default=0.0, ge=0.0, le=100.0)
@@ -95,6 +107,7 @@ class KafkaFaultConfig(BaseModel):
             + self.consumer_stopped_pct
             + self.poison_pct
             + self.slow_fetch_pct
+            + self.error_pct
         )
         commit = self.commit_fail_pct + self.commit_timeout_pct
         for name, total in (("produce", produce), ("fetch", fetch), ("commit", commit)):
@@ -104,7 +117,7 @@ class KafkaFaultConfig(BaseModel):
 
 
 class DbFaultConfig(BaseModel):
-    """Pct knobs for statement faults (spec §3.3), draw order fixed."""
+    """Pct knobs for statement faults, draw order fixed."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -134,7 +147,7 @@ class DbFaultConfig(BaseModel):
 
 
 class JagexFaultConfig(BaseModel):
-    """Pct knobs for HTTP surface faults (spec §3.4), draw order fixed."""
+    """Pct knobs for HTTP surface faults, draw order fixed."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -162,7 +175,7 @@ class JagexFaultConfig(BaseModel):
 
 
 class FaultConfig(BaseModel):
-    """Per-system fault tables wired from the spec §3 knob sets."""
+    """Per-system fault tables, one knob set per simulated surface."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 

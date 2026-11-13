@@ -1,13 +1,7 @@
-"""Zero-wiring scenario: consume a fake kafka feed on the clock.
-
-The simplest shape a scenario can have: pure asyncio code, no app, no
-seams. It only needs the loop swap that dst.run performs.
-"""
-
 from pydantic import BaseModel, Field
 
-from dst import Machine, MachineConfig, NetworkConfig
-from dst.systems import FakeKafka, KafkaConfig
+from dst.loop import running_clock
+from dst.systems import KafkaConfig, SimFeedKafka
 
 
 class KafkaSmokeConfig(BaseModel):
@@ -23,31 +17,37 @@ class KafkaSmokeReport(BaseModel):
     consumed: int
     produced: int
     backlog: int
+    # parse-cost counters read off SimFeedKafka.cpu; machine_* names
+    # kept for report consumers
     machine_cpu_calls: int
     machine_utilization: float
 
 
 async def main(**kwargs) -> KafkaSmokeReport:
-    """Consume a paced fake kafka feed for duration_s of virtual time."""
+    """Consume a paced kafka feed for duration_s of virtual time.
+
+    The simplest shape a scenario can have: pure asyncio, no app, no
+    seams — only the loop swap dst.run performs.
+    """
     config = KafkaSmokeConfig(**kwargs)
-    machine = Machine(
-        MachineConfig(network=NetworkConfig(mean_ms=0.01, jitter_ms=0.005))
-    )
-    kafka = FakeKafka(
-        machine,
-        KafkaConfig(rate_s=config.feed_rate_s, parse_cost_s=config.parse_cost_s),
+    clock = running_clock()
+    kafka = SimFeedKafka(
+        KafkaConfig(feed_rate_s=config.feed_rate_s, parse_cost_s=config.parse_cost_s)
     )
     await kafka.start()
-    while machine.clock.time() < config.duration_s:
+    while clock.time() < config.duration_s:
         await kafka.get_one()
     await kafka.stop()
+    elapsed_s = clock.time()
+    utilization = kafka.cpu.busy_s / elapsed_s if elapsed_s > 0.0 else 0.0
+    assert utilization >= 0.0, f"negative utilization: {utilization!r}"
     return KafkaSmokeReport(
-        duration_s=machine.clock.time(),
+        duration_s=elapsed_s,
         feed_rate_s=config.feed_rate_s,
         parse_cost_s=config.parse_cost_s,
         consumed=kafka.consumed_total,
         produced=kafka.produced_total,
         backlog=kafka.backlog,
-        machine_cpu_calls=machine.cpu.calls,
-        machine_utilization=machine.cpu.utilization(),
+        machine_cpu_calls=kafka.cpu.calls,
+        machine_utilization=min(1.0, utilization),
     )

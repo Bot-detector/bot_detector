@@ -1,12 +1,3 @@
-"""Sim validation for the scrape-rate drop signature.
-
-With per-outcome fetch latencies (successes fast, not-founds slow), a
-worker fleet reproduces the observed production signature: ~450/s in
-success-heavy segments (normal step) vs ~200/s in not_found-heavy
-segments (possible_ban step), with no change in worker count or
-success latency.
-"""
-
 import asyncio
 
 import dst as dst_mod
@@ -56,6 +47,9 @@ def _expected_rate(not_found_share: float) -> float:
 
 
 def test_not_found_heavy_mix_halves_the_fleet_rate():
+    """The production signature: ~450/s in success-heavy segments vs
+    ~200/s in not_found-heavy (possible_ban step), with no change in
+    worker count or success latency."""
     result = dst_mod.run(_fleet(CRAWL_NOT_FOUND_MOD))
     assert result.done
     assert result.error is None

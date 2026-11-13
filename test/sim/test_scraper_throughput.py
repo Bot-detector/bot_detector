@@ -1,25 +1,3 @@
-"""Throughput sim: the real hiscore scraper pipeline on a simulated kafka.
-
-Runs the unmodified stage functions (batched consumer, 1800-fetcher
-pool over 250 proxies with per-proxy rate windows, 16 processors)
-against a 4-partition simulated broker and a simulated Jagex API,
-then answers "where is the pipeline slow" with four caps:
-
-- the consumer serial path: one commit RTT per `consume_batch_size`
-  players;
-- the fetch pool: Little's law, fetchers / mean fetch latency;
-- the per-proxy rate ceilings: proxies x 20 req/s;
-- the feed rate itself.
-
-Prod calibration (Nov 2026 Grafana panel
-`hiscore_scraper_fetch_latency`): crawl-mix pool ~1080/s (the success
-tail carries the pool mean); a starved feed paces consumption at
-exactly the feed rate; per-outcome latency distributions reproduce
-the panel p50/p99 anchors (success 1.45/6.1, not_found 1.45/4.5,
-error 0.33/2.2) with errors bursting to the 30s client timeout only
-inside fleet-wide degradation episodes.
-"""
-
 import math
 
 import pytest
@@ -42,6 +20,19 @@ def run(**kwargs) -> scenario.ScraperThroughputReport:
     return _CACHE[key]
 
 
+def test_scenario_replays_byte_identical():
+    # RetryTracker jitters backoff from the process RNG; the scenario
+    # seeds it per run, so two runs of one seed must match byte-for-byte
+    kwargs = {"duration_s": 20.0, "fetchers": 60, "processors": 4, "proxies": 12}
+    reports = []
+    for _ in range(2):
+        result = dst_mod.run(scenario.main(**kwargs))
+        assert result.done, f"scenario failed: {result.error}"
+        assert result.error is None
+        reports.append(result.value.model_dump_json())
+    assert reports[0] == reports[1]
+
+
 # panel-calibrated per-outcome lognormal means (Nov 2026 Grafana panel
 # hiscore_scraper_fetch_latency): mean = p50 * exp(sigma^2 / 2), with
 # sigma = ln(p99/p50) / z99 and the config's p50/p99 anchors
@@ -60,24 +51,21 @@ def test_batched_commit_takes_commit_rtt_off_the_critical_path():
     print(card.summary())
 
     # one commit per 200-player batch: consumer cap ~40,000/s, orders
-    # of magnitude above the pool. The old per-message commit capped the
-    # same shape at ~200/s.
+    # of magnitude above the pool
     assert card.binding == "fleet"
     assert card.consumer_cap_s == pytest.approx(
         card.config.consume_batch_size / card.config.commit_cost_s, rel=0.01
     )
     assert card.consumer_cap_s > 20 * card.fleet_cap_s
 
-    # commits track batches, not players: orders of magnitude fewer
-    # commits than the old one-per-message pattern (a startup transient
-    # yields some short batches while the pool warms up, so assert the
+    # commits track batches, not players (a startup transient yields
+    # some short batches while the pool warms up, so assert the
     # amortization bound rather than exact batch sizes)
     assert card.commits < 0.3 * card.consumed
     assert card.stages["commit"].share_pct < 1.0
 
-    # the pool binds on fetch latency: ~1080/s (was ~715/s when
-    # successes were a flat 1.0s - the panel-calibrated success tail
-    # now carries the pool mean)
+    # the pool binds on fetch latency: ~1080/s, the panel-calibrated
+    # success tail carrying the pool mean
     assert card.throughput_s == pytest.approx(card.fleet_cap_s, rel=0.10)
     assert card.throughput_s == pytest.approx(card.fetchers / _CRAWL_MEAN_S, rel=0.15)
 
@@ -176,9 +164,8 @@ def test_single_connection_no_longer_serializes_the_pipeline():
     )
     print(card.summary())
 
-    # one broker connection used to serialize every per-message commit
-    # behind the fetch RTTs (~143/s). With per-batch commits the serial
-    # path is ~7ms per 200 players, so the pool binds instead: the
+    # with per-batch commits the serial path is ~7ms per 200 players
+    # even on one broker connection, so the pool binds: the
     # success-heavy mix caps at fetchers / its panel-calibrated mean
     assert card.binding == "fleet"
     assert card.throughput_s == pytest.approx(card.fetchers / _SPRINT_MEAN_S, rel=0.15)
@@ -202,8 +189,7 @@ def test_outcome_mix_is_neutral_for_the_pool_cap():
     # cheap broker so only the pool binds. Under the panel calibration
     # the mix barely moves the cap: the success tail (p99 ~6.1s)
     # outweighs the not_found tail (p99 ~4.5s) while errors are fast
-    # failures (p50 0.33s), so crawl ~1080/s vs sprint ~1040/s (this
-    # was a 1.4x gap when successes were a flat 1.0s)
+    # failures (p50 0.33s), so crawl ~1080/s vs sprint ~1040/s
     assert sprint.binding == "fleet"
     assert crawl.binding == "fleet"
     assert sprint.throughput_s == pytest.approx(

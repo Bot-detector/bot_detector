@@ -1,5 +1,3 @@
-"""kafka_drain_1m scenario: feed/drain parity on the virtual clock."""
-
 import time
 
 import dst as dst_mod

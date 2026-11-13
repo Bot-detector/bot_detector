@@ -1,16 +1,3 @@
-"""Scenario runner: drive coroutines on the virtual loop and report.
-
-``run()`` is the DST entry point for one scenario:
-
-    result = dst.run(scenario(), until_s=3600)
-    assert result.done
-    assert result.virtual_time_s == 3600
-
-The run is wall-clock fast: a simulated day of sleeps, timeouts and
-queued handoffs finishes in milliseconds. Wall time of the scenario is
-recorded so scenarios can double as micro-benchmarks.
-"""
-
 import asyncio
 import time
 from collections.abc import Coroutine
@@ -29,6 +16,8 @@ class SimResult:
     value: the scenario's return value (None unless done)
     error: exception raised by the scenario, or the DSTIdleError that
         aborted a scenario parked on something that never fires
+    wall_time_s: real elapsed time; a simulated day finishes in
+        milliseconds, so a scenario can double as a micro-benchmark
     pending_tasks: tasks still alive when the run ended (empty when
         done is True)
     """

@@ -126,11 +126,19 @@ Why this mix:
 ## Documentation Standards
 Documentation should be **short, relevant, and intentional**.
 - Google-style docstrings
-- Comments only where intent is non-obvious
+- No module-level docstrings: files start with imports. Design prose lives in the
+  package README; rationale lives in class/function docstrings or a `#` why-comment.
+  Enforced by test/sim/test_style_rules.py.
+- Comments are minimal and earn their place: only the non-obvious "why" the code
+  cannot say. The code says the "what".
 - README.md must include:
   - Architecture overview
   - Dependency flow
   - Mermaid diagrams where helpful
+
+## DST scenario naming
+DST scenario naming: `<system|component|base>_<scenario>` (e.g. kafka_drain_1m, firehose_join_storm, scraper_throughput); enforced by test/sim/test_scenario_naming.py.
+
 ## Agent Guardrails (Important)
 Agents MUST NOT:
 - Introduce new bases without architectural justification

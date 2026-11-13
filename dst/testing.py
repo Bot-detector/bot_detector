@@ -1,16 +1,7 @@
-"""Scorecard models and replay checker (spec section 6, E1-slim + E2).
-
-A scenario returns a ``Scorecard``; ``report_bytes`` renders it to
-canonical bytes for the CI replay gate, ``hard_gate`` applies the
-invariant gate (any failed invariant forces score 0), and
-``replay_check`` runs a scenario twice via ``dst.run`` and requires
-byte-equal reports.
-"""
-
-import orjson
 from collections.abc import Callable, Coroutine
 from typing import Any
 
+import orjson
 from pydantic import BaseModel, Field
 
 from .runner import run
@@ -43,7 +34,11 @@ class Scorecard(BaseModel):
 
 
 def report_bytes(scorecard: Scorecard) -> bytes:
-    """Serialize canonically: sorted keys, compact, byte-stable."""
+    """Serialize canonically for the CI replay gate: byte-stable.
+
+    Sorted keys, compact: two equal scorecards must render to equal
+    bytes, that equality being the replay gate's input.
+    """
 
     return orjson.dumps(scorecard.model_dump(mode="json"), option=orjson.OPT_SORT_KEYS)
 

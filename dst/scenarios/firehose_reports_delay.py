@@ -1,29 +1,3 @@
-"""reports.to_insert scenario: a 2h-delayed topic over a full day.
-
-Runs the real firehose (pump, DelayAdapter, exchange, routes) for 24
-simulated hours at 10 msg/s. The broker produces fresh messages from
-t=0, each ts generated on the spot and jittered 0..300s into the past
-(never sequential, never in the future).
-
-The flow is the production mechanism itself:
-
-1. the pump consumes the first message and the DelayAdapter locks on
-   it - that hold sleep is what advances virtual time by ~2h
-2. the adapter releases it, and the backlog plus the live feed yield
-   in emission order (eventqueue -> kafka -> pump -> yield) from then
-   on, pacing the stream 2h behind arrivals
-3. at the end of the window the last ~2h of arrivals are still in
-   kafka: the broker backlog is the "2 hours of messages left"
-
-The clock must start at an epoch value (--start) because the hold math
-compares report.ts against time.time(); virtual_time patches it.
-
-Documented command (about a minute of wall time for a simulated day):
-
-uv run python -m dst.main dst.scenarios.reports_delay \\
-    --start 2000000000 --json-pretty
-"""
-
 import asyncio
 import logging
 import os
@@ -44,18 +18,17 @@ from bot_detector.firehose.core.server import create_app  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
 
 from dst import (  # noqa: E402
-    Machine,
-    MachineConfig,
-    NetworkConfig,
+    KafkaFaultConfig,
     VirtualClock,
+    virtual_time,  # noqa: E402
 )
-from dst import virtual_time  # noqa: E402
-from dst.scenarios.firehose import (  # noqa: E402
-    FakeWebSocket,
+from dst.loop import running_clock  # noqa: E402
+from dst.scenarios.firehose_parity import (  # noqa: E402
     _GROUPS,
+    FakeWebSocket,
     _make_consumer_patch,
 )
-from dst.systems import KafkaConfig, KafkaFaults  # noqa: E402
+from dst.systems import KafkaConfig  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +50,6 @@ class ReportsDelayConfig(BaseModel):
     ts_base_s: int = Field(default=2_000_000_000, ge=0)
     kafka_seed: int = 42
     jitter_seed: int = 7
-    machine_seed: int = 7
     client_buffer: int = Field(default=50_000, gt=0)
     kick_grace_s: float = Field(default=30.0, gt=0.0)
 
@@ -146,7 +118,22 @@ async def _record(
 
 
 async def main(**kwargs) -> ReportsDelayReport:
-    """Run the delayed topic for duration_s of virtual time."""
+    """Run the delayed topic for duration_s of virtual time.
+
+    The flow is the production mechanism itself: the broker produces
+    fresh messages from t=0, each ts generated on the spot and
+    jittered 0..jitter_max_s into the past. The pump consumes the
+    first message and the DelayAdapter locks on it — that hold sleep
+    is what advances virtual time by ~delay_s. The adapter releases
+    it, and the backlog plus the live feed yield in emission order
+    from then on, pacing the stream delay_s behind arrivals; at the
+    end of the window the last ~delay_s of arrivals are still in
+    kafka, so the broker backlog is the "hours left" measure.
+
+    The clock must start at an epoch value (runner ``--start``)
+    because the hold math compares report.ts against ``time.time()``;
+    virtual_time patches it.
+    """
     config = ReportsDelayConfig(**kwargs)
     with virtual_time():
         logging.getLogger("bot_detector").setLevel(logging.WARNING)
@@ -164,22 +151,16 @@ async def main(**kwargs) -> ReportsDelayReport:
 
 
 async def _run(config: ReportsDelayConfig) -> ReportsDelayReport:
-    machine = Machine(
-        MachineConfig(
-            seed=config.machine_seed,
-            network=NetworkConfig(mean_ms=0.01, jitter_ms=0.005),
-        )
-    )
+    clock = running_clock()
     kafka_config = KafkaConfig(
         seed=config.kafka_seed,
-        rate_s=int(config.feed_rate_s),
-        faults=KafkaFaults(),
+        feed_rate_s=int(config.feed_rate_s),
+        faults=KafkaFaultConfig(),
     )
     _GROUPS.clear()
     QueueRepo.create_consumer = _make_consumer_patch(  # type: ignore[assignment]
-        machine,
         kafka_config,
-        payload_factory=_payload_factory(config, machine.clock),
+        payload_factory=_payload_factory(config, clock),
     )
     app = create_app(Settings(port=0, metrics_port=0, kick_grace_s=config.kick_grace_s))
 
@@ -193,9 +174,7 @@ async def _run(config: ReportsDelayConfig) -> ReportsDelayReport:
         ),
         name="route-0",
     )
-    drainer = asyncio.create_task(
-        _record(websocket, machine.clock, records), name="drain-0"
-    )
+    drainer = asyncio.create_task(_record(websocket, clock, records), name="drain-0")
 
     await asyncio.sleep(config.duration_s)
 

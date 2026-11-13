@@ -1,20 +1,3 @@
-"""SimDB table engine: MySQL rowcount semantics over column stores.
-
-Pure sync storage (spec C1): named tables of dict rows with primary-key
-and unique index maps. Ops mirror the MySQL surfaces the product relies
-on — INSERT, INSERT IGNORE, ON DUPLICATE KEY UPDATE, DELETE ... LIMIT —
-and return MySQL rowcounts. Duplicate keys raise the real
-``sqlalchemy.exc.IntegrityError`` (1062 shape, a semantic violation, not
-a fault). No faults or SQL parsing here (C4). Select
-is a chunked iterator per the lazy-data rule (spec §4.5).
-
-C3 appends the async session proxy + pool occupancy model (SimPool,
-SimSession, SimSessionPool): async_sessionmaker-shaped factory whose
-sessions dispatch named SimDB ops. Occupancy-only pool — no per-op
-latency; pre-ping/recycle cost (spec §5 lane C3, exceptions §5) is
-deferred to the latency wave.
-"""
-
 import asyncio
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
@@ -120,7 +103,16 @@ class _Table:
 
 
 class SimDB:
-    """In-memory table engine with MySQL rowcount semantics."""
+    """In-memory table engine with MySQL rowcount semantics.
+
+    Pure sync storage: named tables of dict rows with pk and
+    unique index maps. Ops mirror the MySQL surfaces the product
+    relies on — INSERT, INSERT IGNORE, ON DUPLICATE KEY UPDATE,
+    DELETE ... LIMIT — and return MySQL rowcounts; duplicate keys
+    raise the real ``sqlalchemy.exc.IntegrityError`` (1062 shape, a
+    semantic violation, not a fault). No faults or SQL parsing here;
+    ``select`` is a chunked iterator (never the whole table).
+    """
 
     def __init__(self) -> None:
         self._tables: dict[str, _Table] = {}
@@ -244,10 +236,9 @@ class SimPool:
     ``sqlalchemy.exc.TimeoutError`` with the QueuePool message shape,
     after a zero-cost virtual wait (one ``asyncio.sleep(0)`` yield on
     the running loop). Behavior depends only on occupancy, never on
-    time or seed. ``pool_timeout_pct`` (spec §3.3) is the one seed-dependent
+    time or seed. ``pool_timeout_pct`` is the one seed-dependent
     path: with pct > 0, each checkout draws stream "db:pool" and a hit
-    forces the same TimeoutError. Pre-ping/recycle cost is deferred to
-    the latency wave (spec §5 lane C3; spec/exceptions §5).
+    forces the same TimeoutError. Pre-ping/recycle cost is deferred.
     """
 
     def __init__(
@@ -298,7 +289,7 @@ class SimPool:
 
 
 class SimSession:
-    """AsyncSession-shaped proxy over SimDB: the used surface only (§3.3).
+    """AsyncSession-shaped proxy over SimDB: the used surface only.
 
     ``execute(op_name, table, **kwargs)`` dispatches named SimDB ops —
     no SQL parsing this wave. ``commit``/``rollback`` are no-op markers
@@ -350,7 +341,7 @@ class SimSession:
 
 
 class SimSessionPool:
-    """``async_sessionmaker``-shaped factory over SimDB + SimPool (§5.3)."""
+    """``async_sessionmaker``-shaped factory over SimDB + SimPool."""
 
     def __init__(
         self,

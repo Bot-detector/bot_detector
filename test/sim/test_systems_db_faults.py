@@ -1,5 +1,3 @@
-"""Tests for DB error factories + FaultSession wiring (A5 + C4)."""
-
 from typing import Any
 
 import pytest

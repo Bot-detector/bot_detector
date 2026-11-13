@@ -1,5 +1,3 @@
-"""Tests for dst.systems.seed row generators."""
-
 import time
 from itertools import islice
 

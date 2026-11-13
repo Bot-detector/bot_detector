@@ -52,21 +52,21 @@ simulated day replay byte-identically per seed.
 
 ```sh
 # steady state: parity across clients, no kicks
-uv run python -m dst.main dst.scenarios.firehose \
+uv run python -m dst.main dst.scenarios.firehose_parity \
     --kw duration_s=60 --kw feed_rate_s=500 --kw n_clients=5 --json-pretty
 
 # staggered joins into a hot feed: grace drops, kick waves
-uv run python -m dst.main dst.scenarios.join_storm --json-pretty
+uv run python -m dst.main dst.scenarios.firehose_join_storm --json-pretty
 
 # keyed users isolated from a degrading anonymous fleet
-uv run python -m dst.main dst.scenarios.keyed --json-pretty
+uv run python -m dst.main dst.scenarios.firehose_keyed --json-pretty
 
 # the 2h emission delay over a simulated day (note --start: epoch clock)
-uv run python -m dst.main dst.scenarios.reports_delay \
+uv run python -m dst.main dst.scenarios.firehose_reports_delay \
     --start 2000000000 --json-pretty
 
 # broker outage: pump backs off, arrivals queue, stream resumes
-uv run python -m dst.main dst.scenarios.firehose \
+uv run python -m dst.main dst.scenarios.firehose_parity \
     --kw outage_at_s=5 --kw outage_duration_s=8 --json-pretty
 ```
 

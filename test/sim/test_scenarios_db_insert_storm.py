@@ -1,5 +1,3 @@
-"""db_insert_storm scenario tests (F2)."""
-
 import time
 
 import dst as dst_mod

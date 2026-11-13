@@ -1,5 +1,3 @@
-"""Runner scenarios: SimResult fields, deadlines, idle detection."""
-
 import asyncio
 import time
 

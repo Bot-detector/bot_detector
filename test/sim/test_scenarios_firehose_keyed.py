@@ -1,12 +1,10 @@
-"""Keyed-client scenario: per-user groups isolated from the anonymous one."""
-
 import asyncio
 
 import pytest
 from pydantic import ValidationError
 
 import dst as dst_mod
-from dst.scenarios import keyed
+from dst.scenarios import firehose_keyed as keyed
 
 
 def run(**kwargs) -> keyed.KeyedIsolationReport:

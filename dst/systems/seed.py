@@ -1,11 +1,3 @@
-"""Seeded row generators for SimDB seed data (spec §5.3, task C2).
-
-Column sets mirror the product repos' insert bind params so rows feed
-``test/dst/systems/sim_db.py`` unchanged. Values derive from
-``(seed, row index)`` via splitmix64 mixing — counter-based, cheap,
-replayable (spec §4.1), no hashlib on the hot path.
-"""
-
 from collections.abc import Iterable, Iterator
 from typing import Any
 
@@ -61,7 +53,11 @@ _REPORT_MIX_SALTS = (10, 12, 13, 14, 15, 16, 17, 18, 19) + tuple(
 
 
 def _mix(seed: int, index: int, salt: int) -> int:
-    """Splitmix64-mix ``(seed, index, salt)`` into a 64-bit int."""
+    """Splitmix64-mix ``(seed, index, salt)`` into a 64-bit int.
+
+    Counter-based mixing: cheap, replayable per seed, no hashlib on
+    the hot path.
+    """
     x = (seed + index * _GOLDEN + salt * _M1) % 2**64
     x = ((x ^ (x >> 30)) * _M1) % 2**64
     x = ((x ^ (x >> 27)) * _M2) % 2**64

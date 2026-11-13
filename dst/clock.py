@@ -1,21 +1,15 @@
-"""Virtual clock: the single source of simulated time.
-
-Every part of the DST (event loop timers, sync time patches, machine
-accounting) reads time from here, so a scenario has exactly one
-timeline. The clock is strictly monotonic: time never moves backwards,
-and ``advance_to`` clamps to the current time.
-"""
-
 import math
 
 
 class VirtualClock:
-    """Monotonic simulated clock.
+    """Monotonic simulated clock and the one source of simulated time.
 
-    Time is a float of seconds starting at ``start_s`` (default 0).
-    ``advance`` moves by a relative amount, ``advance_to`` jumps forward
-    to an absolute deadline; both are O(1) wall-clock work regardless of
-    the simulated duration.
+    Loop timers, sync time patches and dependency fakes all read from
+    it, so a scenario has exactly one timeline. Time is a float of
+    seconds starting at ``start_s`` (default 0). ``advance`` moves by a
+    relative amount, ``advance_to`` jumps forward to an absolute
+    deadline; both are O(1) wall-clock work regardless of the simulated
+    duration.
     """
 
     def __init__(self, start_s: float = 0.0) -> None:
