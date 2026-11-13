@@ -133,6 +133,9 @@ flowchart TD
         ReportWorker --> MySQL[(MySQL)]
     end
 ```
+
+The ban flow in detail (possible bans, broadcast, report archive): [docs/ban-pipeline.md](docs/ban-pipeline.md)
+
 # interesting commands
 ```sh
 find . -type f -name "pyproject.toml" -not -path "*/.venv/*" -path "*/projects/*" -execdir sh -c 'echo "🔄 Updating lock in $(pwd)"; uv lock' \;
