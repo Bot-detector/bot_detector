@@ -105,9 +105,9 @@ async def prune(
                         rows_deleted_counter.inc(rows_deleted)
                     logger.info(f"Deleted {rows_deleted} records")
 
-        except Exception as e:
-            logger.error(f"Error during prune loop: {e}")
-            break
+        except Exception:
+            logger.exception(f"Error during prune loop at player_id={player_id}")
+            raise
 
 
 async def main():
