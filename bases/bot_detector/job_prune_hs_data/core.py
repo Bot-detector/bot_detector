@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from typing import cast
 
 import sqlalchemy as sqla
 from bot_detector.database import Settings as DBSettings
@@ -9,6 +10,7 @@ from bot_detector.job_prune_hs_data.metrics import (
     start_metrics_server,
 )
 from pydantic_settings import BaseSettings
+from sqlalchemy import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 logger = logging.getLogger(__name__)
@@ -17,6 +19,11 @@ logger = logging.getLogger(__name__)
 class Settings(BaseSettings):
     LIMIT: int = 10000
     METRICS_PORT: int = 8000
+
+
+def drop_temp_table():
+    sql = sqla.text("DROP TEMPORARY TABLE IF EXISTS tmp_player_ids;")
+    return sql
 
 
 def create_temp_table():
@@ -34,6 +41,7 @@ def insert_temp_table():
         WHERE 1=1 
             AND possible_ban = 0 
             AND id > :player_id
+        ORDER BY id
         limit :limit
         """
     )
@@ -59,12 +67,14 @@ def delete_highscore_data_daily():
     return sql
 
 
-async def prune(async_session: async_sessionmaker[AsyncSession]):
-    sql_drop_tmp = sqla.text("DROP TABLE IF EXISTS tmp_player_ids;")
+async def prune(
+    async_session: async_sessionmaker[AsyncSession],
+    limit: int,
+) -> None:
+    sql_drop_tmp = drop_temp_table()
     sql_create_tmp = create_temp_table()
     sql_insert_tmp = insert_temp_table()
     sql_select_tmp = select_temp_table()
-    sql_row_count = sqla.text("select ROW_COUNT();")
     sql_delete_hdd = delete_highscore_data_daily()
 
     player_id = 0
@@ -75,7 +85,7 @@ async def prune(async_session: async_sessionmaker[AsyncSession]):
                     # Drop and create temp table each loop
                     await session.execute(sql_drop_tmp)
                     await session.execute(sql_create_tmp)
-                    params = {"player_id": player_id, "limit": Settings().LIMIT}
+                    params = {"player_id": player_id, "limit": limit}
                     await session.execute(sql_insert_tmp, params=params)
 
                     result = await session.scalars(sql_select_tmp)
@@ -89,22 +99,25 @@ async def prune(async_session: async_sessionmaker[AsyncSession]):
                     logger.info(f"Processed up to player_id: {player_id}")
 
                     # Perform deletion after temp table is populated
-                    await session.execute(sql_delete_hdd)
-                    result = await session.scalars(sql_row_count)
-                    rows_deleted = result.first()
-                    if rows_deleted is not None:
+                    delete_result = await session.execute(sql_delete_hdd)
+                    rows_deleted = cast(CursorResult, delete_result).rowcount
+                    if rows_deleted > 0:
                         rows_deleted_counter.inc(rows_deleted)
                     logger.info(f"Deleted {rows_deleted} records")
 
-        except Exception as e:
-            logger.error(f"Error during prune loop: {e}")
-            break
+        except Exception:
+            logger.exception(f"Error during prune loop at player_id={player_id}")
+            raise
 
 
 async def main():
-    start_metrics_server(port=Settings().METRICS_PORT)
+    settings = Settings()
+    start_metrics_server(port=settings.METRICS_PORT)
     async_session, async_engine = get_session_factory(SETTINGS=DBSettings())
-    await prune(async_session)
+    try:
+        await prune(async_session, limit=settings.LIMIT)
+    finally:
+        await async_engine.dispose()
 
 
 async def run_async():
