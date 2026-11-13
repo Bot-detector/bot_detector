@@ -37,6 +37,14 @@ class Embed(BaseModel):
     timestamp: datetime | None = None
 
     @model_validator(mode="after")
+    def _check_timestamp_tz(self) -> "Embed":
+        # astimezone() treats naive datetimes as system-local time; embeds
+        # are UTC, so a naive value would silently shift on the wire
+        if self.timestamp is not None and self.timestamp.tzinfo is None:
+            raise ValueError("timestamp must be timezone-aware")
+        return self
+
+    @model_validator(mode="after")
     def _check_total_size(self) -> "Embed":
         total = len(self.title) + len(self.description or "")
         total += sum(len(f.name) + len(f.value) for f in self.fields)

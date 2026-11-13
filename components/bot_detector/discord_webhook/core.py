@@ -4,9 +4,10 @@ from datetime import datetime, timezone
 from typing import Any
 
 import aiohttp
+import orjson
 
 from .interface import WebhookInterface
-from .structs import Embed
+from .structs import MAX_EMBEDS_PER_MESSAGE, Embed
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,15 @@ class DiscordWebhookRepo(WebhookInterface):
         embeds: list[Embed] | None = None,
         content: str | None = None,
     ) -> Exception | None:
+        if embeds and len(embeds) > MAX_EMBEDS_PER_MESSAGE:
+            return Exception(
+                f"webhook post refused: {len(embeds)} embeds exceeds "
+                f"Discord limit {MAX_EMBEDS_PER_MESSAGE}"
+            )
+        if not embeds and not content:
+            return Exception(
+                "webhook post refused: empty payload (no embeds, no content)"
+            )
         payload: dict[str, Any] = {}
         if embeds:
             payload["embeds"] = [embed.to_payload() for embed in embeds]
@@ -51,8 +61,11 @@ class DiscordWebhookRepo(WebhookInterface):
             try:
                 async with self.session.post(
                     url,
-                    json=payload,
+                    data=orjson.dumps(payload),
+                    headers={"Content-Type": "application/json"},
                     timeout=aiohttp.ClientTimeout(total=POST_TIMEOUT_SECONDS),
+                    # never replay the payload to a redirect target
+                    allow_redirects=False,
                 ) as resp:
                     if resp.status in (200, 204):
                         return None
@@ -81,24 +94,31 @@ class DiscordWebhookRepo(WebhookInterface):
         )
 
     async def _rate_limit_seconds(self, resp: aiohttp.ClientResponse) -> float:
-        """Discord 429 bodies carry retry_after in seconds; fall back to the
-        Retry-After header, then to a sane default for malformed responses."""
+        """Discord's 429 body carries retry_after in fractional seconds
+        (64.57-style) and is authoritative; the Retry-After header is its
+        integer ceiling (65) and only fills in when the body omits or
+        garbles the value. Anything unreadable falls back to a sane default.
+        """
+        try:
+            data = await resp.json()
+            retry_after = float(data["retry_after"]) if isinstance(data, dict) else None
+        except (
+            aiohttp.ContentTypeError,
+            ValueError,
+            TypeError,  # retry_after: null or a non-numeric JSON value
+            AttributeError,  # non-object JSON body (list, string, null)
+            KeyError,  # object body without retry_after: header decides next
+        ):
+            retry_after = None
+        if retry_after is not None:
+            return retry_after
         header_value = resp.headers.get("Retry-After")
         if header_value:
             try:
                 return float(header_value)
             except ValueError:
                 pass
-        try:
-            data = await resp.json()
-            return float(data.get("retry_after", DEFAULT_RETRY_AFTER_SECONDS))
-        except (
-            aiohttp.ContentTypeError,
-            ValueError,
-            TypeError,  # retry_after: null or a non-numeric JSON value
-            AttributeError,  # non-object JSON body (list, string, null)
-        ):
-            return DEFAULT_RETRY_AFTER_SECONDS
+        return DEFAULT_RETRY_AFTER_SECONDS
 
 
 def utcnow() -> datetime:

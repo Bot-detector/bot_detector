@@ -1,9 +1,16 @@
 import asyncio
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import aiohttp
+import orjson
 import pytest
 from bot_detector.discord_webhook import DiscordWebhookRepo, Embed
+from bot_detector.discord_webhook.core import (
+    MAX_RETRY_AFTER_SECONDS,
+    POST_TIMEOUT_SECONDS,
+)
+from bot_detector.discord_webhook.structs import MAX_EMBEDS_PER_MESSAGE
 
 
 def _resp(
@@ -88,7 +95,7 @@ async def test_post_gives_up_after_max_429s_without_extra_sleep(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_post_falls_back_for_malformed_429(monkeypatch):
+async def test_post_defaults_when_429_body_lacks_retry_after(monkeypatch):
     monkeypatch.setattr(asyncio, "sleep", AsyncMock(return_value=None))
     repo = DiscordWebhookRepo(
         session=_session([_resp(429, json_data=None), _resp(204)])
@@ -155,12 +162,173 @@ async def test_post_payload_contains_embeds_and_content():
 
     assert err is None
     kwargs = session.post.call_args.kwargs
-    assert kwargs["json"] == {
+    assert orjson.loads(kwargs["data"]) == {
         "embeds": [
             {"title": "t", "color": 0, "fields": [], "description": "d"},
         ],
         "content": "ping",
     }
+    assert kwargs["headers"] == {"Content-Type": "application/json"}
+    assert kwargs["allow_redirects"] is False
+
+
+@pytest.mark.asyncio
+async def test_post_passes_total_timeout():
+    """The 30s total timeout is the hang guard; falling back to session
+    defaults would let a stuck endpoint park the broadcast."""
+    resp = _resp(204)
+    session = MagicMock(post=MagicMock(return_value=resp))
+    repo = DiscordWebhookRepo(session=session)
+
+    err = await repo.post(url="http://hook", embeds=[Embed(title="t")])
+
+    assert err is None
+    timeout = session.post.call_args.kwargs["timeout"]
+    assert timeout.total == POST_TIMEOUT_SECONDS
+
+
+@pytest.mark.asyncio
+async def test_post_caps_hostile_retry_after(monkeypatch):
+    """A hostile or honest-huge 429 (Discord's shared-limit example is
+    1336.57s) must cost cap x attempts, not park the broadcast run past
+    its cron window."""
+    sleeps: list[float] = []
+
+    async def _fake_sleep(seconds):
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(asyncio, "sleep", _fake_sleep)
+    repo = DiscordWebhookRepo(
+        session=_session(
+            [_resp(429, json_data={"retry_after": 86_400.0}) for _ in range(3)]
+        )
+    )
+    err = await repo.post(url="http://hook", embeds=[Embed(title="t")])
+    assert isinstance(err, Exception)
+    assert sleeps == [MAX_RETRY_AFTER_SECONDS, MAX_RETRY_AFTER_SECONDS]
+
+
+@pytest.mark.asyncio
+async def test_post_clamps_negative_retry_after_to_zero(monkeypatch):
+    """A negative retry_after would make asyncio.sleep return immediately,
+    turning the retry loop into a tight hammer on the endpoint."""
+    sleeps: list[float] = []
+
+    async def _fake_sleep(seconds):
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(asyncio, "sleep", _fake_sleep)
+    repo = DiscordWebhookRepo(
+        session=_session([_resp(429, json_data={"retry_after": -5.0}), _resp(204)])
+    )
+    err = await repo.post(url="http://hook", embeds=[Embed(title="t")])
+    assert err is None
+    assert sleeps == [0.0]
+
+
+@pytest.mark.asyncio
+async def test_post_survives_html_429_body(monkeypatch):
+    """A proxy returning an HTML 429 makes json() raise ContentTypeError;
+    the Retry-After header must still carry the retry."""
+    sleeps: list[float] = []
+
+    async def _fake_sleep(seconds):
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(asyncio, "sleep", _fake_sleep)
+    resp = _resp(429, headers={"Retry-After": "0.5"})
+    resp.json = AsyncMock(side_effect=aiohttp.ContentTypeError(MagicMock(), ()))
+    repo = DiscordWebhookRepo(session=_session([resp, _resp(204)]))
+    err = await repo.post(url="http://hook", embeds=[Embed(title="t")])
+    assert err is None
+    assert sleeps == [0.5]
+
+
+@pytest.mark.asyncio
+async def test_post_prefers_body_retry_after_over_header(monkeypatch):
+    """Discord's body retry_after is fractional (64.57) and the header is
+    its integer ceiling (65) - body-first always waits the shorter, exact
+    time the docs' examples show."""
+    sleeps: list[float] = []
+
+    async def _fake_sleep(seconds):
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(asyncio, "sleep", _fake_sleep)
+    repo = DiscordWebhookRepo(
+        session=_session(
+            [
+                _resp(
+                    429,
+                    json_data={"retry_after": 1.5},
+                    headers={"Retry-After": "9"},
+                ),
+                _resp(204),
+            ]
+        )
+    )
+    err = await repo.post(url="http://hook", embeds=[Embed(title="t")])
+    assert err is None
+    assert sleeps == [1.5]
+
+
+@pytest.mark.asyncio
+async def test_post_uses_header_when_body_retry_after_is_null(monkeypatch):
+    """A garbled body value (null) must not mask a valid Retry-After header."""
+    sleeps: list[float] = []
+
+    async def _fake_sleep(seconds):
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(asyncio, "sleep", _fake_sleep)
+    repo = DiscordWebhookRepo(
+        session=_session(
+            [
+                _resp(
+                    429,
+                    json_data={"retry_after": None},
+                    headers={"Retry-After": "0.75"},
+                ),
+                _resp(204),
+            ]
+        )
+    )
+    err = await repo.post(url="http://hook", embeds=[Embed(title="t")])
+    assert err is None
+    assert sleeps == [0.75]
+
+
+@pytest.mark.asyncio
+async def test_post_rejects_more_embeds_than_discord_allows():
+    """Discord 400s past 10 embeds; refusing locally fails fast instead of
+    trading a transport round-trip for an error value."""
+    session = MagicMock(post=MagicMock())
+    repo = DiscordWebhookRepo(session=session)
+    err = await repo.post(
+        url="http://hook",
+        embeds=[Embed(title="t") for _ in range(MAX_EMBEDS_PER_MESSAGE + 1)],
+    )
+    assert isinstance(err, Exception)
+    assert str(MAX_EMBEDS_PER_MESSAGE) in str(err)
+    session.post.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_post_refuses_empty_payload():
+    """Discord 400s an empty message; the error should name the actual
+    problem instead of coming back as an opaque 400 body."""
+    session = MagicMock(post=MagicMock())
+    repo = DiscordWebhookRepo(session=session)
+    err = await repo.post(url="http://hook")
+    assert isinstance(err, Exception)
+    session.post.assert_not_called()
+
+
+def test_embed_rejects_naive_timestamp():
+    """astimezone() treats naive datetimes as system-local time; a naive
+    timestamp would silently shift the embed on the wire."""
+    with pytest.raises(Exception):
+        Embed(title="t", timestamp=datetime(2026, 1, 1))
 
 
 @pytest.mark.asyncio
