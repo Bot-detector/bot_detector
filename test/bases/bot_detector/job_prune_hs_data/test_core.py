@@ -85,6 +85,13 @@ def test_insert_temp_table_sql_orders_by_id() -> None:
 
 
 @pytest.mark.asyncio
+async def test_prune_raises_on_db_error() -> None:
+    factory = FakeSessionFactory([FakeSession(error=RuntimeError("lock wait timeout"))])
+    with pytest.raises(RuntimeError, match="lock wait timeout"):
+        await core.prune(factory, limit=100)  # type: ignore[arg-type]
+
+
+@pytest.mark.asyncio
 async def test_prune_stops_on_empty_batch_without_deleting() -> None:
     factory = FakeSessionFactory([FakeSession(batch_ids=[])])
     await core.prune(factory, limit=100)  # type: ignore[arg-type]
