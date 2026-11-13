@@ -1,25 +1,34 @@
+import atexit
 import logging
+import logging.handlers
+from datetime import datetime, timezone
+from queue import Queue
 
 import orjson
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+MAX_FILE_BYTES = 50_000_000
+MAX_FILE_BACKUPS = 5
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="LOGFMT_")
+
     DEBUG: bool = False
     TO_FILE: str | None = None
 
 
-# Configure JSON logging
 class JsonFormatter(logging.Formatter):
-    def format(self, record):
+    def format(self, record: logging.LogRecord) -> str:
         log_record = {
-            "ts": self.formatTime(record, self.datefmt),
+            "ts": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
             "lvl": record.levelname,
             "name": record.name,
             "func": record.funcName,
             "line": record.lineno,
         }
         if isinstance(record.msg, dict):
+            # msg. prefix keeps logged keys from clobbering ts/lvl/name/line
             log_record.update({f"msg.{k}": v for k, v in record.msg.items()})
         else:
             log_record["msg"] = record.getMessage()
@@ -30,31 +39,56 @@ class JsonFormatter(logging.Formatter):
         return orjson.dumps(log_record, default=str).decode()
 
 
-class IgnoreSQLWarnings(logging.Filter):
-    def filter(self, record):
-        ignore_messages = ["Unknown table", "Duplicate entry"]
-        # Check if any of the ignore messages are in the log record message
-        if any(msg in record.getMessage() for msg in ignore_messages):
-            return False  # Don't log
-        return True  # Log
+def _build_handlers(settings: Settings) -> list[logging.Handler]:
+    handlers: list[logging.Handler] = [logging.StreamHandler()]
+    if settings.TO_FILE:
+        file_handler = logging.handlers.RotatingFileHandler(
+            filename=settings.TO_FILE,
+            maxBytes=MAX_FILE_BYTES,
+            backupCount=MAX_FILE_BACKUPS,
+            # defer open so an unwritable path cannot crash at import time
+            delay=True,
+        )
+        handlers.append(file_handler)
+    for handler in handlers:
+        handler.setFormatter(JsonFormatter())
+    return handlers
 
 
-# Set up the logger
-settings = Settings()
+_configured = False
 
-handlers: list[logging.Handler] = [logging.StreamHandler()]
-for h in handlers:
-    h.setFormatter(JsonFormatter())
 
-if settings.TO_FILE:
-    file_handler = logging.FileHandler(settings.TO_FILE)  # append mode
-    file_handler.setFormatter(JsonFormatter())
-    handlers.append(file_handler)
+def setup_logging(settings: Settings | None = None) -> None:
+    """Configure root logging once.
 
-logging.basicConfig(level=logging.INFO, handlers=handlers)
+    Skips loudly when root already has handlers, since basicConfig would
+    silently no-op and drop the JSON format without anyone noticing.
+    """
+    global _configured
+    if _configured:
+        return
+    _configured = True
 
-level = logging.DEBUG if settings.DEBUG else logging.INFO
-logging.getLogger("bot_detector").setLevel(level=level)
+    config = settings or Settings()
+    root = logging.getLogger()
+    if root.handlers:
+        logging.getLogger("bot_detector.logfmt").warning(
+            "root logger already configured; logfmt setup skipped"
+        )
+        return
 
-# set imported loggers to warning
-logging.getLogger("asyncmy").addFilter(IgnoreSQLWarnings())
+    # queue handler keeps blocking stderr/file writes off the event loop
+    q_handler = logging.handlers.QueueHandler(Queue())
+    logging.basicConfig(
+        level=logging.DEBUG if config.DEBUG else logging.INFO,
+        handlers=[q_handler],
+    )
+    listener = logging.handlers.QueueListener(q_handler.queue, *_build_handlers(config))
+    listener.start()
+    # daemon thread dies abruptly at exit; stop() flushes the queue first
+    atexit.register(listener.stop)
+
+    logging.getLogger("asyncmy").setLevel(logging.ERROR)
+
+
+setup_logging()
