@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     METRICS_PORT: int = 8000
 
 
+def drop_temp_table():
+    sql = sqla.text("DROP TEMPORARY TABLE IF EXISTS tmp_player_ids;")
+    return sql
+
+
 def create_temp_table():
     sql = sqla.text(
         """CREATE TEMPORARY TABLE tmp_player_ids (id BIGINT PRIMARY KEY);"""
@@ -60,7 +65,7 @@ def delete_highscore_data_daily():
 
 
 async def prune(async_session: async_sessionmaker[AsyncSession]):
-    sql_drop_tmp = sqla.text("DROP TABLE IF EXISTS tmp_player_ids;")
+    sql_drop_tmp = drop_temp_table()
     sql_create_tmp = create_temp_table()
     sql_insert_tmp = insert_temp_table()
     sql_select_tmp = select_temp_table()
