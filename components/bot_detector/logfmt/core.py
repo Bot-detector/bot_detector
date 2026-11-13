@@ -27,7 +27,7 @@ class JsonFormatter(logging.Formatter):
             "func": record.funcName,
             "line": record.lineno,
         }
-        if isinstance(record.msg, dict) and not record.args:
+        if isinstance(record.msg, dict):
             # msg. prefix keeps logged keys from clobbering ts/lvl/name/line
             log_record.update({f"msg.{k}": v for k, v in record.msg.items()})
         else:
