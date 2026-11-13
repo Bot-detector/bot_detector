@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from typing import cast
 
 import sqlalchemy as sqla
 from bot_detector.database import Settings as DBSettings
@@ -9,6 +10,7 @@ from bot_detector.job_prune_hs_data.metrics import (
     start_metrics_server,
 )
 from pydantic_settings import BaseSettings
+from sqlalchemy import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 logger = logging.getLogger(__name__)
@@ -73,7 +75,6 @@ async def prune(
     sql_create_tmp = create_temp_table()
     sql_insert_tmp = insert_temp_table()
     sql_select_tmp = select_temp_table()
-    sql_row_count = sqla.text("select ROW_COUNT();")
     sql_delete_hdd = delete_highscore_data_daily()
 
     player_id = 0
@@ -98,10 +99,9 @@ async def prune(
                     logger.info(f"Processed up to player_id: {player_id}")
 
                     # Perform deletion after temp table is populated
-                    await session.execute(sql_delete_hdd)
-                    result = await session.scalars(sql_row_count)
-                    rows_deleted = result.first()
-                    if rows_deleted is not None:
+                    delete_result = await session.execute(sql_delete_hdd)
+                    rows_deleted = cast(CursorResult, delete_result).rowcount
+                    if rows_deleted > 0:
                         rows_deleted_counter.inc(rows_deleted)
                     logger.info(f"Deleted {rows_deleted} records")
 
