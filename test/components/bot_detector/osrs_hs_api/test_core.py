@@ -271,6 +271,20 @@ async def test_cancellation_propagates():
 
 
 @pytest.mark.asyncio
+async def test_duplicate_skill_ids_is_err():
+    # a duplicated id is corruption, not extra data: the set check alone
+    # would miss it
+    payload = _valid_hiscore_payload()
+    payload["skills"].append(_skill(5))
+    session = FakeSession([FakeResponse(200, payload=payload)])
+    result = await _api().get("player", session)
+
+    assert result.is_err()
+    assert isinstance(result, Err)
+    assert isinstance(result.error, ValidationError)
+
+
+@pytest.mark.asyncio
 async def test_extra_skill_ids_logged_once(caplog):
     # tolerated, but must surface in the logs exactly once per distinct
     # set: a drifted payload scraped 1800 times must not spam the logs

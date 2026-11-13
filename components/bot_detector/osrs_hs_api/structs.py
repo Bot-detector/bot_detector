@@ -30,7 +30,10 @@ class PlayerStats(BaseModel):
         Unknown extra ids are tolerated (a Jagex schema addition must not
         break scrapes) and logged once per distinct set by the fetcher.
         """
-        missing = EXPECTED_SKILL_IDS - {skill.id for skill in value}
+        ids = [skill.id for skill in value]
+        if len(set(ids)) != len(ids):
+            raise ValueError("duplicate skill ids")
+        missing = EXPECTED_SKILL_IDS - set(ids)
         if missing:
             raise ValueError(f"truncated payload: missing skill ids {sorted(missing)}")
         return value
