@@ -97,7 +97,7 @@ services:
       dockerfile: _mysql_data/Dockerfile
     environment:
       - DATABASE_URL=mysql+asyncmy://root:root_bot_buster@mysql:3306/playerdata
-      - DEBUG=False
+      - LOGFMT_DEBUG=False
       - SEED_PLAYERS=100
       - SEED_REPORTS=100
       - SEED_PREDICTIONS=100
@@ -208,7 +208,7 @@ services:
     networks:
       - botdetector-network
     environment:
-      - DEBUG=1
+      - LOGFMT_DEBUG=1
     env_file:
       - .env
     depends_on:
