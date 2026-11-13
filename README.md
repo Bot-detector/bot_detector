@@ -111,10 +111,7 @@ flowchart TD
 
     subgraph Scraping
         KafkaToScrape --> HighscoreScraper(Highscore Scraper)
-        HighscoreScraper --> KafkaNotFound[/"Kafka: players.not_found"/]
-        HighscoreScraper --> KafkaScraped[/"Kafka: players.scraped"/]
-        KafkaNotFound --> RunemetricsScraper(Runemetrics Scraper)
-        RunemetricsScraper --> KafkaScraped
+        HighscoreScraper -->|"not found = possible ban"| KafkaScraped[/"Kafka: players.scraped"/]
     end
 
     subgraph Processing

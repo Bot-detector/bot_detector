@@ -3,7 +3,6 @@ import logging
 
 from bot_detector.event_queue.core import Queue, QueueProducer
 from bot_detector.event_queue.structs import (
-    NotFoundStruct,
     ScrapedStruct,
     ToScrapeStruct,
 )
@@ -33,30 +32,6 @@ async def produce_player_to_scrape(
     else:
         return Exception(
             f"Failed to produce player to scrape after {MAX_RETRIES} attempts: {error}"
-        )
-
-
-async def produce_not_found(
-    player_nf_producer: QueueProducer[NotFoundStruct],
-    player: PlayerStruct,
-):
-    error = None
-    retries = 0
-    MAX_RETRIES = 3
-    while retries < MAX_RETRIES:
-        not_found_struct = NotFoundStruct(
-            metadata=MetaData(version=1, source="hiscore_scraper"),
-            player_data=player,
-        )
-        error = await player_nf_producer.put([not_found_struct])
-        if not error:
-            return None
-        retries += 1
-        logger.error(f"Failed to produce not found (attempt {retries}): {error}")
-        await asyncio.sleep(2**retries)  # Exponential backoff
-    else:
-        return Exception(
-            f"Failed to produce not found after {MAX_RETRIES} attempts: {error}"
         )
 
 

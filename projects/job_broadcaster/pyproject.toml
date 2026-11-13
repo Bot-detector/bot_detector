@@ -9,11 +9,13 @@ version = "0.1.0"
 requires-python = ">=3.10"
 
 dependencies = [
+    "aiokafka==0.12.0",
     "aiohttp==3.14.4",
     "orjson==3.11.5",
     "asyncmy==0.2.17",
     "cryptography==50.0.2",
     "pydantic-settings==2.7.0",
+    "pydantic==2.10.4",
     "prometheus-client==0.22.0",
     "sqlalchemy==2.0.44",
 ]
@@ -31,5 +33,7 @@ packages = ["bot_detector"]
 "../../bases/bot_detector/job_broadcaster" = "bot_detector/job_broadcaster"
 "../../components/bot_detector/database" = "bot_detector/database"
 "../../components/bot_detector/discord_webhook" = "bot_detector/discord_webhook"
+"../../components/bot_detector/event_queue" = "bot_detector/event_queue"
 "../../components/bot_detector/logfmt" = "bot_detector/logfmt"
+"../../components/bot_detector/structs" = "bot_detector/structs"
 "../../components/bot_detector/wide_event" = "bot_detector/wide_event"

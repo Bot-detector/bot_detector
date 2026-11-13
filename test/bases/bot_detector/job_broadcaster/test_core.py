@@ -152,6 +152,66 @@ async def test_broadcast_webhook_failure_does_not_abort(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_broadcast_emits_ban_events_per_chunk(monkeypatch):
+    """Applied bans must publish one players.banned event per player so
+    worker_ban_migration can archive their reports (runemetrics used to
+    emit these)."""
+    monkeypatch.setattr(core.asyncio, "sleep", AsyncMock(return_value=None))
+    bots = [
+        BannedBot(player_id=i, name=f"bot{i}", prediction="vanilla") for i in range(4)
+    ]
+    repo = _make_repo(bots=bots)
+    producer = AsyncMock()
+    producer.put = AsyncMock(return_value=None)
+
+    await core.broadcast(
+        session_factory=_make_session_factory(),
+        repo=repo,
+        webhook=_make_webhook(),
+        webhook_url="http://hook",
+        chunk_size=2,
+        chunk_sleep_seconds=0,
+        banned_producer=producer,
+    )
+
+    assert producer.put.await_count == 2
+    first, second = (call.args[0] for call in producer.put.await_args_list)
+    assert [e.player_id for e in first] == [0, 1]
+    assert [e.player_id for e in second] == [2, 3]
+    for event in (*first, *second):
+        assert event.metadata.source == "job_broadcaster"
+        assert event.name == f"bot{event.player_id}"
+
+
+@pytest.mark.asyncio
+async def test_broadcast_ban_event_failure_is_not_fatal(monkeypatch):
+    """A stuck Kafka producer must not abort the run: the bans are already
+    applied, so the broadcast completes and the failure is counted."""
+    monkeypatch.setattr(core.asyncio, "sleep", AsyncMock(return_value=None))
+    bots = [
+        BannedBot(player_id=i, name=f"bot{i}", prediction="vanilla") for i in range(2)
+    ]
+    repo = _make_repo(bots=bots)
+    webhook = _make_webhook()
+    producer = AsyncMock()
+    producer.put = AsyncMock(return_value=Exception("kafka down"))
+
+    banned = await core.broadcast(
+        session_factory=_make_session_factory(),
+        repo=repo,
+        webhook=webhook,
+        webhook_url="http://hook",
+        chunk_sleep_seconds=0,
+        banned_producer=producer,
+    )
+
+    assert banned == 2
+    assert producer.put.await_count == core.BAN_EVENT_ATTEMPTS
+    titles = [p["embeds"][0].title for p in webhook.posts]
+    assert "Bans Added!" in titles
+
+
+@pytest.mark.asyncio
 async def test_broadcast_role_mention_on_completion():
     bots = [BannedBot(player_id=0, name="bot0", prediction="vanilla")]
     repo = _make_repo(bots=bots)
@@ -725,6 +785,8 @@ async def test_broadcast_emits_force_logged_wide_event(caplog):
         "no_data_bans": 2,
         "bots_selected": 1,
         "bans_applied": 1,
+        "ban_events_produced": 0,
+        "ban_events_failed": 0,
     }
     assert ctx["webhook"] == {
         "totals_failed": False,

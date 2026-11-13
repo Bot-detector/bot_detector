@@ -12,7 +12,6 @@ from bot_detector.event_queue.adapters.kafka import (
 from bot_detector.event_queue.core import Queue, QueueProducer
 from bot_detector.event_queue.factory import QueueFactory
 from bot_detector.event_queue.structs import (
-    NotFoundStruct,
     ScrapedStruct,
     ToScrapeStruct,
 )
@@ -54,17 +53,6 @@ async def main():
             consumer_config=KafkaConsumerConfig(group_id="scraper"),
         ),
     )
-    player_nf_producer = QueueFactory.create_queue(
-        model=NotFoundStruct,
-        queue_type="producer",
-        backend_type="kafka",
-        config=KafkaConfig(
-            topic="players.not_found",
-            bootstrap_servers=b_server,
-            producer=True,
-            producer_config=KafkaProducerConfig(partition_key_fn=None),
-        ),
-    )
     player_sc_producer = QueueFactory.create_queue(
         model=ScrapedStruct,
         queue_type="producer",
@@ -78,16 +66,14 @@ async def main():
             ),
         ),
     )
-    for queue in (player_ts_queue, player_nf_producer, player_sc_producer):
+    for queue in (player_ts_queue, player_sc_producer):
         if isinstance(queue, Exception):
             raise queue
 
     assert isinstance(player_ts_queue, Queue)
-    assert isinstance(player_nf_producer, QueueProducer)
     assert isinstance(player_sc_producer, QueueProducer)
 
     await player_ts_queue.start()
-    await player_nf_producer.start()
     await player_sc_producer.start()
 
     # in-process pipeline: kafka -> consume -> task_queue -> fetch pool
@@ -125,7 +111,6 @@ async def main():
             processor_id=processor_id,
             results_queue=results_queue,
             player_ts_queue=player_ts_queue,
-            player_nf_producer=player_nf_producer,
             player_sc_producer=player_sc_producer,
         )
         for processor_id in range(settings.PROCESS_CONCURRENCY)

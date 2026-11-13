@@ -19,7 +19,6 @@ from bot_detector.database.ban_broadcast.repository import (
 PENDING_PREDICATES = [
     "possible_ban = 1",
     "confirmed_ban = 0",
-    "label_jagex = 2",
 ]
 
 
