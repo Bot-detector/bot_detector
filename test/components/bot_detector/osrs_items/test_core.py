@@ -2,10 +2,12 @@ import asyncio
 from datetime import datetime, timedelta
 
 import aiohttp
+import orjson
 import pytest
 import pytest_asyncio
 from aiohttp import web
 from aiohttp.test_utils import TestServer
+from pydantic import ValidationError
 
 from bot_detector.osrs_items.core import OsrsItemsClient
 
@@ -64,10 +66,11 @@ def _build_app(responses: list) -> tuple[web.Application, dict]:
     The last entry repeats once exhausted.
     """
     state = {"call": 0}
-    calls = {"n": 0}
+    calls: dict = {"n": 0, "user_agents": []}
 
     async def mapping(request: web.Request) -> web.Response:
         calls["n"] += 1
+        calls["user_agents"].append(request.headers.get("User-Agent"))
         idx = min(state["call"], len(responses) - 1)
         state["call"] += 1
         entry = responses[idx]
@@ -120,14 +123,13 @@ async def test_load_items_success(session, sample_items_data, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_load_items_with_user_agent(session, sample_items_data, monkeypatch):
-    client, server, app = await _start_client(
+    client, server, calls = await _start_client(
         session, TEST_USER_AGENT, [_ok(sample_items_data)], monkeypatch
     )
     try:
         await client._load_items()
-        # Verify items were loaded (indirectly tests user agent worked)
+        assert calls["user_agents"] == [TEST_USER_AGENT]
         assert len(client._items_by_id) == 3
-        assert len(client._items_by_name) == 3
     finally:
         await server.close()
 
@@ -259,7 +261,7 @@ async def test_load_items_api_error(session, monkeypatch):
         session, TEST_USER_AGENT, [(500, None)], monkeypatch
     )
     try:
-        with pytest.raises(Exception):
+        with pytest.raises(RuntimeError):
             await client._load_items()
     finally:
         await server.close()
@@ -271,8 +273,37 @@ async def test_load_items_invalid_json(session, monkeypatch):
         session, TEST_USER_AGENT, [_ok("invalid json")], monkeypatch
     )
     try:
-        with pytest.raises(Exception):
+        with pytest.raises(orjson.JSONDecodeError):
             await client._load_items()
+    finally:
+        await server.close()
+
+
+@pytest.mark.asyncio
+async def test_failed_refresh_preserves_stale_cache(
+    session, sample_items_data, monkeypatch
+):
+    # second payload: valid item followed by one missing required fields,
+    # so the refresh fails mid-parse
+    bad_payload = [sample_items_data[0], {"id": 2}]
+    client, server, _ = await _start_client(
+        session,
+        TEST_USER_AGENT,
+        [_ok(sample_items_data), _ok(bad_payload)],
+        monkeypatch,
+    )
+    try:
+        await client._load_items()
+        stale_at = datetime.now() - timedelta(hours=25)
+        client._loaded_at = stale_at
+
+        with pytest.raises(ValidationError):
+            await client.lookup_by_item_id(1)
+
+        # the previously loaded cache must survive the failed refresh
+        assert client._loaded_at == stale_at
+        assert len(client._items_by_id) == 3
+        assert client._items_by_id[1].name == "Bronze dagger"
     finally:
         await server.close()
 

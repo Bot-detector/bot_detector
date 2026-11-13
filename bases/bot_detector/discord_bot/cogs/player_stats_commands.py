@@ -447,6 +447,7 @@ class playerStatsCommands(Cog):
             f"{ctx.author.name=}, {ctx.author.id=}, Requesting gear: {player_name}"
         )
         assert self.deps.legacy_api is not None
+        assert self.deps.osrs_items is not None
         sighting = await self.deps.legacy_api.get_latest_sighting(
             player_name=player_name
         )
@@ -471,7 +472,7 @@ class playerStatsCommands(Cog):
                 slot = k.capitalize()
 
             if v:
-                item = await self.bot.osrs_items.get_by_id(v)  # type: ignore
+                item = await self.deps.osrs_items.lookup_by_item_id(v)
                 item_name = item.name if item else f"Unknown item (ID: {v})"
 
                 equipped_items += 1
