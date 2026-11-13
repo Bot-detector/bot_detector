@@ -12,7 +12,9 @@ from sqlalchemy.orm import DeclarativeBase, MappedAsDataclass
 class Settings(BaseSettings):
     DATABASE_URL: str = Field(default=...)
     POOL_TIMEOUT: int = 25
-    POOL_RECYCLE: int = 25
+    # recycle must outlive idle waits (MySQL wait_timeout is typically hours);
+    # 25s caused constant reconnect churn across every service
+    POOL_RECYCLE: int = 3600
     DB_DEBUG: bool = False
 
 

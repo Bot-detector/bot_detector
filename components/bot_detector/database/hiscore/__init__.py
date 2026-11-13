@@ -1,16 +1,5 @@
-from .interface import (
-    HighscoreDataDailyInterface,
-    HighscoreDataLatestInterface,
-    HighscoreDataMonthlyInterface,
-    HighscoreDataWeeklyInterface,
-)
-from .repository import (
-    HighscoreDataDailyRepo,
-    HighscoreDataLatestRepo,
-    HighscoreDataMonthlyRepo,
-    HighscoreDataRepo,
-    HighscoreDataWeeklyRepo,
-)
+from .interface import HighscoreDataLatestInterface
+from .repository import HighscoreDataRepo
 from .structs import (
     HighscoreDataDailyTableStruct,
     HighscoreDataLatestTableStruct,
@@ -19,17 +8,10 @@ from .structs import (
 )
 
 __all__ = [
-    "HighscoreDataDailyInterface",
-    "HighscoreDataWeeklyInterface",
-    "HighscoreDataMonthlyInterface",
     "HighscoreDataLatestInterface",
-    "HighscoreDataDailyRepo",
-    "HighscoreDataWeeklyRepo",
-    "HighscoreDataMonthlyRepo",
     "HighscoreDataRepo",
-    "HighscoreDataLatestRepo",
+    "HighscoreDataLatestTableStruct",
     "HighscoreDataDailyTableStruct",
     "HighscoreDataWeeklyTableStruct",
     "HighscoreDataMonthlyTableStruct",
-    "HighscoreDataLatestTableStruct",
 ]

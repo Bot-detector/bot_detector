@@ -2,21 +2,9 @@ import orjson
 import logging
 
 import sqlalchemy as sqla
-import sqlalchemy.dialects.mysql as sqla_mysql
-from .interface import (
-    HighscoreDataDailyInterface,
-    HighscoreDataLatestInterface,
-    HighscoreDataMonthlyInterface,
-    HighscoreDataWeeklyInterface,
-)
-from .structs import (
-    HighscoreDataDailyTableStruct,
-    HighscoreDataLatestTableStruct,
-    HighscoreDataMonthlyTableStruct,
-    HighscoreDataWeeklyTableStruct,
-)
+from .interface import HighscoreDataLatestInterface
 from bot_detector.structs import HighscoreBaseStruct
-from sqlalchemy import TextClause, func
+from sqlalchemy import TextClause
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -50,7 +38,7 @@ class HighscoreDataRepo(HighscoreDataLatestInterface):
             """
             INSERT INTO highscore_data_latest (player_id, scrape_date, skills, activities)
             SELECT * FROM (
-                SELECT 
+                SELECT
                     t.player_id, t.scrape_date, t.skills, t.activities
                 FROM temp_highscore_data t
             ) AS new
@@ -69,11 +57,11 @@ class HighscoreDataRepo(HighscoreDataLatestInterface):
             """
             INSERT INTO highscore_data_daily (player_id, scrape_date, time_to_live, skills, activities)
             SELECT * FROM (
-                SELECT 
-                    t.player_id, 
-                    t.scrape_date, 
-                    DATE_ADD(t.scrape_date, INTERVAL 30 DAY) AS time_to_live, 
-                    t.skills, 
+                SELECT
+                    t.player_id,
+                    t.scrape_date,
+                    DATE_ADD(t.scrape_date, INTERVAL 30 DAY) AS time_to_live,
+                    t.skills,
                     t.activities
                 FROM temp_highscore_data t
             ) AS new
@@ -90,11 +78,11 @@ class HighscoreDataRepo(HighscoreDataLatestInterface):
             """
             INSERT INTO highscore_data_weekly (player_id, scrape_date, time_to_live, skills, activities)
             SELECT * FROM (
-                SELECT 
-                    t.player_id, 
-                    t.scrape_date, 
-                    DATE_ADD(t.scrape_date, INTERVAL 210 DAY) AS time_to_live, 
-                    t.skills, 
+                SELECT
+                    t.player_id,
+                    t.scrape_date,
+                    DATE_ADD(t.scrape_date, INTERVAL 210 DAY) AS time_to_live,
+                    t.skills,
                     t.activities
                 FROM temp_highscore_data t
             ) AS new
@@ -111,11 +99,11 @@ class HighscoreDataRepo(HighscoreDataLatestInterface):
             """
             INSERT INTO highscore_data_monthly (player_id, scrape_date, time_to_live, skills, activities)
             SELECT * FROM (
-                SELECT 
-                    t.player_id, 
-                    t.scrape_date, 
-                    DATE_ADD(t.scrape_date, INTERVAL 900 DAY) AS time_to_live, 
-                    t.skills, 
+                SELECT
+                    t.player_id,
+                    t.scrape_date,
+                    DATE_ADD(t.scrape_date, INTERVAL 900 DAY) AS time_to_live,
+                    t.skills,
                     t.activities
                 FROM temp_highscore_data t
             ) AS new
@@ -180,146 +168,3 @@ class HighscoreDataRepo(HighscoreDataLatestInterface):
         await async_session.execute(
             sqla.text("DROP TEMPORARY TABLE IF EXISTS temp_highscore_data;")
         )
-
-
-class HighscoreDataLatestRepo(HighscoreDataLatestInterface):
-    async def insert_highscore(
-        self,
-        async_session: AsyncSession,
-        highscore_data: HighscoreBaseStruct,
-    ):
-        """Insert a new highscore record into the highscore_data_weekly table."""
-        # The latest highscore data table has no time_to_live field,
-        _data = highscore_data.model_dump()
-        _data.pop("time_to_live", None)
-
-        _table = HighscoreDataLatestTableStruct
-        sql = sqla_mysql.insert(_table)
-        sql = sql.values([_data])
-        sql = sql.on_duplicate_key_update(
-            scrape_date=func.if_(
-                sql.inserted.scrape_date > _table.scrape_date,
-                sql.inserted.scrape_date,
-                _table.scrape_date,
-            ),
-            skills=func.if_(
-                sql.inserted.scrape_date > _table.scrape_date,
-                sql.inserted.skills,
-                _table.skills,
-            ),
-            activities=func.if_(
-                sql.inserted.scrape_date > _table.scrape_date,
-                sql.inserted.activities,
-                _table.activities,
-            ),
-        )
-        sql = sql.prefix_with("IGNORE")
-        await async_session.execute(sql)
-
-
-class HighscoreDataDailyRepo(HighscoreDataDailyInterface):
-    async def insert_highscore(
-        self,
-        async_session: AsyncSession,
-        highscore_data: HighscoreBaseStruct,
-    ):
-        """Insert a new highscore record into the database."""
-        _table = HighscoreDataDailyTableStruct
-        sql = sqla_mysql.insert(_table)
-        sql = sql.values([highscore_data.model_dump()])
-        sql = sql.on_duplicate_key_update(
-            scrape_date=func.if_(
-                sql.inserted.scrape_date > _table.scrape_date,
-                sql.inserted.scrape_date,
-                _table.scrape_date,
-            ),
-            time_to_live=func.if_(
-                sql.inserted.scrape_date > _table.scrape_date,
-                sql.inserted.time_to_live,
-                _table.time_to_live,
-            ),
-            skills=func.if_(
-                sql.inserted.scrape_date > _table.scrape_date,
-                sql.inserted.skills,
-                _table.skills,
-            ),
-            activities=func.if_(
-                sql.inserted.scrape_date > _table.scrape_date,
-                sql.inserted.activities,
-                _table.activities,
-            ),
-        )
-        sql = sql.prefix_with("IGNORE")
-        await async_session.execute(sql)
-
-
-class HighscoreDataWeeklyRepo(HighscoreDataWeeklyInterface):
-    async def insert_highscore(
-        self,
-        async_session: AsyncSession,
-        highscore_data: HighscoreBaseStruct,
-    ):
-        """Insert a new highscore record into the highscore_data_weekly table."""
-        _table = HighscoreDataWeeklyTableStruct
-        sql = sqla_mysql.insert(_table)
-        sql = sql.values([highscore_data.model_dump()])
-        sql = sql.on_duplicate_key_update(
-            scrape_date=func.if_(
-                sql.inserted.scrape_date > _table.scrape_date,
-                sql.inserted.scrape_date,
-                _table.scrape_date,
-            ),
-            time_to_live=func.if_(
-                sql.inserted.scrape_date > _table.scrape_date,
-                sql.inserted.time_to_live,
-                _table.time_to_live,
-            ),
-            skills=func.if_(
-                sql.inserted.scrape_date > _table.scrape_date,
-                sql.inserted.skills,
-                _table.skills,
-            ),
-            activities=func.if_(
-                sql.inserted.scrape_date > _table.scrape_date,
-                sql.inserted.activities,
-                _table.activities,
-            ),
-        )
-        sql = sql.prefix_with("IGNORE")
-        await async_session.execute(sql)
-
-
-class HighscoreDataMonthlyRepo(HighscoreDataMonthlyInterface):
-    async def insert_highscore(
-        self,
-        async_session: AsyncSession,
-        highscore_data: HighscoreBaseStruct,
-    ):
-        """Insert a new highscore record into the highscore_data_weekly table."""
-        _table = HighscoreDataMonthlyTableStruct
-        sql = sqla_mysql.insert(_table)
-        sql = sql.values([highscore_data.model_dump()])
-        sql = sql.on_duplicate_key_update(
-            scrape_date=func.if_(
-                sql.inserted.scrape_date > _table.scrape_date,
-                sql.inserted.scrape_date,
-                _table.scrape_date,
-            ),
-            time_to_live=func.if_(
-                sql.inserted.scrape_date > _table.scrape_date,
-                sql.inserted.time_to_live,
-                _table.time_to_live,
-            ),
-            skills=func.if_(
-                sql.inserted.scrape_date > _table.scrape_date,
-                sql.inserted.skills,
-                _table.skills,
-            ),
-            activities=func.if_(
-                sql.inserted.scrape_date > _table.scrape_date,
-                sql.inserted.activities,
-                _table.activities,
-            ),
-        )
-        sql = sql.prefix_with("IGNORE")
-        await async_session.execute(sql)
