@@ -2,6 +2,7 @@ import atexit
 import logging
 import logging.handlers
 from datetime import datetime, timezone
+from queue import Queue
 
 import orjson
 from pydantic_settings import BaseSettings, SettingsConfigDict
