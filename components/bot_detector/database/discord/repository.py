@@ -124,6 +124,7 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
         clear_query = (
             update(DiscordVerificationTableStruct)
             .where(DiscordVerificationTableStruct.Discord_id == discord_id)
+            .where(DiscordVerificationTableStruct.Player_id != player_id)
             .values(primary_rsn=0)
         )
         await async_session.execute(clear_query)
