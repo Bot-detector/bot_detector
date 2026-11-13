@@ -2,7 +2,6 @@ import atexit
 import logging
 import logging.handlers
 from datetime import datetime, timezone
-from queue import Queue
 
 import orjson
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -77,15 +76,15 @@ def setup_logging(settings: Settings | None = None) -> None:
         )
         return
 
-    real_handlers = _build_handlers(config)
     # queue handler keeps blocking stderr/file writes off the event loop
-    queue: Queue[logging.LogRecord] = Queue()
-    listener = logging.handlers.QueueListener(queue, *real_handlers)
+    q_handler = logging.handlers.QueueHandler(Queue())
     logging.basicConfig(
         level=logging.DEBUG if config.DEBUG else logging.INFO,
-        handlers=[logging.handlers.QueueHandler(queue)],
+        handlers=[q_handler],
     )
+    listener = logging.handlers.QueueListener(q_handler.queue, *_build_handlers(config))
     listener.start()
+    # daemon thread dies abruptly at exit; stop() flushes the queue first
     atexit.register(listener.stop)
 
     logging.getLogger("asyncmy").setLevel(logging.ERROR)
