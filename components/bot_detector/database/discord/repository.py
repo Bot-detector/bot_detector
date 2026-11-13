@@ -108,12 +108,8 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
         is_primary: bool,
         auto_commit: bool = True,
     ) -> bool:
-        clear_query = (
-            update(DiscordVerificationTableStruct)
-            .where(DiscordVerificationTableStruct.Discord_id == discord_id)
-            .values(primary_rsn=0)
-        )
-
+        # set first, bail on miss: a clear-before-set wipes all primaries
+        # when the target row is missing
         set_query = (
             update(DiscordVerificationTableStruct)
             .where(DiscordVerificationTableStruct.Discord_id == discord_id)
@@ -121,11 +117,20 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
             .values(primary_rsn=1 if is_primary else 0, updated_at=datetime.now())
         )
 
-        await async_session.execute(clear_query)
         result = await async_session.execute(set_query)
+        if result.rowcount == 0:  # type: ignore[attr-defined]
+            return False
+
+        clear_query = (
+            update(DiscordVerificationTableStruct)
+            .where(DiscordVerificationTableStruct.Discord_id == discord_id)
+            .where(DiscordVerificationTableStruct.Player_id != player_id)
+            .values(primary_rsn=0)
+        )
+        await async_session.execute(clear_query)
         if auto_commit:
             await async_session.commit()
-        return result.rowcount > 0  # type: ignore[attr-defined]
+        return True
 
     async def delete_verification(
         self,

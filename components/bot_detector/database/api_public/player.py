@@ -38,15 +38,18 @@ class PlayerRepo:
         from report_sighting rs
         join Players voter ON rs.reporting_id = voter.id
         join Players subject ON rs.reported_id = subject.id
-        WHERE voter.name in :name 
+        WHERE voter.name in :name
         GROUP BY
             subject.confirmed_ban,
             subject.possible_ban,
             subject.confirmed_player,
             rs.manual_detect
         """
+        # expanding: a bare tuple bind only escapes correctly via asyncmy
+        # accident; an empty tuple renders invalid `IN ()` SQL
+        stmt = sqla.text(sql_select).bindparams(sqla.bindparam("name", expanding=True))
         params = {"name": player_names}
-        data = await self.session.execute(sqla.text(sql_select), params=params)
+        data = await self.session.execute(stmt, params=params)
         result = data.mappings().all()
         return result
 

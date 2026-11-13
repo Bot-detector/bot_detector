@@ -22,6 +22,11 @@ def _sample(name: str) -> float | None:
 
 def _mock_session_factory() -> MagicMock:
     session = AsyncMock()
+    # begin() must return an async context manager like a real AsyncSession
+    begin_cm = AsyncMock()
+    begin_cm.__aenter__ = AsyncMock(return_value=None)
+    begin_cm.__aexit__ = AsyncMock(return_value=None)
+    session.begin = MagicMock(return_value=begin_cm)
     session_factory = MagicMock()
     session_factory.return_value.__aenter__ = AsyncMock(return_value=session)
     session_factory.return_value.__aexit__ = AsyncMock(return_value=None)

@@ -59,7 +59,6 @@ class PredictionLatestRepo(PredictionLatestInterface):
             ]
         )
         await async_session.execute(sql_insert)
-        await async_session.commit()
 
 
 class PredictionRepo(PredictionInterface):
@@ -105,4 +104,3 @@ class PredictionRepo(PredictionInterface):
             ]
         )
         await async_session.execute(sql_insert)
-        await async_session.commit()

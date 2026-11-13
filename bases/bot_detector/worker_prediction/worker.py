@@ -19,11 +19,14 @@ async def insert_batch(
     logger.debug(f"batch inserting: {len(batch)}")
     try:
         async with session_factory() as session:
-            await prediction_repo.insert(async_session=session, predictions=batch)
-            await prediction_latest_repo.insert(
-                async_session=session,
-                predictions=batch,
-            )
+            # one tx for both tables: a mid-batch failure rolls back both,
+            # so the runner's requeue cannot duplicate prediction rows
+            async with session.begin():
+                await prediction_repo.insert(async_session=session, predictions=batch)
+                await prediction_latest_repo.insert(
+                    async_session=session,
+                    predictions=batch,
+                )
     except OperationalError as e:
         logger.error(f"OperationalError during batch insert: {e}")
         raise

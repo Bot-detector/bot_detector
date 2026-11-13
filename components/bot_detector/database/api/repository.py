@@ -69,6 +69,8 @@ class ApiUserRepo(ApiUserInterface):
         )
         if is_active is not None:
             query = query.where(ApiUserTableStruct.is_active == is_active)
+        # apiUser.username has no unique constraint; a dup would 500 auth
+        query = query.limit(1)
         result = await async_session.execute(query)
         return result.scalar_one_or_none()
 

@@ -45,7 +45,7 @@ class PlayerRepo(playerInterface):
 
             sql = sql.where(_stmt)
 
-        if player_id:
+        if player_id is not None:
             sql = sql.where(PlayersTableStruct.id > player_id)
 
         if confirmed_ban is not None:
@@ -78,7 +78,7 @@ class PlayerRepo(playerInterface):
                 confirmed_player BOOLEAN NOT NULL DEFAULT '0',
                 label_id INTEGER NOT NULL DEFAULT '0',
                 label_jagex INTEGER NOT NULL DEFAULT '0'
-            ) ENGINE=MEMORY;
+            ) ENGINE=InnoDB;
             """
         )
 
