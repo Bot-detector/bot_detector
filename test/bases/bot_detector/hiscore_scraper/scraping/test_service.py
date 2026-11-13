@@ -11,7 +11,12 @@ from bot_detector.structs import PlayerStruct
 @pytest.mark.asyncio
 async def test_scrape_player_with_proxy():
     from bot_detector.osrs_hs_api.exceptions import Ok
-    from bot_detector.osrs_hs_api.structs import Activity, PlayerStats, Skill
+    from bot_detector.osrs_hs_api.structs import (
+        EXPECTED_SKILL_IDS,
+        Activity,
+        PlayerStats,
+        Skill,
+    )
 
     api = AsyncMock()
     player = PlayerStruct(id=1, name="test_player", created_at=datetime(2024, 1, 1))
@@ -19,7 +24,10 @@ async def test_scrape_player_with_proxy():
     proxy = "http://user:pass@proxy.example.com:8080"
 
     player_stats = PlayerStats(
-        skills=[Skill(id=0, name="Attack", rank=1000, level=99, xp=13034431)],
+        skills=[
+            Skill(id=i, name=f"skill_{i}", rank=1000, level=50, xp=13034431)
+            for i in sorted(EXPECTED_SKILL_IDS)
+        ],
         activities=[Activity(id=0, name="Bounty Hunter", rank=500, score=100)],
     )
     api.get.return_value = Ok(value=player_stats, latency=0.5)

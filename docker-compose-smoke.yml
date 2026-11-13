@@ -43,3 +43,19 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     profiles:
       - smoke
+
+  # fetch-level smoke: the real osrs_hs_api brick against the live
+  # Jagex hiscores, in the packaged image. Internet egress only - no
+  # kafka, mysql or proxies. run with: make smoke-scraper
+  scraper_smoke:
+    container_name: scraper_smoke
+    build:
+      context: ./
+      dockerfile: ./projects/hiscore_scraper/Dockerfile
+      target: prod
+    init: true
+    entrypoint: ["python", "/smoke/smoke.py"]
+    volumes:
+      - ./_infra/_smoke/scraper:/smoke:ro
+    profiles:
+      - smoke

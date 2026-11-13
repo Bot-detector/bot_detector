@@ -38,6 +38,7 @@ from bot_detector.osrs_hs_api.exceptions import (  # noqa: E402
     PlayerDoesNotExist,
 )
 from bot_detector.osrs_hs_api.structs import (  # noqa: E402
+    EXPECTED_SKILL_IDS,
     Activity,
     PlayerStats,
     Skill,
@@ -909,7 +910,10 @@ class SimHiscoreAPI:
             return Err(error=error, latency=latency)
         state.outcomes.scraped += 1
         stats = PlayerStats(
-            skills=[Skill(id=0, name="overall", rank=1, level=2, xp=3)],
+            skills=[
+                Skill(id=i, name=f"skill_{i}", rank=1, level=2, xp=3)
+                for i in sorted(EXPECTED_SKILL_IDS)
+            ],
             activities=[Activity(id=7, name="clue_all", rank=1, score=1)],
         )
         return Ok(value=stats, latency=latency)

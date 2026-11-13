@@ -63,6 +63,10 @@ restart-%: ## Restart a docker service by name, eg make restart-api_public
 	$(DOCKER_ENV) docker compose build $*
 	$(DOCKER_ENV) docker compose up -d $*
 
+smoke-scraper: ## run the scraper fetch smoke: real brick vs live Jagex (no proxies needed)
+	$(DOCKER_ENV) docker compose -f docker-compose.yml -f docker-compose-smoke.yml \
+		--profile smoke run --build --rm scraper_smoke
+
 smoke-firehose: ## run the firehose container smoke test (real kafka + real websockets)
 	$(DOCKER_ENV) docker compose -f docker-compose.yml -f docker-compose-smoke.yml \
 		--profile smoke up -d --build kafka kafka_setup mysql mysql_setup firehose
