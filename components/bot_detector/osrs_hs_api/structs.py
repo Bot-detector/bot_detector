@@ -1,4 +1,6 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+EXPECTED_SKILL_IDS: frozenset[int] = frozenset(range(24))
 
 
 class Skill(BaseModel):
@@ -19,3 +21,27 @@ class Activity(BaseModel):
 class PlayerStats(BaseModel):
     skills: list[Skill]
     activities: list[Activity]
+
+    @field_validator("skills")
+    @classmethod
+    def _skills_complete(cls, value: list[Skill]) -> list[Skill]:
+        """Rejects truncated payloads: the lite API reports every skill id."""
+        ids = {skill.id for skill in value}
+        if ids != EXPECTED_SKILL_IDS:
+            missing = sorted(EXPECTED_SKILL_IDS - ids)
+            unexpected = sorted(ids - EXPECTED_SKILL_IDS)
+            raise ValueError(
+                f"skill id set mismatch: missing={missing} unexpected={unexpected}"
+            )
+        return value
+
+    @field_validator("activities")
+    @classmethod
+    def _activities_present(cls, value: list[Activity]) -> list[Activity]:
+        """Activities grow as Jagex adds them, so only presence and unique ids are pinned."""
+        if not value:
+            raise ValueError("activities must not be empty")
+        ids = [activity.id for activity in value]
+        if len(set(ids)) != len(ids):
+            raise ValueError("duplicate activity ids")
+        return value
