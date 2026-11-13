@@ -27,14 +27,12 @@ class PlayerStats(BaseModel):
     def _skills_complete(cls, value: list[Skill]) -> list[Skill]:
         """Rejects truncated payloads: every known skill id must be present.
 
-        Unknown extra ids are tolerated, so a Jagex schema addition does
-        not break scrapes; the smoke test flags the drift instead.
+        Unknown extra ids are tolerated (a Jagex schema addition must not
+        break scrapes) and logged once per distinct set by the fetcher.
         """
         missing = EXPECTED_SKILL_IDS - {skill.id for skill in value}
         if missing:
-            raise ValueError(
-                f"truncated payload: missing skill ids {sorted(missing)}"
-            )
+            raise ValueError(f"truncated payload: missing skill ids {sorted(missing)}")
         return value
 
     @field_validator("activities")

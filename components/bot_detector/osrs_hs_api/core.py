@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import time
 from typing import Any, Optional
 
@@ -8,7 +9,9 @@ from bot_detector.rate_limiter import RateLimiter, Window
 from pydantic import ValidationError
 
 from .exceptions import Err, Ok, PlayerDoesNotExist, UnexpectedRedirection
-from .structs import PlayerStats
+from .structs import EXPECTED_SKILL_IDS, PlayerStats
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_URL = "https://secure.runescape.com/m=hiscore_oldschool/index_lite.json"
 
@@ -22,6 +25,22 @@ REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
 # timeouts and protocol failures are operational outcomes (Err values);
 # anything else - TypeError, KeyError - is a bug and must surface
 _FETCH_ERRORS = (aiohttp.ClientError, asyncio.TimeoutError, ValueError)
+
+# schema drift already reported: one warning per unknown-id set, so 1800
+# fetchers scraping the same drifted payload do not spam the logs
+_REPORTED_DRIFT: set[frozenset[int]] = set()
+
+
+def _report_unknown_skill_ids(ids: set[int]) -> None:
+    key = frozenset(ids)
+    if not ids or key in _REPORTED_DRIFT:
+        return
+    _REPORTED_DRIFT.add(key)
+    logger.warning(
+        "unexpected skill ids in live payload: %s — "
+        "consider updating EXPECTED_SKILL_IDS in bot_detector.osrs_hs_api.structs",
+        sorted(ids),
+    )
 
 
 class HiscoreOldSchoolAPI:
@@ -94,6 +113,9 @@ class HiscoreOldSchoolAPI:
         except ValidationError as e:
             # the fetch still happened: its latency belongs on the error
             return Err(error=e, latency=result.latency)
+        _report_unknown_skill_ids(
+            {skill.id for skill in stats.skills} - EXPECTED_SKILL_IDS
+        )
         return Ok(value=stats, latency=result.latency)
 
     async def get(

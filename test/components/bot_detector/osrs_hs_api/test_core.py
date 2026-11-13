@@ -9,6 +9,7 @@ make smoke-scraper runs this brick against the live API.
 """
 
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Optional, Union
@@ -267,6 +268,27 @@ async def test_cancellation_propagates():
     outcomes = await asyncio.gather(task, return_exceptions=True)
 
     assert isinstance(outcomes[0], asyncio.CancelledError)
+
+
+@pytest.mark.asyncio
+async def test_extra_skill_ids_logged_once(caplog):
+    # tolerated, but must surface in the logs exactly once per distinct
+    # set: a drifted payload scraped 1800 times must not spam the logs
+    from bot_detector.osrs_hs_api import core
+
+    core._REPORTED_DRIFT.clear()
+    payload = _valid_hiscore_payload()
+    payload["skills"].append(_skill(999))
+    session = FakeSession(
+        [FakeResponse(200, payload=payload), FakeResponse(200, payload=payload)]
+    )
+    with caplog.at_level(logging.WARNING, logger="bot_detector.osrs_hs_api.core"):
+        await _api().get("player", session)
+        await _api().get("player", session)
+
+    drift = [r for r in caplog.records if "unexpected skill ids" in r.getMessage()]
+    assert len(drift) == 1
+    assert "[999]" in drift[0].getMessage()
 
 
 @pytest.mark.asyncio
