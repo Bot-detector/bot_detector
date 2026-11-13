@@ -1,22 +1,25 @@
 import asyncio
 import logging
+from datetime import datetime
 
 from bot_detector.event_queue.core import Queue, QueueProducer
 from bot_detector.event_queue.structs import (
-    NotFoundStruct,
     ScrapedStruct,
     ToScrapeStruct,
 )
 from bot_detector.hiscore_scraper.errors import dump_error
-from bot_detector.hiscore_scraper.metrics import not_found_counter
-from bot_detector.hiscore_scraper.producers import (
-    produce_not_found,
+from bot_detector.hiscore_scraper.flow.structs import FetchResult
+from bot_detector.hiscore_scraper.player_outcomes.metrics import not_found_counter
+from bot_detector.hiscore_scraper.player_outcomes.service import (
     produce_player_scraped,
     produce_player_to_scrape,
 )
-from bot_detector.hiscore_scraper.scrape import proxy_label, transform_player_stats
-from bot_detector.hiscore_scraper.structs import FetchResult
+from bot_detector.hiscore_scraper.scraping.service import (
+    proxy_label,
+    transform_player_stats,
+)
 from bot_detector.osrs_hs_api.exceptions import PlayerDoesNotExist
+from bot_detector.structs import MetaData
 from bot_detector.wide_event import WideEventLogger
 
 logger = logging.getLogger(__name__)
@@ -51,7 +54,6 @@ async def process(
     processor_id: int,
     results_queue: asyncio.Queue[FetchResult],
     player_ts_queue: Queue[ToScrapeStruct],
-    player_nf_producer: QueueProducer[NotFoundStruct],
     player_sc_producer: QueueProducer[ScrapedStruct],
 ):
     """Turns fetch outcomes into Kafka side effects.
@@ -75,12 +77,24 @@ async def process(
             if result.error is not None:
                 if isinstance(result.error, PlayerDoesNotExist):
                     not_found_counter.labels(proxy=result.proxy).inc()
-                    player_data.possible_ban = True
                     wide_event.add({"outcome": "not_found"})
-                    error = await produce_not_found(player_nf_producer, player_data)
+                    # runemetrics is gone, so a hiscore not-found IS the
+                    # possible-ban signal. Publish the player directly so
+                    # worker_hiscore persists possible_ban; the broadcaster
+                    # selects it from there.
+                    player_data.updated_at = datetime.now()
+                    player_data.possible_ban = True
+                    scraped_data = ScrapedStruct(
+                        metadata=MetaData(version=1, source="hiscore_scraper"),
+                        player_data=player_data,
+                        highscore_data=None,
+                    )
+                    error = await produce_player_scraped(
+                        player_sc_producer, scraped_data
+                    )
                     if error:
                         wide_event.add(
-                            {"produce_errors": {"not_found": dump_error(error)}}
+                            {"produce_errors": {"scraped": dump_error(error)}}
                         )
                     continue
 
@@ -97,12 +111,15 @@ async def process(
             scraped_data = await transform_player_stats(
                 player_stats=result.stats,
                 player=player_data,
-                player_ts_producer=player_ts_queue,
             )
             if scraped_data is None:
-                # transform already logged and requeued the player
+                # transform logged the validation error; the requeue
+                # lives here so scraping never touches player outcomes
                 wide_event.add({"outcome": "transform_failed"})
                 _force_log()
+                error = await produce_player_to_scrape(player_ts_queue, player_data)
+                if error:
+                    wide_event.add({"produce_errors": {"to_scrape": dump_error(error)}})
                 continue
 
             error = await produce_player_scraped(player_sc_producer, scraped_data)

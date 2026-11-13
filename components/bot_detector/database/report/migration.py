@@ -77,8 +77,8 @@ async def migrate_banned_player_reports(
 
     Args:
         session_factory: SQLAlchemy async session factory.
-        reported_id: The banned player (Players.label_jagex = 2) whose reports
-            should be archived.
+        reported_id: The banned player (per the broadcaster's players.banned
+            event) whose reports should be archived.
 
     Returns:
         Number of report_archive rows inserted by this call (0 on a re-run for

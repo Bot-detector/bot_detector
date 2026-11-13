@@ -2,13 +2,11 @@ import logging
 from datetime import date, datetime, timedelta
 
 from aiohttp import ClientSession
-from bot_detector.event_queue.core import Queue
-from bot_detector.event_queue.structs import ScrapedStruct, ToScrapeStruct
-from bot_detector.hiscore_scraper.metrics import (
+from bot_detector.event_queue.structs import ScrapedStruct
+from bot_detector.hiscore_scraper.scraping.metrics import (
     fetch_outcome_latency_histogram,
     latency_histogram,
 )
-from bot_detector.hiscore_scraper.producers import produce_player_to_scrape
 from bot_detector.osrs_hs_api import HiscoreOldSchoolAPI
 from bot_detector.osrs_hs_api.exceptions import Err, Ok, PlayerDoesNotExist
 from bot_detector.osrs_hs_api.structs import PlayerStats
@@ -56,7 +54,6 @@ async def scrape_player(
 async def transform_player_stats(
     player_stats: PlayerStats,
     player: PlayerStruct,
-    player_ts_producer: Queue[ToScrapeStruct],
 ) -> ScrapedStruct | None:
     player.updated_at = datetime.now()
     player.possible_ban = False
@@ -79,8 +76,7 @@ async def transform_player_stats(
             ),
         )
     except ValidationError as e:
+        # the processor owns the requeue; it turns None into a
+        # produce_player_to_scrape side effect
         logger.error(e.json())
-        error = await produce_player_to_scrape(player_ts_producer, player)
-        if error:
-            logger.error(f"Failed to requeue player after transform failure: {error}")
         return None

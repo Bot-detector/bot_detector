@@ -29,3 +29,13 @@ embeds_failed_counter = Counter(
     name="job_broadcaster_embeds_failed",
     documentation="Number of Discord embeds that failed to post",
 )
+
+ban_events_produced_counter = Counter(
+    name="job_broadcaster_ban_events_produced",
+    documentation="Number of players.banned events published for applied bans",
+)
+
+ban_events_failed_counter = Counter(
+    name="job_broadcaster_ban_events_failed",
+    documentation="Number of players.banned events given up on after retries",
+)

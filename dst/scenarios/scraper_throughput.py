@@ -23,11 +23,16 @@ from bot_detector.event_queue.structs import (  # noqa: E402
     ScrapedStruct,
     ToScrapeStruct,
 )
-from bot_detector.hiscore_scraper import consumer as scraper_consumer  # noqa: E402
-from bot_detector.hiscore_scraper import fetcher as scraper_fetcher  # noqa: E402
-from bot_detector.hiscore_scraper import processor as scraper_processor  # noqa: E402
-from bot_detector.hiscore_scraper.fetcher import ProxyRuntime  # noqa: E402
-from bot_detector.hiscore_scraper.structs import FetchResult  # noqa: E402
+from bot_detector.hiscore_scraper.flow import consumer as scraper_consumer  # noqa: E402
+from bot_detector.hiscore_scraper.flow import fetcher as scraper_fetcher  # noqa: E402
+from bot_detector.hiscore_scraper.flow import (
+    processor as scraper_processor,  # noqa: E402
+)
+from bot_detector.hiscore_scraper.flow.structs import FetchResult  # noqa: E402
+from bot_detector.hiscore_scraper.proxy_pool import (
+    runtime as scraper_runtime,  # noqa: E402
+)
+from bot_detector.hiscore_scraper.proxy_pool.runtime import ProxyRuntime  # noqa: E402
 from bot_detector.osrs_hs_api.exceptions import (  # noqa: E402
     Err,
     Ok,
@@ -980,9 +985,9 @@ async def main(**kwargs) -> ScraperThroughputReport:
         SimHiscoreAPI.sigma_not_found = math.log(config.not_found_p99_over_p50) / Z_99
         SimHiscoreAPI.sigma_error = math.log(config.error_p99_over_p50) / Z_99
         SimHiscoreAPI.degradation = _Degradation(random.Random(config.seed + 1), config)
-        original_api = scraper_fetcher.HiscoreOldSchoolAPI
+        original_api = scraper_runtime.HiscoreOldSchoolAPI
         original_transform = scraper_processor.transform_player_stats
-        scraper_fetcher.HiscoreOldSchoolAPI = SimHiscoreAPI  # type: ignore[assignment]
+        scraper_runtime.HiscoreOldSchoolAPI = SimHiscoreAPI  # type: ignore[assignment]
         scraper_processor.transform_player_stats = _timed(
             state, "transform", original_transform
         )
@@ -1070,7 +1075,7 @@ async def main(**kwargs) -> ScraperThroughputReport:
             # restore the seams so other scenarios in the process see
             # product code; must run on the crash path too, or a seeded
             # global RNG and patched functions leak into the process
-            scraper_fetcher.HiscoreOldSchoolAPI = original_api
+            scraper_runtime.HiscoreOldSchoolAPI = original_api
             scraper_processor.transform_player_stats = original_transform
             random.setstate(original_random_state)
 

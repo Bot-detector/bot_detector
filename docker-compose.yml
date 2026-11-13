@@ -197,21 +197,6 @@ services:
       kafka_setup:
         condition: service_completed_successfully
 
-  runemetrics_scraper:
-    container_name: runemetrics_scraper
-    image: bd/runemetrics_scraper:prd
-    build:
-      context: ./
-      dockerfile: ./projects/runemetrics_scraper/Dockerfile
-      target: prod
-    networks:
-      - botdetector-network
-    env_file:
-      - .env
-    depends_on:
-      kafka_setup:
-        condition: service_completed_successfully
-
   worker_hiscore:
     container_name: worker_hiscore
     image: bd/worker_hiscore:prd
@@ -341,6 +326,8 @@ services:
     env_file:
       - .env
     depends_on:
+      kafka_setup:
+        condition: service_completed_successfully
       mysql_setup:
         condition: service_completed_successfully
 

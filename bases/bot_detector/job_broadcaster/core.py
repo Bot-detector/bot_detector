@@ -15,6 +15,14 @@ from bot_detector.database.ban_broadcast import (
     BannedBot,
 )
 from bot_detector.discord_webhook import DiscordWebhookRepo, WebhookInterface
+from bot_detector.event_queue.adapters.kafka import (
+    KafkaConfig,
+    KafkaProducerConfig,
+    KafkaSettings,
+)
+from bot_detector.event_queue.core import QueueProducer
+from bot_detector.event_queue.factory import QueueFactory
+from bot_detector.event_queue.structs import PlayerBannedStruct
 from bot_detector.job_broadcaster.embeds import (
     build_complete_embed,
     build_names_embed,
@@ -22,12 +30,15 @@ from bot_detector.job_broadcaster.embeds import (
     chunk_bots,
 )
 from bot_detector.job_broadcaster.metrics import (
+    ban_events_failed_counter,
+    ban_events_produced_counter,
     bans_applied_counter,
     db_retries_counter,
     embeds_failed_counter,
     embeds_sent_counter,
     start_metrics_server,
 )
+from bot_detector.structs import MetaData
 from bot_detector.wide_event import EventLoggerInterface, WideEventLogger
 from pydantic import Field
 from pydantic_settings import BaseSettings
@@ -50,6 +61,10 @@ RETRIABLE_DB_ERRORS = (SAOperationalError, SATimeoutError, SAInterfaceError)
 
 # Legacy graveyard role ping; empty string disables the mention.
 DEFAULT_ROLE_MENTION = "<@&893399220172767253>"
+
+# Attempts to publish one chunk's players.banned events before giving up;
+# failures are counted and logged, never fatal (see _produce_ban_events).
+BAN_EVENT_ATTEMPTS = 3
 
 
 class Settings(BaseSettings):
@@ -81,6 +96,7 @@ async def broadcast(
     db_attempts: int = 3,
     db_backoff_seconds: float = 5.0,
     db_lock_wait_timeout: int = 10,
+    banned_producer: QueueProducer[PlayerBannedStruct] | None = None,
     event: EventLoggerInterface | None = None,
 ) -> int:
     """Apply predicted bot bans and broadcast the results to Discord.
@@ -94,15 +110,21 @@ async def broadcast(
     is the announced set by construction: only ids from the snapshot are
     updated, rows flagged mid-run wait for the next run.
 
+    When banned_producer is wired, every applied chunk also publishes one
+    players.banned event per player so worker_ban_migration archives the
+    player's reports (runemetrics used to emit these; it is gone). Event
+    publishes are best effort: retried, then counted and logged - never
+    fatal, because the bans are already applied.
+
     The snapshot and every chunk apply are retried on transient DB errors
     (lock wait timeouts, deadlocks, lost connections) with exponential
     backoff; the session's innodb_lock_wait_timeout is lowered first so
     waits fail fast into the retry loop instead of hanging.
 
     Accumulates one wide event for the whole run: counts, selected and
-    applied bans, db retries, webhook outcomes. Emits it at the end -
-    error level on failure, info with log_reason=force when bans were
-    applied or a post failed, otherwise sampled.
+    applied bans, ban events, db retries, webhook outcomes. Emits it at
+    the end - error level on failure, info with log_reason=force when
+    bans were applied or a post failed, otherwise sampled.
 
     Args:
         session_factory: SQLAlchemy async session factory.
@@ -116,6 +138,8 @@ async def broadcast(
         db_attempts: Max tries for each DB transaction.
         db_backoff_seconds: Base for exponential retry backoff.
         db_lock_wait_timeout: Session innodb_lock_wait_timeout in seconds.
+        banned_producer: players.banned producer; None disables event
+            publishing.
         event: Wide event logger; defaults to the module instance.
 
     Returns:
@@ -152,8 +176,16 @@ async def broadcast(
         bans_applied = 0
         chunks_failed = 0
         chunks_total = 0
+        events_produced = 0
+        events_failed = 0
         if num_bots > 0:
-            bans_applied, chunks_total, chunks_failed = await _apply_and_announce(
+            (
+                bans_applied,
+                chunks_total,
+                chunks_failed,
+                events_produced,
+                events_failed,
+            ) = await _apply_and_announce(
                 bots=bots,
                 session_factory=session_factory,
                 repo=repo,
@@ -165,6 +197,7 @@ async def broadcast(
                 db_attempts=db_attempts,
                 db_backoff_seconds=db_backoff_seconds,
                 db_lock_wait_timeout=db_lock_wait_timeout,
+                banned_producer=banned_producer,
                 event=event,
             )
             webhook_ctx["names_chunks"] = chunks_total
@@ -188,6 +221,8 @@ async def broadcast(
                     "no_data_bans": counts.no_data_bans,
                     "bots_selected": num_bots,
                     "bans_applied": bans_applied,
+                    "ban_events_produced": events_produced,
+                    "ban_events_failed": events_failed,
                 },
                 "settings": {
                     "chunk_size": chunk_size,
@@ -306,6 +341,43 @@ async def _set_lock_wait_timeout(session: AsyncSession, seconds: int) -> None:
     )
 
 
+async def _produce_ban_events(
+    producer: QueueProducer[PlayerBannedStruct],
+    chunk: list[BannedBot],
+) -> tuple[int, int]:
+    """Publish one players.banned event per applied player. Best effort.
+
+    worker_ban_migration archives a player's reports per event, and the
+    archive insert is idempotent (INSERT IGNORE), so a duplicate event is
+    harmless while a missed one leaves reports unmigrated until a manual
+    backfill. Publishes are therefore retried; a final failure is counted
+    and logged, never fatal - the bans themselves are already applied.
+
+    Returns (produced, failed) event counts.
+    """
+    events = [
+        PlayerBannedStruct(
+            metadata=MetaData(version=1, source="job_broadcaster"),
+            player_id=bot.player_id,
+            name=bot.name,
+        )
+        for bot in chunk
+    ]
+    for attempt in range(1, BAN_EVENT_ATTEMPTS + 1):
+        produce_error = await producer.put(events)
+        if produce_error is None:
+            ban_events_produced_counter.inc(len(events))
+            return len(events), 0
+        logger.error(
+            f"broadcast: ban events produce attempt {attempt}/{BAN_EVENT_ATTEMPTS} "
+            f"failed for {len(events)} players: {produce_error}"
+        )
+        if attempt < BAN_EVENT_ATTEMPTS:
+            await asyncio.sleep(2**attempt)
+    ban_events_failed_counter.inc(len(events))
+    return 0, len(events)
+
+
 async def _apply_and_announce(
     bots: list[BannedBot],
     session_factory: async_sessionmaker[AsyncSession],
@@ -318,20 +390,26 @@ async def _apply_and_announce(
     db_attempts: int,
     db_backoff_seconds: float,
     db_lock_wait_timeout: int,
-    event: EventLoggerInterface,
-) -> tuple[int, int, int]:
-    """Apply each chunk of vetted bots, then announce it, in one loop.
+    banned_producer: QueueProducer[PlayerBannedStruct] | None = None,
+    event: EventLoggerInterface = wide_event,
+) -> tuple[int, int, int, int, int]:
+    """Apply each chunk of vetted bots, emit its ban events, announce it.
 
-    Apply-before-announce per chunk: a failed apply aborts the run before
-    further announcements, and a failed embed never hides applied bans.
-    The embed-pacing sleeps throttle the UPDATE rate as a side effect.
+    Per chunk: apply (short PK transaction) -> publish players.banned
+    events -> post the names embed. A failed apply aborts the run before
+    further announcements; failed events and embeds never hide applied
+    bans. The embed-pacing sleeps throttle the UPDATE rate as a side
+    effect.
 
-    Returns (bans_applied, chunks_total, chunks_failed); failures are
-    logged inline and reflected in the wide event by the caller.
+    Returns (bans_applied, chunks_total, chunks_failed, events_produced,
+    events_failed); failures are logged inline and reflected in the wide
+    event by the caller.
     """
     chunks = chunk_bots(bots=bots, max_names=chunk_size, max_chars=chunk_max_chars)
     bans_applied = 0
     chunks_failed = 0
+    events_produced = 0
+    events_failed = 0
     for i, chunk in enumerate(chunks, start=1):
         if i > 1:
             await asyncio.sleep(chunk_sleep_seconds)
@@ -348,6 +426,10 @@ async def _apply_and_announce(
             event=event,
             label=f"batch_{i}",
         )
+        if banned_producer is not None:
+            produced, failed = await _produce_ban_events(banned_producer, chunk)
+            events_produced += produced
+            events_failed += failed
         err = await webhook.post(
             url=webhook_url,
             embeds=[build_names_embed(chunk=chunk)],
@@ -359,13 +441,32 @@ async def _apply_and_announce(
             continue
         embeds_sent_counter.inc()
         logger.debug(f"broadcast: names chunk {i}/{len(chunks)} sent")
-    return bans_applied, len(chunks), chunks_failed
+    return bans_applied, len(chunks), chunks_failed, events_produced, events_failed
 
 
 async def main():
     settings = Settings()
     start_metrics_server(port=settings.METRICS_PORT)
     session_factory, async_engine = get_session_factory(SETTINGS=DBSettings())
+
+    banned_producer = QueueFactory.create_queue(
+        model=PlayerBannedStruct,
+        queue_type="producer",
+        backend_type="kafka",
+        config=KafkaConfig(
+            topic="players.banned",
+            bootstrap_servers=KafkaSettings().bootstrap_servers,
+            producer=True,
+            producer_config=KafkaProducerConfig(
+                partition_key_fn=lambda message: str(message.player_id % 10)
+            ),
+        ),
+    )
+    if isinstance(banned_producer, Exception):
+        raise banned_producer
+    assert isinstance(banned_producer, QueueProducer)
+    await banned_producer.start()
+
     async with aiohttp.ClientSession() as aiohttp_session:
         webhook = DiscordWebhookRepo(session=aiohttp_session)
         try:
@@ -381,10 +482,12 @@ async def main():
                 db_attempts=settings.DB_RETRY_ATTEMPTS,
                 db_backoff_seconds=settings.DB_RETRY_BACKOFF_SECONDS,
                 db_lock_wait_timeout=settings.DB_LOCK_WAIT_TIMEOUT,
+                banned_producer=banned_producer,
                 event=wide_event,
             )
         finally:
             await async_engine.dispose()
+            await banned_producer.stop()
 
 
 async def run_async():
