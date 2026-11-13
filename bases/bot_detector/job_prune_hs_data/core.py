@@ -65,7 +65,10 @@ def delete_highscore_data_daily():
     return sql
 
 
-async def prune(async_session: async_sessionmaker[AsyncSession]):
+async def prune(
+    async_session: async_sessionmaker[AsyncSession],
+    limit: int,
+) -> None:
     sql_drop_tmp = drop_temp_table()
     sql_create_tmp = create_temp_table()
     sql_insert_tmp = insert_temp_table()
@@ -81,7 +84,7 @@ async def prune(async_session: async_sessionmaker[AsyncSession]):
                     # Drop and create temp table each loop
                     await session.execute(sql_drop_tmp)
                     await session.execute(sql_create_tmp)
-                    params = {"player_id": player_id, "limit": Settings().LIMIT}
+                    params = {"player_id": player_id, "limit": limit}
                     await session.execute(sql_insert_tmp, params=params)
 
                     result = await session.scalars(sql_select_tmp)
@@ -108,9 +111,10 @@ async def prune(async_session: async_sessionmaker[AsyncSession]):
 
 
 async def main():
-    start_metrics_server(port=Settings().METRICS_PORT)
+    settings = Settings()
+    start_metrics_server(port=settings.METRICS_PORT)
     async_session, async_engine = get_session_factory(SETTINGS=DBSettings())
-    await prune(async_session)
+    await prune(async_session, limit=settings.LIMIT)
 
 
 async def run_async():
