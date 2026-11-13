@@ -39,6 +39,7 @@ def insert_temp_table():
         WHERE 1=1 
             AND possible_ban = 0 
             AND id > :player_id
+        ORDER BY id
         limit :limit
         """
     )
