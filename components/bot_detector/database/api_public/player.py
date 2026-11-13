@@ -45,9 +45,8 @@ class PlayerRepo:
             subject.confirmed_player,
             rs.manual_detect
         """
-        # expanding is required: a bare tuple bind reaches the driver as one
-        # scalar and only escapes correctly by asyncmy accident; an empty
-        # tuple would render invalid `IN ()` SQL
+        # expanding: a bare tuple bind only escapes correctly via asyncmy
+        # accident; an empty tuple renders invalid `IN ()` SQL
         stmt = sqla.text(sql_select).bindparams(sqla.bindparam("name", expanding=True))
         params = {"name": player_names}
         data = await self.session.execute(stmt, params=params)

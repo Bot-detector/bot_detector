@@ -108,8 +108,8 @@ class DiscordVerificationRepo(DiscordVerificationInterface):
         is_primary: bool,
         auto_commit: bool = True,
     ) -> bool:
-        # set first and bail before the clear: clearing every row then
-        # finding no target row must not leave the user with no primary
+        # set first, bail on miss: a clear-before-set wipes all primaries
+        # when the target row is missing
         set_query = (
             update(DiscordVerificationTableStruct)
             .where(DiscordVerificationTableStruct.Discord_id == discord_id)
