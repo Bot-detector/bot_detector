@@ -19,8 +19,10 @@ replaced:
   partition) through a `kafka_connection_limit` connection pool
   (0 = unlimited).
 - jagex: SimHiscoreAPI draws per-fetch outcomes on a seeded RNG:
-  success (~success_latency_s), not_found (slow, ~not_found_latency_s,
-  the 404 path) and transient errors (requeue + retry backoff).
+  success, not_found (the 404 path) and transient errors (requeue +
+  retry backoff), each lognormal on the panel calibration below,
+  capped by the 30s client timeout, under fleet-wide degradation
+  episodes that stretch every draw ~2-3x.
 - proxies: an in-memory manager with `proxies` proxies; fetchers are
   assigned sticky by index modulo the pool size, so each proxy's rate
   windows are shared by fetchers/proxies fetchers.
@@ -30,13 +32,17 @@ stage-time shares (where pipeline time goes) and the binding cap among
 feed, consumer serial path, fetch pool (Little's law: fetchers / mean
 fetch latency) and the per-proxy rate ceilings (proxies x 20/s).
 
-Latency calibration (prod, Nov 2026): overall fetch p50 ~ 1.7s,
-p99 ~ 5s, and not_found runs ~20% ahead of found (share 1.2/2.2
-~ 54.5%). Because not_found is the majority outcome, the mixture
-median sits inside its distribution: not_found is drawn lognormal
-with median 1.7s and p99 5s, successes stay tight around 1.0s
-(uniform jitter), which together reproduce the observed fleet
-signatures (~450/s sprint, ~300/s crawl) and the mixture p50/p99.
+Latency calibration (prod, Nov 2026 Grafana panel
+`hiscore_scraper_fetch_latency`, 6h window): success p50 ~1.45s /
+p99 ~6.1s (the fattest tail), not_found p50 ~1.45s / p99 ~4.5s,
+error p50 ~0.33s / p90 ~0.94s / p99 ~2.4s (failures are fast), and
+error p99 flat-topping at exactly 30s in rare bursts - the client
+timeout. Every outcome is drawn lognormal anchored at its panel
+p50 (`*_latency_s`) and p99 (`*_p99_over_p50`); fleet-wide
+degradation episodes (a few per ~6h, minutes long, every draw
+multiplied ~2-3x together) reproduce the step bumps, and error
+draws flip to the 30s timeout inside an episode, reproducing the
+flat-top. Together: mixture p50 ~1.45s, p99 ~5s.
 """
 
 import asyncio
@@ -64,11 +70,16 @@ from bot_detector.event_queue.structs import (  # noqa: E402
     ScrapedStruct,
     ToScrapeStruct,
 )
-from bot_detector.hiscore_scraper import consumer as scraper_consumer  # noqa: E402
-from bot_detector.hiscore_scraper import fetcher as scraper_fetcher  # noqa: E402
-from bot_detector.hiscore_scraper import processor as scraper_processor  # noqa: E402
-from bot_detector.hiscore_scraper.fetcher import ProxyRuntime  # noqa: E402
-from bot_detector.hiscore_scraper.structs import FetchResult  # noqa: E402
+from bot_detector.hiscore_scraper.flow import consumer as scraper_consumer  # noqa: E402
+from bot_detector.hiscore_scraper.flow import fetcher as scraper_fetcher  # noqa: E402
+from bot_detector.hiscore_scraper.flow import (
+    processor as scraper_processor,  # noqa: E402
+)
+from bot_detector.hiscore_scraper.flow.structs import FetchResult  # noqa: E402
+from bot_detector.hiscore_scraper.proxy_pool import (
+    runtime as scraper_runtime,  # noqa: E402
+)
+from bot_detector.hiscore_scraper.proxy_pool.runtime import ProxyRuntime  # noqa: E402
 from bot_detector.osrs_hs_api.exceptions import (  # noqa: E402
     Err,
     Ok,
@@ -139,16 +150,42 @@ class ScraperThroughputConfig(BaseModel):
     # drop null fields (ironman/hardcore_ironman/ultimate_ironman/
     # normalized_name) from serialized messages to shrink them
     exclude_none_fields: bool = False
-    # simulated jagex fetch outcomes; prod calibration (Nov 2026):
-    # overall fetch p50 ~1.7s (the not_found median - it is the majority
-    # outcome), p99 ~5s, not_found share 1.2/2.2 ~ 54.5%
-    success_latency_s: float = Field(default=1.0, ge=0.0)
-    not_found_latency_s: float = Field(default=1.7, ge=0.0)
+    # simulated jagex fetch outcomes, calibrated to the Nov 2026 Grafana
+    # panel (hiscore_scraper_fetch_latency, 6h): each outcome is
+    # lognormal anchored at its panel p50 (`*_latency_s`) and p99
+    # (`*_p99_over_p50`):
+    #   success    p50 1.45  p90 ~3.2  p99 ~6.1  (fattest tail)
+    #   not_found  p50 1.45  p90 ~2.7  p99 ~4.5
+    #   error      p50 0.33  p90 ~0.9  p99 ~2.2  (failures are fast)
+    # (lognormal through the p50/p99 anchors runs slightly wide at p90:
+    # 3.2 vs the panel's 2.4 for success - prod's tail is a mixture)
     not_found_pct: float = Field(default=54.5, ge=0.0, le=100.0)
-    latency_p99_over_p50: float = Field(default=2.9412, gt=1.0)
     error_pct: float = Field(default=2.0, ge=0.0, le=100.0)
-    error_latency_s: float = Field(default=1.0, ge=0.0)
-    latency_jitter: float = Field(default=0.25, ge=0.0)
+    success_latency_s: float = Field(default=1.45, ge=0.0)
+    success_p99_over_p50: float = Field(default=4.2, gt=1.0)
+    not_found_latency_s: float = Field(default=1.45, ge=0.0)
+    not_found_p99_over_p50: float = Field(default=3.1, gt=1.0)
+    error_latency_s: float = Field(default=0.33, ge=0.0)
+    error_p99_over_p50: float = Field(default=6.7, gt=1.0)
+    # hard client timeout: any draw at or above it lands on it exactly
+    # (a fetch is never observed past the timeout) and surfaces as an
+    # error regardless of its original outcome - in prod a timed-out
+    # scrape raises, it does not return partial data
+    timeout_s: float = Field(default=30.0, gt=0.0)
+    # share of error fetches that hard-timeout while a degradation
+    # episode is active: proxy failures burst inside a fleet-wide
+    # slowdown, which is the flat-top 30s error p99 in prod panels.
+    # Outside episodes errors keep their lognormal draw.
+    error_timeout_pct: float = Field(default=10.0, ge=0.0, le=100.0)
+    # fleet-wide degradation episodes: prod shows a few minutes-long
+    # bumps per ~6h where every outcome's percentiles rise ~2-3x
+    # together. Exponential inter-arrival and duration, uniform
+    # multiplier. Episodes draw from their own RNG stream (seed + 1),
+    # so outcome draws do not shift when the schedule knobs change.
+    degradation_every_s: float = Field(default=7200.0, gt=0.0)
+    degradation_duration_s: float = Field(default=240.0, gt=0.0)
+    degradation_factor_min: float = Field(default=1.8, ge=1.0)
+    degradation_factor_max: float = Field(default=3.0, ge=1.0)
 
     @model_validator(mode="after")
     def check_outcome_mix(self):
@@ -156,6 +193,15 @@ class ScraperThroughputConfig(BaseModel):
             raise ValueError(
                 f"not_found_pct + error_pct must be <= 100, got "
                 f"{self.not_found_pct} + {self.error_pct}"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def check_degradation_factor(self):
+        if self.degradation_factor_min > self.degradation_factor_max:
+            raise ValueError(
+                f"degradation_factor_min must be <= degradation_factor_max, "
+                f"got {self.degradation_factor_min} > {self.degradation_factor_max}"
             )
         return self
 
@@ -174,6 +220,7 @@ class OutcomeCounts(BaseModel):
     not_found: int = 0
     errors: int = 0
     requeues: int = 0
+    timeouts: int = 0  # errors that landed on the client timeout
 
 
 class FetchLatencyStat(BaseModel):
@@ -210,6 +257,8 @@ class ScraperThroughputReport(BaseModel):
     bytes_transferred: int
     kafka_fetch_failures: int
     kafka_commit_failures: int
+    degradation_episodes: int
+    degradation_active_s: float
     throughput_s: float
     fleet_cap_s: float
     consumer_cap_s: float
@@ -248,6 +297,14 @@ class ScraperThroughputReport(BaseModel):
                 f"transferred {self.bytes_transferred / 1e6:.1f}MB, "
                 f"fetch failures {self.kafka_fetch_failures}"
             ),
+        ]
+        if self.degradation_episodes:
+            lines.append(
+                f"degradation: {self.degradation_episodes} episode(s), "
+                f"{self.degradation_active_s:.1f}s of {self.duration_s:.0f}s "
+                f"active, {self.outcomes.timeouts} client timeouts"
+            )
+        lines += [
             f"mean iteration {self.mean_iteration_s:.3f}s",
             "stage-time shares:",
         ]
@@ -316,8 +373,51 @@ class RunState:
         return self.stages[name]
 
 
-def _jittered(rng: random.Random, mean_s: float, jitter: float) -> float:
-    return mean_s * rng.uniform(1.0 - jitter, 1.0 + jitter)
+class _Degradation:
+    """Fleet-wide slow episodes on the virtual clock.
+
+    Prod panels show a few minutes-long bumps per ~6h where every
+    outcome's percentiles rise together ~2-3x. Modeled as an on/off
+    process: exponential inter-arrival (`degradation_every_s`) and
+    duration (`degradation_duration_s`), uniform multiplier in
+    [degradation_factor_min, degradation_factor_max]. State advances
+    lazily off `now()` - the clock only moves when the pipeline awaits,
+    so no timers ride the loop - and the schedule draws from its own
+    RNG stream, keeping outcome draws independent of episode knobs.
+    """
+
+    def __init__(self, rng: random.Random, config: ScraperThroughputConfig) -> None:
+        self._rng = rng
+        self._every_s = config.degradation_every_s
+        self._duration_mean_s = config.degradation_duration_s
+        self._factor_min = config.degradation_factor_min
+        self._factor_max = config.degradation_factor_max
+        self._next_start_s = rng.expovariate(1.0 / self._every_s)
+        self._active_end_s = -1.0  # no episode in progress
+        self._active_factor = 1.0
+        self.spans: list[tuple[float, float]] = []  # (start, end) per episode
+
+    def factor(self, now_s: float) -> float:
+        """The multiplier applying at `now_s`: 1.0 outside episodes."""
+        if now_s < self._active_end_s:
+            return self._active_factor
+        while now_s >= self._next_start_s:
+            # lazy advance: the clock may jump past whole episodes
+            start = self._next_start_s
+            duration = self._rng.expovariate(1.0 / self._duration_mean_s)
+            end = start + duration
+            factor = self._rng.uniform(self._factor_min, self._factor_max)
+            self.spans.append((start, end))
+            self._next_start_s = end + self._rng.expovariate(1.0 / self._every_s)
+            if now_s < end:
+                self._active_end_s = end
+                self._active_factor = factor
+                return factor
+        return 1.0
+
+    def active_s(self, horizon_s: float) -> float:
+        """Total episode time within [0, horizon_s] of virtual time."""
+        return sum(max(0.0, min(end, horizon_s) - start) for start, end in self.spans)
 
 
 class SimKafka:
@@ -668,13 +768,19 @@ class SimHiscoreAPI:
     The rate limiter stays real (ProxyRuntime builds one per proxy from
     ProxySettings defaults, shared by every fetcher assigned to that
     proxy); check() time is accounted so rate-limit waits show up in
-    the stage shares.
+    the stage shares. Each outcome draws lognormal on the panel
+    calibration in the config; the client timeout caps every draw,
+    degradation episodes stretch them together, and error draws burst
+    to the timeout inside an episode (the flat-top 30s error p99).
     """
 
     config: ScraperThroughputConfig
     state: RunState
     rng: random.Random
-    sigma: float  # lognormal sigma: not_found tail from p99/p50
+    degradation: _Degradation
+    sigma_success: float  # lognormal sigmas: tails from p99/p50
+    sigma_not_found: float
+    sigma_error: float
 
     def __init__(self, rate_limiter: RateLimiter | None = None) -> None:
         self.rate_limiter = rate_limiter or RateLimiter(
@@ -692,33 +798,65 @@ class SimHiscoreAPI:
         stage.add(state.now() - t0)
 
         roll = self.rng.random() * 100.0
+        if roll < cfg.not_found_pct:
+            kind = "not_found"
+            latency = self.rng.lognormvariate(
+                math.log(cfg.not_found_latency_s), self.sigma_not_found
+            )
+        elif roll < cfg.not_found_pct + cfg.error_pct:
+            kind = "error"
+            latency = self.rng.lognormvariate(
+                math.log(cfg.error_latency_s), self.sigma_error
+            )
+        else:
+            kind = "success"
+            latency = self.rng.lognormvariate(
+                math.log(cfg.success_latency_s), self.sigma_success
+            )
+
+        # a fleet-wide episode stretches every draw together
+        factor = self.degradation.factor(state.now())
+        latency *= factor
+        timed_out = False
+        # the client never observes a fetch past the timeout: capped
+        # draws land on it exactly and surface as errors - in prod a
+        # timed-out scrape raises, it does not return partial data
+        if latency >= cfg.timeout_s:
+            latency = cfg.timeout_s
+            kind = "error"
+            timed_out = True
+            state.outcomes.timeouts += 1
+        elif (
+            kind == "error"
+            and factor > 1.0
+            and self.rng.random() * 100.0 < cfg.error_timeout_pct
+        ):
+            # proxy failures burst inside an episode: the flat-top 30s
+            # error p99 in the prod panel
+            latency = cfg.timeout_s
+            timed_out = True
+            state.outcomes.timeouts += 1
+
+        state.fetch_samples[kind].append(latency)
         fetch = state.stage("fetch")
         t1 = state.now()
-        if roll < cfg.not_found_pct:
-            # prod p50/p99 sit inside the not_found distribution (the
-            # majority outcome): lognormal with median 1.7s, p99 5s
-            latency = self.rng.lognormvariate(
-                math.log(cfg.not_found_latency_s), self.sigma
-            )
-            state.fetch_samples["not_found"].append(latency)
-            await asyncio.sleep(latency)
-            fetch.add(state.now() - t1)
+        await asyncio.sleep(latency)
+        fetch.add(state.now() - t1)
+
+        if kind == "not_found":
             state.outcomes.not_found += 1
             return Err(
                 error=PlayerDoesNotExist(f"Player '{player}' does not exist."),
                 latency=latency,
             )
-        if roll < cfg.not_found_pct + cfg.error_pct:
-            latency = _jittered(self.rng, cfg.error_latency_s, cfg.latency_jitter)
-            state.fetch_samples["error"].append(latency)
-            await asyncio.sleep(latency)
-            fetch.add(state.now() - t1)
+        if kind == "error":
             state.outcomes.errors += 1
-            return Err(error=Exception("sim jagex 502"), latency=latency)
-        latency = _jittered(self.rng, cfg.success_latency_s, cfg.latency_jitter)
-        state.fetch_samples["success"].append(latency)
-        await asyncio.sleep(latency)
-        fetch.add(state.now() - t1)
+            error: Exception = (
+                TimeoutError("sim jagex fetch timed out")
+                if timed_out
+                else Exception("sim jagex 502")
+            )
+            return Err(error=error, latency=latency)
         state.outcomes.scraped += 1
         stats = PlayerStats(
             skills=[Skill(id=0, name="overall", rank=1, level=2, xp=3)],
@@ -800,10 +938,13 @@ async def main(**kwargs) -> ScraperThroughputReport:
         SimHiscoreAPI.config = config
         SimHiscoreAPI.state = state
         SimHiscoreAPI.rng = rng
-        SimHiscoreAPI.sigma = math.log(config.latency_p99_over_p50) / Z_99
-        original_api = scraper_fetcher.HiscoreOldSchoolAPI
+        SimHiscoreAPI.sigma_success = math.log(config.success_p99_over_p50) / Z_99
+        SimHiscoreAPI.sigma_not_found = math.log(config.not_found_p99_over_p50) / Z_99
+        SimHiscoreAPI.sigma_error = math.log(config.error_p99_over_p50) / Z_99
+        SimHiscoreAPI.degradation = _Degradation(random.Random(config.seed + 1), config)
+        original_api = scraper_runtime.HiscoreOldSchoolAPI
         original_transform = scraper_processor.transform_player_stats
-        scraper_fetcher.HiscoreOldSchoolAPI = SimHiscoreAPI  # type: ignore[assignment]
+        scraper_runtime.HiscoreOldSchoolAPI = SimHiscoreAPI  # type: ignore[assignment]
         scraper_processor.transform_player_stats = _timed(
             state, "transform", original_transform
         )
@@ -887,7 +1028,7 @@ async def main(**kwargs) -> ScraperThroughputReport:
             )
 
         # restore the seams so other scenarios in the process see product code
-        scraper_fetcher.HiscoreOldSchoolAPI = original_api
+        scraper_runtime.HiscoreOldSchoolAPI = original_api
         scraper_processor.transform_player_stats = original_transform
 
         consumed = broker.consumed
@@ -979,6 +1120,8 @@ async def main(**kwargs) -> ScraperThroughputReport:
             bytes_transferred=broker.bytes_transferred,
             kafka_fetch_failures=broker.fetch_failures,
             kafka_commit_failures=broker.commit_failures,
+            degradation_episodes=len(SimHiscoreAPI.degradation.spans),
+            degradation_active_s=SimHiscoreAPI.degradation.active_s(config.duration_s),
             throughput_s=throughput_s,
             fleet_cap_s=fleet_cap_s,
             consumer_cap_s=consumer_cap_s,

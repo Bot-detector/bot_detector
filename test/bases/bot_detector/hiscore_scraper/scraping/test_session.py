@@ -10,7 +10,7 @@ import re
 import pytest
 from aiohttp import web
 from aiohttp.test_utils import TestServer
-from bot_detector.hiscore_scraper.session import build_session
+from bot_detector.hiscore_scraper.scraping.session import build_session
 
 # any quoted-empty cookie is poison (aiohttp >= 3.12.7 quoting); Jagex
 # currently only issues empties for JGSTAFFNAME/JGSTAFFPASS, this catches

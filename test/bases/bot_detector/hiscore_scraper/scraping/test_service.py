@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 import aiohttp
 import pytest
 from aiohttp import RequestInfo
-from bot_detector.hiscore_scraper import scrape
+from bot_detector.hiscore_scraper.scraping import service as scrape
 from bot_detector.structs import PlayerStruct
 
 

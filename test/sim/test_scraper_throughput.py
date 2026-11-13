@@ -11,9 +11,13 @@ then answers "where is the pipeline slow" with four caps:
 - the per-proxy rate ceilings: proxies x 20 req/s;
 - the feed rate itself.
 
-Prod calibration (Nov 2026): crawl-mix pool ~1250/s; a starved feed
-paces consumption at exactly the feed rate; fetch latency distributions
-reproduce the observed mixture p50 ~1.7s, p99 ~5s.
+Prod calibration (Nov 2026 Grafana panel
+`hiscore_scraper_fetch_latency`): crawl-mix pool ~1080/s (the success
+tail carries the pool mean); a starved feed paces consumption at
+exactly the feed rate; per-outcome latency distributions reproduce
+the panel p50/p99 anchors (success 1.45/6.1, not_found 1.45/4.5,
+error 0.33/2.2) with errors bursting to the 30s client timeout only
+inside fleet-wide degradation episodes.
 """
 
 import math
@@ -38,10 +42,17 @@ def run(**kwargs) -> scenario.ScraperThroughputReport:
     return _CACHE[key]
 
 
-# crawl-mix pool mean: 54.5% not_found (lognormal median 1.7s, mean
-# 1.7 * exp(sigma^2/2)) plus successes/errors at ~1s
-_NF_MEAN_S = 1.7 * math.exp((math.log(2.9412) / 2.3263478740408408) ** 2 / 2)
-_CRAWL_MEAN_S = 0.545 * _NF_MEAN_S + 0.455 * 1.0
+# panel-calibrated per-outcome lognormal means (Nov 2026 Grafana panel
+# hiscore_scraper_fetch_latency): mean = p50 * exp(sigma^2 / 2), with
+# sigma = ln(p99/p50) / z99 and the config's p50/p99 anchors
+_Z99 = 2.3263478740408408
+_MEAN_SUCCESS_S = 1.45 * math.exp((math.log(4.2) / _Z99) ** 2 / 2)
+_MEAN_NF_S = 1.45 * math.exp((math.log(3.1) / _Z99) ** 2 / 2)
+_MEAN_ERROR_S = 0.33 * math.exp((math.log(6.7) / _Z99) ** 2 / 2)
+# crawl mix (the defaults): 54.5% not_found, 2% errors, 43.5% success
+_CRAWL_MEAN_S = 0.545 * _MEAN_NF_S + 0.02 * _MEAN_ERROR_S + 0.435 * _MEAN_SUCCESS_S
+# sprint mix (not_found_pct=0): 98% success, 2% errors
+_SPRINT_MEAN_S = 0.98 * _MEAN_SUCCESS_S + 0.02 * _MEAN_ERROR_S
 
 
 def test_batched_commit_takes_commit_rtt_off_the_critical_path():
@@ -64,8 +75,9 @@ def test_batched_commit_takes_commit_rtt_off_the_critical_path():
     assert card.commits < 0.3 * card.consumed
     assert card.stages["commit"].share_pct < 1.0
 
-    # the pool binds on fetch latency: ~715/s (was ~300/s with 450
-    # per-message-commit workers, and that was against a 200/s commit cap)
+    # the pool binds on fetch latency: ~1080/s (was ~715/s when
+    # successes were a flat 1.0s - the panel-calibrated success tail
+    # now carries the pool mean)
     assert card.throughput_s == pytest.approx(card.fleet_cap_s, rel=0.10)
     assert card.throughput_s == pytest.approx(card.fetchers / _CRAWL_MEAN_S, rel=0.15)
 
@@ -104,19 +116,27 @@ def test_fetch_latency_distribution_matches_prod_calibration():
     card = run()  # same cached default run
     nf = card.latency["not_found"]
     success = card.latency["success"]
-    assert nf.calls > 0 and success.calls > 0
+    error = card.latency["error"]
+    assert nf.calls > 0 and success.calls > 0 and error.calls > 0
 
-    # prod: overall p50 ~1.7s sits inside the not_found distribution,
-    # overall p99 ~5s is its tail
-    assert nf.p50_s == pytest.approx(1.7, rel=0.10)
-    assert nf.p99_s == pytest.approx(5.0, rel=0.15)
-    assert nf.mean_s == pytest.approx(
-        1.7 * math.exp((math.log(2.9412) / 2.3263478740408408) ** 2 / 2), rel=0.10
-    )
+    # prod panel anchors (Nov 2026): per-outcome lognormal p50/p99
+    assert nf.p50_s == pytest.approx(1.45, rel=0.10)
+    assert nf.p99_s == pytest.approx(4.5, rel=0.15)
+    assert nf.mean_s == pytest.approx(_MEAN_NF_S, rel=0.10)
 
-    # successes stay tight around 1s
-    assert success.mean_s == pytest.approx(1.0, rel=0.05)
-    assert success.p99_s < 1.3
+    # success carries the fattest tail: p99 ~6.1s vs ~4.5s
+    assert success.p50_s == pytest.approx(1.45, rel=0.10)
+    assert success.p99_s == pytest.approx(1.45 * 4.2, rel=0.15)
+    assert success.p99_s > nf.p99_s
+    assert success.mean_s == pytest.approx(_MEAN_SUCCESS_S, rel=0.10)
+
+    # failures are fast: p50 ~0.33s, p99 ~2.2s. The default 120s run is
+    # episode-free (first episode lands at ~283s of virtual time on the
+    # seeded schedule), so no draw hits the 30s client timeout
+    assert error.p50_s == pytest.approx(0.33, rel=0.10)
+    assert error.p99_s == pytest.approx(2.2, rel=0.20)
+    assert card.outcomes.timeouts == 0
+    assert card.degradation_episodes == 0
 
 
 def test_partitions_stay_balanced():
@@ -158,12 +178,13 @@ def test_single_connection_no_longer_serializes_the_pipeline():
 
     # one broker connection used to serialize every per-message commit
     # behind the fetch RTTs (~143/s). With per-batch commits the serial
-    # path is ~7ms per 200 players, so the pool binds instead.
+    # path is ~7ms per 200 players, so the pool binds instead: the
+    # success-heavy mix caps at fetchers / its panel-calibrated mean
     assert card.binding == "fleet"
-    assert card.throughput_s == pytest.approx(card.fetchers / 1.004, rel=0.15)
+    assert card.throughput_s == pytest.approx(card.fetchers / _SPRINT_MEAN_S, rel=0.15)
 
 
-def test_not_found_mix_still_stretches_the_pool():
+def test_outcome_mix_is_neutral_for_the_pool_cap():
     crawl = run(
         duration_s=120.0,
         commit_cost_s=0.0005,
@@ -178,15 +199,19 @@ def test_not_found_mix_still_stretches_the_pool():
     )
     print(crawl.summary())
 
-    # cheap broker so only the pool binds: sprint ~1020/s vs crawl
-    # ~715/s - the crawl's not_found fetches (p50 1.7s, p99 5s tail)
-    # stretch the mean fetch from ~1.0s to ~1.43s
+    # cheap broker so only the pool binds. Under the panel calibration
+    # the mix barely moves the cap: the success tail (p99 ~6.1s)
+    # outweighs the not_found tail (p99 ~4.5s) while errors are fast
+    # failures (p50 0.33s), so crawl ~1080/s vs sprint ~1040/s (this
+    # was a 1.4x gap when successes were a flat 1.0s)
     assert sprint.binding == "fleet"
     assert crawl.binding == "fleet"
-    assert sprint.throughput_s == pytest.approx(sprint.fetchers / 1.004, rel=0.10)
+    assert sprint.throughput_s == pytest.approx(
+        sprint.fetchers / _SPRINT_MEAN_S, rel=0.10
+    )
     assert crawl.throughput_s == pytest.approx(crawl.fetchers / _CRAWL_MEAN_S, rel=0.10)
     ratio = sprint.throughput_s / crawl.throughput_s
-    assert 1.2 < ratio < 1.9
+    assert 0.85 < ratio < 1.05
 
 
 def test_dropping_null_fields_shrinks_messages_not_throughput():

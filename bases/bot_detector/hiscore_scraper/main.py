@@ -15,22 +15,22 @@ from bot_detector.event_queue.structs import (
     ScrapedStruct,
     ToScrapeStruct,
 )
-from bot_detector.hiscore_scraper.consumer import consume
-from bot_detector.hiscore_scraper.fetcher import ProxyRuntime, fetch
-from bot_detector.hiscore_scraper.metrics import start_metrics_server
-from bot_detector.hiscore_scraper.processor import process
-from bot_detector.hiscore_scraper.session import build_session
+from bot_detector.hiscore_scraper.flow import consume, fetch, process
+from bot_detector.hiscore_scraper.flow.structs import FetchResult
+from bot_detector.hiscore_scraper.proxy_pool.runtime import ProxyRuntime
+from bot_detector.hiscore_scraper.scraping.session import build_session
 from bot_detector.hiscore_scraper.settings import Settings
-from bot_detector.hiscore_scraper.structs import FetchResult
 from bot_detector.proxy_manager import ProxyManager
 from bot_detector.proxy_manager import Settings as ProxySettings
+from prometheus_client import start_http_server
 
 logger = logging.getLogger(__name__)
 
 
 async def main():
     settings = Settings()
-    start_metrics_server(port=settings.METRICS_PORT)
+    start_http_server(port=settings.METRICS_PORT)
+    logger.info(f"metrics server started on port {settings.METRICS_PORT}")
     proxy_manager = ProxyManager(api_key=ProxySettings().PROXY_API_KEY)  # type: ignore
     proxies = await proxy_manager.fetch_proxies()
 

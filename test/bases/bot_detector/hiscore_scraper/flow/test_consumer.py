@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from bot_detector.event_queue.structs import ToScrapeStruct
-from bot_detector.hiscore_scraper import consumer
+from bot_detector.hiscore_scraper.flow import consumer
 from bot_detector.structs import MetaData, PlayerStruct
 
 
