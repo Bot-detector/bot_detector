@@ -19,7 +19,6 @@ from bot_detector.event_queue.core import (  # noqa: E402
     QueueProducer,
 )
 from bot_detector.event_queue.structs import (  # noqa: E402
-    NotFoundStruct,
     ScrapedStruct,
     ToScrapeStruct,
 )
@@ -220,7 +219,6 @@ class ScraperThroughputReport(BaseModel):
     per_partition_produced: list[int]
     per_partition_consumed: list[int]
     scraped_produced: int
-    not_found_produced: int
     outcomes: OutcomeCounts
     latency: dict[str, FetchLatencyStat]
     commits: int
@@ -965,14 +963,10 @@ async def main(**kwargs) -> ScraperThroughputReport:
         rng = random.Random(config.seed)
 
         broker = SimKafka(config, state, feed=True)
-        not_found_broker = SimKafka(config, state, feed=False)
         scraped_broker = SimKafka(config, state, feed=False)
 
         ts_queue = Queue[ToScrapeStruct](
             SimQueueBackend(broker), name="players.to_scrape"
-        )
-        nf_producer = QueueProducer[NotFoundStruct](
-            SimProducerBackend(not_found_broker), name="players.not_found"
         )
         sc_producer = QueueProducer[ScrapedStruct](
             SimProducerBackend(scraped_broker), name="players.scraped"
@@ -1000,7 +994,6 @@ async def main(**kwargs) -> ScraperThroughputReport:
         proxy_manager = SimProxyManager(config.proxies, state)
         runtime = ProxyRuntime(proxy_manager=proxy_manager)  # type: ignore[arg-type]
         await ts_queue.start()
-        await nf_producer.start()
         await sc_producer.start()
 
         task_queue: asyncio.Queue[ToScrapeStruct] = asyncio.Queue(
@@ -1055,8 +1048,7 @@ async def main(**kwargs) -> ScraperThroughputReport:
                         processor_id=processor_id,
                         results_queue=results_queue,
                         player_ts_queue=ts_queue,
-                        player_nf_producer=nf_producer,  # type: ignore[arg-type]
-                        player_sc_producer=sc_producer,  # type: ignore[arg-type]
+                        player_sc_producer=sc_producer,
                     ),
                     name=f"scraper-processor-{processor_id}",
                 )
@@ -1068,7 +1060,6 @@ async def main(**kwargs) -> ScraperThroughputReport:
             stage_task.cancel()
         await asyncio.gather(*stages, return_exceptions=True)
         await ts_queue.stop()
-        await nf_producer.stop()
         await sc_producer.stop()
 
         def _restore_seams() -> None:
@@ -1168,7 +1159,6 @@ async def main(**kwargs) -> ScraperThroughputReport:
             per_partition_produced=broker.produced_per_partition,
             per_partition_consumed=broker.consumed_per_partition,
             scraped_produced=scraped_broker.produced_total,
-            not_found_produced=not_found_broker.produced_total,
             outcomes=state.outcomes,
             latency=latency_stats,
             commits=broker.commits,

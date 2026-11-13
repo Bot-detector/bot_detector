@@ -84,9 +84,12 @@ def test_consistency_counts():
     )
     assert outcomes >= card.consumed - in_flight_bound
 
-    # outputs land on their topics
-    assert card.scraped_produced == pytest.approx(card.outcomes.scraped, rel=0.01)
-    assert card.not_found_produced == pytest.approx(card.outcomes.not_found, rel=0.01)
+    # outputs land on their topics: under the possible-ban flow the
+    # processor publishes not-found players to players.scraped too, so
+    # the scraped topic carries scraped + not_found outcomes
+    assert card.scraped_produced == pytest.approx(
+        card.outcomes.scraped + card.outcomes.not_found, rel=0.01
+    )
 
     # outcome mix matches prod: ~20% more not_found than found
     # (share = 1.2 / 2.2 ~ 0.545)
