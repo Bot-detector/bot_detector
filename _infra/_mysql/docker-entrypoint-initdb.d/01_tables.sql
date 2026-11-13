@@ -252,7 +252,8 @@ CREATE TABLE report (
     report_sighting_id,
     report_location_id,
     region_id
-  )
+  ),
+  KEY idx_report_reported_at (reported_at)
 );
 
 CREATE TABLE report_archive (
