@@ -14,15 +14,16 @@ import aiohttp
 import pytest
 from aiohttp import ClientResponseError, RequestInfo
 from bot_detector.event_queue.structs import ToScrapeStruct
-from bot_detector.hiscore_scraper import fetcher
-from bot_detector.hiscore_scraper.fetcher import ProxyRuntime, fetch
-from bot_detector.hiscore_scraper.structs import FetchResult
+from bot_detector.hiscore_scraper.flow import fetcher
+from bot_detector.hiscore_scraper.flow.fetcher import fetch
+from bot_detector.hiscore_scraper.flow.structs import FetchResult
+from bot_detector.hiscore_scraper.proxy_pool.runtime import ProxyRuntime
 from bot_detector.osrs_hs_api.exceptions import PlayerDoesNotExist
 from bot_detector.structs import MetaData, PlayerStruct
 from multidict import CIMultiDict
 from yarl import URL
 
-FETCHER_LOGGER = "bot_detector.hiscore_scraper.fetcher"
+FETCHER_LOGGER = "bot_detector.hiscore_scraper.flow.fetcher"
 URL_HS = "https://secure.runescape.com/m=hiscore_oldschool/index_lite.json"
 
 

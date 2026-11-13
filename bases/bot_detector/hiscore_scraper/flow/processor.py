@@ -8,14 +8,17 @@ from bot_detector.event_queue.structs import (
     ToScrapeStruct,
 )
 from bot_detector.hiscore_scraper.errors import dump_error
-from bot_detector.hiscore_scraper.metrics import not_found_counter
-from bot_detector.hiscore_scraper.producers import (
+from bot_detector.hiscore_scraper.flow.structs import FetchResult
+from bot_detector.hiscore_scraper.player_outcomes.metrics import not_found_counter
+from bot_detector.hiscore_scraper.player_outcomes.service import (
     produce_not_found,
     produce_player_scraped,
     produce_player_to_scrape,
 )
-from bot_detector.hiscore_scraper.scrape import proxy_label, transform_player_stats
-from bot_detector.hiscore_scraper.structs import FetchResult
+from bot_detector.hiscore_scraper.scraping.service import (
+    proxy_label,
+    transform_player_stats,
+)
 from bot_detector.osrs_hs_api.exceptions import PlayerDoesNotExist
 from bot_detector.wide_event import WideEventLogger
 
@@ -97,12 +100,15 @@ async def process(
             scraped_data = await transform_player_stats(
                 player_stats=result.stats,
                 player=player_data,
-                player_ts_producer=player_ts_queue,
             )
             if scraped_data is None:
-                # transform already logged and requeued the player
+                # transform logged the validation error; the requeue
+                # lives here so scraping never touches player outcomes
                 wide_event.add({"outcome": "transform_failed"})
                 _force_log()
+                error = await produce_player_to_scrape(player_ts_queue, player_data)
+                if error:
+                    wide_event.add({"produce_errors": {"to_scrape": dump_error(error)}})
                 continue
 
             error = await produce_player_scraped(player_sc_producer, scraped_data)

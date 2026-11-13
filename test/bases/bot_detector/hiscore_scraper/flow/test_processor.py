@@ -14,14 +14,14 @@ from unittest.mock import AsyncMock
 import pytest
 from aiohttp import ClientResponseError, RequestInfo
 from bot_detector.event_queue.structs import ScrapedStruct
-from bot_detector.hiscore_scraper import processor
-from bot_detector.hiscore_scraper.structs import FetchResult
+from bot_detector.hiscore_scraper.flow import processor
+from bot_detector.hiscore_scraper.flow.structs import FetchResult
 from bot_detector.osrs_hs_api.exceptions import PlayerDoesNotExist
 from bot_detector.structs import HighscoreBaseStruct, MetaData, PlayerStruct
 from multidict import CIMultiDict
 from yarl import URL
 
-PROCESSOR_LOGGER = "bot_detector.hiscore_scraper.processor"
+PROCESSOR_LOGGER = "bot_detector.hiscore_scraper.flow.processor"
 URL_HS = "https://secure.runescape.com/m=hiscore_oldschool/index_lite.json"
 
 
@@ -177,9 +177,7 @@ async def test_publish_failure_requeues_player(monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.mark.asyncio
-async def test_transform_none_skips_scraped_production(
-    monkeypatch: pytest.MonkeyPatch,
-):
+async def test_transform_failure_requeues_player(monkeypatch: pytest.MonkeyPatch):
     player = _player()
     mocks = _patch_producers(monkeypatch, transform_return=None)
     results_queue = _enqueue(
@@ -188,12 +186,15 @@ async def test_transform_none_skips_scraped_production(
 
     task = await _process_one(results_queue)
     await asyncio.wait_for(_await_calls(mocks.transform), timeout=1.0)
+    await asyncio.wait_for(_await_calls(mocks.produce_player_to_scrape), timeout=1.0)
     task.cancel()
 
-    # transform already requeued the player internally; the processor
-    # must not also publish a scraped struct
+    # the transform failed (validation); the processor requeues the
+    # player but must not publish a scraped struct
     mocks.produce_player_scraped.assert_not_awaited()
-    mocks.produce_player_to_scrape.assert_not_awaited()
+    mocks.produce_player_to_scrape.assert_awaited_once()
+    requeued_player = mocks.produce_player_to_scrape.await_args.args[1]
+    assert requeued_player.id == 1
 
 
 def _gateway_error(player_name: str = "player-1") -> ClientResponseError:
