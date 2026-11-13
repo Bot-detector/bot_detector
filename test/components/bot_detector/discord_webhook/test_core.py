@@ -163,6 +163,35 @@ async def test_post_payload_contains_embeds_and_content():
     }
 
 
+@pytest.mark.asyncio
+async def test_post_survives_non_object_429_body(monkeypatch):
+    """A non-object JSON 429 body (list / string / null, e.g. from a proxy)
+    must fall back to the default retry_after, never raise - post()'s
+    contract is errors as values, and data.get on a list raised
+    AttributeError out of post() before the except was widened."""
+    monkeypatch.setattr(asyncio, "sleep", AsyncMock(return_value=None))
+    repo = DiscordWebhookRepo(
+        session=_session([_resp(429, json_data=[1, 2]), _resp(204)])
+    )
+    err = await repo.post(url="http://hook", embeds=[Embed(title="t")])
+    assert err is None
+    assert repo.session.post.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_post_survives_null_retry_after_in_429_body(monkeypatch):
+    """{"retry_after": null} must fall back to the default: float(None)
+    raises TypeError, which escaped post()'s errors-as-values contract
+    before the except was widened."""
+    monkeypatch.setattr(asyncio, "sleep", AsyncMock(return_value=None))
+    repo = DiscordWebhookRepo(
+        session=_session([_resp(429, json_data={"retry_after": None}), _resp(204)])
+    )
+    err = await repo.post(url="http://hook", embeds=[Embed(title="t")])
+    assert err is None
+    assert repo.session.post.call_count == 2
+
+
 def test_embed_rejects_oversized_field_value():
     """Legacy posted 50 joined RSNs with no limit check and Discord 400'd;
     oversized embeds must fail at construction, not silently in transport."""

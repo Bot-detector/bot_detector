@@ -76,12 +76,15 @@ def test_broadcaster_rate_limit_storm_finishes_under_budget():
     assert 480.0 <= result.virtual_time_s <= 600.0
 
 
-def test_broadcaster_rate_limit_storm_hang_trips_deadline():
-    """retry_after is unclamped in the transport, so one hostile 429 (86400s)
-    parks the run far past any cron window; the virtual deadline catches this
-    hang class in milliseconds. When the transport gains a retry_after cap the
-    run completes and this test must flip to asserting completion."""
-    result = run(_storm_broadcast(retry_after_s=86_400.0), until_s=1000.0)
-    assert result.done is False
-    assert result.error is None
-    assert result.virtual_time_s == 1000.0
+def test_broadcaster_rate_limit_storm_hostile_retry_after_capped():
+    """A hostile 429 (retry_after=86400s) is clamped by the transport's
+    cron-window cap: the broadcast must still complete, all posts exhausted
+    at 3 attempts, inside the same budget as the honest 60s storm - one
+    hostile response costs the same as an honest one."""
+    result = run(_storm_broadcast(retry_after_s=86_400.0))
+    assert result.done, result.error
+    banned, session = result.value
+    assert banned == 3
+    assert session.post.call_count == 12  # totals + 2 names + complete, x3 attempts
+    # cap(60) x 4 posts x 2 sleeps + one 5s chunk pause = 485s of virtual time
+    assert 480.0 <= result.virtual_time_s <= 600.0

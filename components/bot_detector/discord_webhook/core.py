@@ -13,6 +13,10 @@ logger = logging.getLogger(__name__)
 RATE_LIMIT_RETRIES = 3
 POST_TIMEOUT_SECONDS = 30
 DEFAULT_RETRY_AFTER_SECONDS = 1.0
+# Cron-window bound: a hostile or honest huge retry_after (Discord global
+# limits, misconfigured proxies) must cost cap * attempts, not park the
+# whole broadcast run past its window.
+MAX_RETRY_AFTER_SECONDS = 60.0
 
 
 class DiscordWebhookRepo(WebhookInterface):
@@ -55,7 +59,10 @@ class DiscordWebhookRepo(WebhookInterface):
                     if resp.status == 429:
                         if attempt == RATE_LIMIT_RETRIES:
                             break
-                        retry_after = await self._rate_limit_seconds(resp)
+                        retry_after = min(
+                            max(await self._rate_limit_seconds(resp), 0.0),
+                            MAX_RETRY_AFTER_SECONDS,
+                        )
                         logger.warning(
                             f"webhook post rate limited, retry {attempt}/"
                             f"{RATE_LIMIT_RETRIES} in {retry_after}s"
@@ -85,7 +92,12 @@ class DiscordWebhookRepo(WebhookInterface):
         try:
             data = await resp.json()
             return float(data.get("retry_after", DEFAULT_RETRY_AFTER_SECONDS))
-        except (aiohttp.ContentTypeError, ValueError):
+        except (
+            aiohttp.ContentTypeError,
+            ValueError,
+            TypeError,  # retry_after: null or a non-numeric JSON value
+            AttributeError,  # non-object JSON body (list, string, null)
+        ):
             return DEFAULT_RETRY_AFTER_SECONDS
 
 
