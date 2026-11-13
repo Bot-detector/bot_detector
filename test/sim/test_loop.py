@@ -1,5 +1,3 @@
-"""VirtualEventLoop behavior: unmodified asyncio code on virtual time."""
-
 import asyncio
 import time
 

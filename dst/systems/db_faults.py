@@ -1,35 +1,3 @@
-"""DB fault factories and FaultSession (spec A5 + C4).
-
-Factories raise/return the real SQLAlchemy errors the product sees:
-``sqlalchemy.exc.OperationalError(stmt, params, orig)`` with ``orig``
-an ``asyncmy.errors.OperationalError(errno, msg)`` (errno 1062 goes to
-``IntegrityError``). asyncmy only sets ``.errno`` inside
-``raise_mysql_exception``, so the factories attach it manually to keep
-``orig.errno`` checks working. Errnos 2006/2013 additionally set
-``connection_invalidated=True`` on the SQLAlchemy error (spec
-exceptions/sqlalchemy.md §2).
-
-Stream/ordinal conventions (spec §4.1): one draw per fault-checked op
-on stream ``db:x:<table>``; ``ordinal`` is the per-table op counter
-kept by the session (correctness state, not fault state). Draw order
-per op is FIXED:
-
-    bucket(draw(seed, "db:x:<table>", ordinal),
-           deadlock_pct,            # 1213
-           lock_wait_timeout_pct,   # 1205
-           conn_lost_pct,           # 2006 (even ordinal) / 2013 (odd)
-           too_many_conn_pct,       # 1040
-           temp_table_full_pct,     # 1114
-           dup_key_pct)             # 1062, insert/upsert only
-
-``pool_timeout_pct`` is excluded (checkout happens before any
-statement). The dup_key bucket is inert on ops without a raise path
-(``insert_ignore`` swallows 1062; ``delete_limit`` cannot dup): the
-draw is consumed, no error is raised. ``select``/``count`` are
-pass-through: no draw, no ordinal. Errors are RAISED here — this layer
-models SQLAlchemy raise semantics (spec §3.3).
-"""
-
 from collections.abc import Callable, Iterator
 from typing import Any
 
@@ -59,7 +27,11 @@ TEMP_TABLE_FULL_MSG = "The table 'temp_report' is full"
 
 
 def _asyncmy_operational(errno: int, msg: str) -> AsyncMyOperationalError:
-    """asyncmy OperationalError with the errno attribute attached."""
+    """asyncmy OperationalError with the errno attribute attached.
+
+    asyncmy only sets ``.errno`` inside ``raise_mysql_exception``, so
+    attach it manually to keep ``orig.errno`` checks working.
+    """
     orig = AsyncMyOperationalError(errno, msg)
     orig.errno = errno
     return orig
@@ -77,8 +49,10 @@ def db_operational_error(
 ) -> OperationalError:
     """Real OperationalError wrapping an asyncmy-shaped ``.orig``.
 
-    Errnos 2006/2013 set ``connection_invalidated=True`` on the
-    returned error (mimics SQLAlchemy's pool invalidation attribute).
+    The product sees ``sqlalchemy.exc.OperationalError(stmt, params,
+    orig)`` with ``orig`` an asyncmy ``(errno, msg)``. Errnos 2006/2013
+    set ``connection_invalidated=True`` on the returned error (mimics
+    SQLAlchemy's pool invalidation attribute).
     """
 
     error = OperationalError(statement, params, _asyncmy_operational(errno, msg))
@@ -141,9 +115,20 @@ def dup_key_error(
 class FaultSession:
     """SimDB wrapper raising pct-driven faults before each statement.
 
-    Mirrors the SimDB surface; every fault-checked op draws once per
-    the module docstring's fixed order and raises the mapped real
-    SQLAlchemy error before delegating to the wrapped SimDB.
+    Mirrors the SimDB surface; every fault-checked op consumes one
+    ordinal on stream ``db:x:<table>`` (ordinal = per-table op counter,
+    correctness state, not fault state) and raises the mapped real
+    SQLAlchemy error before delegating to the wrapped SimDB. Errors
+    are raised here: this layer models SQLAlchemy raise semantics.
+
+    Fixed bucket order: deadlock (1213), lock_wait_timeout
+    (1205), conn_lost (2006 even ordinal / 2013 odd), too_many_conn
+    (1040), temp_table_full (1114), dup_key (1062, insert/upsert only).
+    ``pool_timeout_pct`` is excluded: checkout happens before any
+    statement. The dup_key bucket is inert on ops without a raise path
+    (``insert_ignore`` swallows 1062; ``delete_limit`` cannot dup): the
+    draw is consumed, no error is raised. ``select``/``count`` are
+    pass-through: no draw, no ordinal.
     """
 
     def __init__(

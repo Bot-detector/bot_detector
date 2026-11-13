@@ -1,5 +1,3 @@
-"""dst.faults: counter-based draw determinism and independence."""
-
 import pytest
 from pydantic import ValidationError
 

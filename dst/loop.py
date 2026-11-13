@@ -1,24 +1,3 @@
-"""Virtual asyncio event loop: timers run on simulated time.
-
-``VirtualEventLoop`` subclasses ``BaseSelectorEventLoop`` and replaces
-only the time source and the I/O poll:
-
-- ``time()`` returns the virtual clock, so ``call_later`` /
-  ``call_at`` / ``asyncio.sleep`` / ``wait_for`` timeouts all schedule
-  against simulated time. A coroutine sleeping 3600s finishes after a
-  single O(1) clock jump.
-- ``_run_once`` never polls the selector. When nothing is ready it
-  jumps the clock to the next timer deadline instead of blocking.
-  When there are no ready callbacks and no timers, the loop is parked
-  on something that will never fire on a virtual timeline (real I/O,
-  an unset future, a missing simulated system) and raises
-  ``DSTIdleError`` so scenarios fail loudly instead of hanging.
-
-Coroutines need no changes: standard ``await asyncio.sleep(n)``,
-``asyncio.gather``, queues, locks and timeouts behave identically,
-just in virtual time.
-"""
-
 import asyncio.base_events
 import asyncio.selector_events
 import heapq
@@ -50,9 +29,9 @@ class DSTIdleError(RuntimeError):
 def running_clock() -> VirtualClock:
     """The clock of the running VirtualEventLoop.
 
-    Simulated objects (Machine, FirehoseHub, ...) bind to it when
-    constructed inside a ``dst.run`` scenario instead of demanding a
-    clock argument everywhere.
+    Simulated objects (dependency fakes, FirehoseHub, ...) bind to it
+    when constructed inside a ``dst.run`` scenario instead of demanding
+    a clock argument everywhere.
     """
     loop = asyncio.get_running_loop()
     if not isinstance(loop, VirtualEventLoop):
@@ -66,9 +45,17 @@ def running_clock() -> VirtualClock:
 class VirtualEventLoop(asyncio.selector_events.BaseSelectorEventLoop):
     """Selector event loop whose clock and timers are simulated.
 
+    Subclasses ``BaseSelectorEventLoop`` and replaces only the time
+    source and the I/O poll: ``time()`` reads the clock, so
+    ``asyncio.sleep`` / ``call_later`` / ``wait_for`` timeouts schedule
+    in virtual time (a 3600s sleep costs one O(1) clock jump), and
+    ``_run_once`` never polls the selector — it fast-forwards the clock
+    to the next timer instead. Unmodified coroutines behave identically,
+    just in virtual time.
+
     Real socket I/O is deliberately unavailable: transports need a real
-    peer, and the simulated world is provided by DST machines and fake
-    systems instead. Anything that would block on I/O surfaces as
+    peer, and the simulated world is provided by DST's dependency fakes
+    (dst.systems) instead. Anything that would block on I/O surfaces as
     ``DSTIdleError``.
     """
 
@@ -113,7 +100,7 @@ class VirtualEventLoop(asyncio.selector_events.BaseSelectorEventLoop):
         if not ready:
             self._fast_forward()
 
-        # pop every timer due at the current virtual time, in order
+        # pop every timer due at the current virtual time
         now = self._clock.time()
         while scheduled and scheduled[0]._when <= now:  # type: ignore[attr-defined]
             timer = heapq.heappop(scheduled)

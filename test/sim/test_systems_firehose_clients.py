@@ -1,5 +1,3 @@
-"""Fake firehose clients: fanout parity, grace drops, kicks, ordering."""
-
 import asyncio
 
 import pytest

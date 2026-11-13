@@ -1,5 +1,3 @@
-"""Sync time patching: blocking legacy code on the virtual clock."""
-
 import time
 
 import pytest

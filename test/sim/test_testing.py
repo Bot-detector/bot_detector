@@ -1,5 +1,3 @@
-"""dst.testing: scorecard helpers and the replay checker (E1-slim + E2)."""
-
 import asyncio
 import random
 import time

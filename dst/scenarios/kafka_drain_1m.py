@@ -1,23 +1,3 @@
-"""kafka_drain_1m (spec lane F1): feed 1M messages into one SimBroker
-partition at a paced virtual rate while a consumer drains it in bulk
-batches on the same loop.
-
-Measures whether the consumer keeps up with the feed and how long the
-backlog takes to empty after the feed ends (spec sections 6, 6.2,
-MVP-slim subscores):
-
-- ``keep_up`` = consumed rate / feed rate, capped at 1.0
-- ``drain``   = 1.0 when ``drain_end - feed_end <= drain_budget_s``,
-  else linear down to 0.0 at 4x the budget
-- ``loss``    = 1.0 when zero messages were lost, else 0.0
-
-``score`` = 0.0 if any invariant failed, else the mean of the three
-subscores (hard gate, spec section 6.2). No faults by default: this
-run is the drain/keep-up skeleton; fault knobs arrive with later
-tasks. Timestamps come from the loop clock, which under ``dst.run``
-is the virtual clock.
-"""
-
 import asyncio
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -47,7 +27,22 @@ class ScenarioConfig(BaseModel):
 
 
 async def main(**kwargs) -> Scorecard:
-    """Feed ``total`` messages at ``rate_s`` while a consumer drains."""
+    """Feed ``total`` messages at ``rate_s`` while a consumer drains.
+
+    Measures whether the consumer keeps up with the feed and how long
+    the backlog takes to empty after the feed ends, scored as
+    MVP-slim subscores:
+
+    - ``keep_up`` = consumed rate / feed rate, capped at 1.0
+    - ``drain``   = 1.0 when ``drain_end - feed_end <= drain_budget_s``,
+      else linear down to 0.0 at 4x the budget
+    - ``loss``    = 1.0 when zero messages were lost, else 0.0
+
+    ``score`` = 0.0 if any invariant failed, else the mean of the three
+    subscores (hard gate, spec section 6.2). No faults by default:
+    this run is the drain/keep-up skeleton. Timestamps come from the
+    loop clock, which under ``dst.run`` is the virtual clock.
+    """
     config = ScenarioConfig(**kwargs)
     broker = SimBroker(
         SimBrokerConfig(
@@ -69,9 +64,11 @@ async def main(**kwargs) -> Scorecard:
     feed_start = 0.0
     feed_end = 0.0
     drain_end = 0.0
+    feed_done = False
+    no_progress_rounds = 0
 
     async def produce_paced() -> None:
-        nonlocal faulted_produce, feed_start, feed_end
+        nonlocal faulted_produce, feed_start, feed_end, feed_done
         remaining = config.total
         feed_start = loop.time()
         while remaining > 0:
@@ -81,14 +78,20 @@ async def main(**kwargs) -> Scorecard:
             if error is not None:
                 faulted_produce += 1
             remaining -= count
+        feed_done = True
         feed_end = loop.time()
 
     async def drain_bulk() -> None:
         nonlocal faulted_fetch, consumed, expected_offset, offsets_monotonic
         nonlocal drain_end
         while consumed < config.total:
+            progress = consumed
             messages = await broker.get_many(TOPIC, PARTITION, GROUP, fetch_count)
             if not messages:
+                # faults can leave fewer messages than total: once the
+                # feed is done and the log is drained, nothing is left
+                if feed_done and broker.lag(TOPIC, PARTITION, GROUP) == 0:
+                    break
                 await asyncio.sleep(idle_s)
                 continue
             for message in messages:
@@ -99,6 +102,17 @@ async def main(**kwargs) -> Scorecard:
                     offsets_monotonic = False
                 expected_offset = message.offset + 1
                 consumed += 1
+            if consumed == progress:
+                # faulted fetches return values without advancing the
+                # cursor: bound the no-progress spin so a pathological
+                # fault table cannot idle the drain forever
+                no_progress_rounds += 1
+                assert no_progress_rounds < 100_000, (
+                    "drain made no progress past its bound "
+                    f"({no_progress_rounds} fault-only rounds)"
+                )
+            else:
+                no_progress_rounds = 0
             if config.consumer_sleep_s > 0.0:
                 await asyncio.sleep(config.consumer_sleep_s)
         drain_end = loop.time()

@@ -1,38 +1,3 @@
-"""db_insert_storm scenario (spec F2): a 1M-report insert storm.
-
-Zero-wiring scenario (pure asyncio, no app): stream ``total`` seeded
-report rows through a FaultSession's ``insert_ignore`` in batches and
-interleave a dup race — a configurable pct of rows are re-inserted a
-second time with a plain ``insert``, catching the real
-``IntegrityError`` (1062) the non-IGNORE race produces.
-
-Tables match the seed generator columns. ``reports`` uses the
-composite natural key ``(reporter_id, reported_id, timestamp)`` as its
-primary key — no synthetic id, so rows stream from the generator
-unchanged and INSERT IGNORE dedup is observable; ``players`` keys on
-``id`` and is seeded directly on the store as fixture data (not part
-of the storm counters).
-
-Deadlock policy (finding #4 fix, modeled): every OperationalError with
-errno 1213 is caught and the statement retried; each catch counts one
-retry. A literal single retry is insufficient at sustained pct —
-expected double-faults are pct^2 * N — so the storm retries a deadlocked
-statement until it lands (deterministic: draws are counter-based,
-pct < 100). The ``retries`` counter is the cost signal for hill
-climbing.
-
-Draw order (FIXED, spec §4.1): per report row i, one dup-race
-selection draw ``draw(seed, "scenario:duprace", i)``; each fault-checked
-statement consumes one FaultSession ordinal on ``db:x:reports``
-(ignore first, then the race re-insert when selected).
-
-Subscores: ``loss`` = 1.0 when no_loss holds; ``drain`` = 1.0 when the
-storm finishes within ``drain_budget_s`` of virtual time; ``keep_up``
-= 1.0 always — an insert storm has no feed to keep pace with, the only
-bottleneck modeled is fault retries (visible in ``retries``). Score is
-0.0 when any invariant fails, else the mean of the subscores.
-"""
-
 import asyncio
 from itertools import islice
 from typing import Any
@@ -40,8 +5,8 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.exc import IntegrityError, OperationalError
 
-from dst import Machine, MachineConfig
 from dst.faults import DbFaultConfig, draw
+from dst.loop import running_clock
 from dst.systems.db_faults import ERR_DEADLOCK, FaultSession
 from dst.systems.seed import players, reports
 from dst.systems.sim_db import SimDB, TableSchema
@@ -62,6 +27,8 @@ PLAYERS_SCHEMA = TableSchema(
     primary_key=("id",),
 )
 
+# composite natural key, no synthetic id: rows stream from the seed
+# generator unchanged and INSERT IGNORE dedup stays observable
 REPORTS_SCHEMA = TableSchema(
     name="reports",
     columns=(
@@ -171,7 +138,33 @@ def _seed_players(db: SimDB, config: DbInsertStormConfig) -> None:
 
 
 async def main(**kwargs) -> Scorecard:
-    """Run the report insert storm and return its scorecard."""
+    """Run the report insert storm and return its scorecard.
+
+    Zero-wiring (pure asyncio, no app): stream ``total`` seeded report
+    rows through a FaultSession's ``insert_ignore`` in batches and
+    interleave a dup race — a configurable pct of rows are re-inserted
+    with a plain ``insert``, catching the real ``IntegrityError``
+    (1062) the non-IGNORE race produces.
+
+    Deadlock policy: every OperationalError with errno 1213 is caught
+    and the statement retried until it lands (deterministic: draws are
+    counter-based and deadlock_pct < 100; a literal single retry is
+    insufficient at sustained pct, where expected double-faults are
+    pct^2 * N). Each catch counts one retry; ``retries`` is the cost
+    signal for hill climbing.
+
+    Draw order (FIXED): per report row i, one dup-race
+    selection draw ``draw(seed, "scenario:duprace", i)``; each
+    fault-checked statement consumes one FaultSession ordinal on
+    ``db:x:reports`` (ignore first, then the race re-insert when
+    selected).
+
+    Subscores: ``loss`` = 1.0 when no_loss holds; ``drain`` = 1.0 when
+    the storm finishes within ``drain_budget_s`` of virtual time;
+    ``keep_up`` = 1.0 always — an insert storm has no feed to keep
+    pace with, the only bottleneck modeled is fault retries. Score is
+    0.0 when any invariant fails, else the mean of the subscores.
+    """
     config = DbInsertStormConfig(**kwargs)
     db = SimDB()
     db.define_table(PLAYERS_SCHEMA)
@@ -180,7 +173,7 @@ async def main(**kwargs) -> Scorecard:
     session = FaultSession(
         db, DbFaultConfig(deadlock_pct=config.deadlock_pct), seed=config.seed
     )
-    machine = Machine(MachineConfig(seed=config.seed))
+    clock = running_clock()
     counters = _Counters()
 
     rows = reports(config.total, range(1, config.n_players + 1), seed=config.seed)
@@ -195,7 +188,7 @@ async def main(**kwargs) -> Scorecard:
                 _dup_race_insert(session, "reports", row, counters)
         await asyncio.sleep(config.batch_pause_s)
 
-    elapsed = machine.clock.time()
+    elapsed = clock.time()
     no_loss = counters.inserted + counters.skipped_dups == counters.attempted
     counted = db.count("reports") == counters.inserted
     invariants = [

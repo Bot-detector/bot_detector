@@ -1,5 +1,3 @@
-"""dst launcher: target resolution, kwarg typing, CLI end-to-end."""
-
 import pytest
 
 from dst.main import _parse_value, main, resolve_target
@@ -14,8 +12,8 @@ def test_resolve_target_default_function():
 
 
 def test_resolve_target_explicit_function():
-    function, target = resolve_target("dst.scenarios.firehose:main")
-    assert target == "dst.scenarios.firehose:main"
+    function, target = resolve_target("dst.scenarios.firehose_parity:main")
+    assert target == "dst.scenarios.firehose_parity:main"
     import inspect
 
     assert inspect.iscoroutinefunction(function)

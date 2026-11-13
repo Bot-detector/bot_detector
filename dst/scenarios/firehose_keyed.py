@@ -1,20 +1,3 @@
-"""Keyed-client scenario: per-user groups stay clean while the shared
-anonymous group degrades.
-
-The discord token path is a seam like the broker: the scenario patches
-``auth_repo.authenticate`` (the real one needs a discord OAuth call and
-a database) to hand out ``discord_<token>`` users with the topic
-permission. Everything after that seam is product code: per-user
-consumer groups, the shared anonymous group, and the exchange.
-
-The documented command pairs fast keyed clients with a slow anonymous
-fleet on the same feed rate. The anonymous clients' shared inbox fills
-and they take grace drops and kicks; every keyed client has its own
-group, its own pump, and drains fast, so it must see the full stream
-with no drops and no kicks. The report carries per-type counters and
-per-group feed totals so the isolation is auditable.
-"""
-
 import asyncio
 import logging
 import os
@@ -27,23 +10,27 @@ from bot_detector.firehose.app.auth.auth import ANONYMOUS, AuthUser  # noqa: E40
 from bot_detector.firehose.app.consumer.queue_repo import QueueRepo  # noqa: E402
 from bot_detector.firehose.core.config import Settings  # noqa: E402
 from bot_detector.firehose.core.server import create_app  # noqa: E402
+from pydantic import BaseModel, Field  # noqa: E402
+
+from dst import (  # noqa: E402
+    KafkaFaultConfig,
+    virtual_time,
+)
+from dst.loop import running_clock  # noqa: E402
 from dst.payloads import (  # noqa: E402
     PayloadConfig,
     build_payload_pool,
 )
-from pydantic import BaseModel, Field  # noqa: E402
-
-from dst import Machine, MachineConfig, NetworkConfig, virtual_time  # noqa: E402
-from dst.scenarios.firehose import (  # noqa: E402
-    TOPIC,
-    FirehoseClientReport,
-    FakeWebSocket,
+from dst.scenarios.firehose_parity import (  # noqa: E402
     _GROUPS,
+    TOPIC,
+    FakeWebSocket,
+    FirehoseClientReport,
     _counter,
     _drain,
     _make_consumer_patch,
 )
-from dst.systems import KafkaConfig, KafkaFaults  # noqa: E402
+from dst.systems import KafkaConfig  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +41,6 @@ class KeyedIsolationConfig(BaseModel):
     pool_size: int = Field(default=100, ge=1)
     payload_seed: int = 42
     kafka_seed: int = 42
-    machine_seed: int = 7
     n_keyed: int = Field(default=2, ge=0)
     n_anonymous: int = Field(default=3, ge=0)
     anonymous_slow_s: float = Field(default=0.02, ge=0.0)
@@ -78,27 +64,35 @@ class KeyedIsolationReport(BaseModel):
 
 
 async def main(**kwargs) -> KeyedIsolationReport:
-    """Run fast keyed users next to a slow anonymous fleet."""
+    """Run fast keyed users next to a slow anonymous fleet.
+
+    The discord token path is a seam like the broker: this scenario
+    patches ``auth_repo.authenticate`` (the real one needs a discord
+    OAuth call and a database) to hand out ``key-<token>`` users with
+    the topic permission. Everything past that seam is product code:
+    per-user consumer groups, the shared anonymous group, the exchange.
+
+    Keyed clients have their own group and pump and drain fast, so
+    they must see the full stream with no drops and no kicks, while
+    the anonymous clients' shared inbox fills and takes grace drops
+    and kicks. The report carries per-type counters and per-group feed
+    totals so the isolation is auditable.
+    """
     config = KeyedIsolationConfig(**kwargs)
     with virtual_time():
         logging.getLogger("bot_detector").setLevel(logging.WARNING)
-        machine = Machine(
-            MachineConfig(
-                seed=config.machine_seed,
-                network=NetworkConfig(mean_ms=0.01, jitter_ms=0.005),
-            )
-        )
+        clock = running_clock()
         kafka_config = KafkaConfig(
             seed=config.kafka_seed,
-            rate_s=config.feed_rate_s,
-            faults=KafkaFaults(),
+            feed_rate_s=config.feed_rate_s,
+            faults=KafkaFaultConfig(),
         )
         pool = build_payload_pool(
             PayloadConfig(seed=config.payload_seed, pool_size=config.pool_size)
         )
         _GROUPS.clear()
         QueueRepo.create_consumer = _make_consumer_patch(  # type: ignore[assignment]
-            machine, kafka_config, pool
+            kafka_config, pool
         )
         app = create_app(
             Settings(port=0, metrics_port=0, kick_grace_s=config.kick_grace_s)
@@ -189,7 +183,7 @@ async def main(**kwargs) -> KeyedIsolationReport:
 
         return KeyedIsolationReport(
             config=config,
-            duration_s=machine.clock.time(),
+            duration_s=clock.time(),
             keyed_clients=client_reports("keyed-"),
             anonymous_clients=client_reports("anon-"),
             keyed_messages=delta("keyed", "messages"),

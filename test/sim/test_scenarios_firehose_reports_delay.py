@@ -1,9 +1,7 @@
-"""reports.to_insert scenario: 2h delay, silence, then a lagged stream."""
-
 import pytest
 
 import dst as dst_mod
-from dst.scenarios import reports_delay
+from dst.scenarios import firehose_reports_delay as reports_delay
 
 TS_BASE = 2_000_000_000
 

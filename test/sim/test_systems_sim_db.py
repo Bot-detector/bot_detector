@@ -1,5 +1,3 @@
-"""Tests for the SimDB table engine (MySQL rowcount semantics)."""
-
 import asyncio
 from typing import Any
 

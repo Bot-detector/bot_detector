@@ -1,26 +1,3 @@
-"""Fake firehose clients: an in-memory websocket fleet on the clock.
-
-Port of perf's client fleet concepts (`run_clients`, the smoke
-suite's slow/fast scenarios), rebuilt on DST so the exchange-side
-behavior (fanout parity, join grace drops, kick with close 1013,
-per-client ordering) is reproducible in virtual time:
-
-- ``FirehoseHub`` is the exchange stand-in: ``send_all`` fans a
-  payload out to per-client inboxes. On a full inbox it applies the
-  same policy as the real Exchange: drop while the head is inside
-  ``kick_grace_s``, kick (close 1013 "try again later") once it is
-  older. Drops and kicks are counted, never silent.
-- ``FirehoseClient`` is one connection: ``receive()`` yields payloads
-  in order and wakes with a close frame when kicked mid-wait.
-  ``slow_s`` adds a per-message virtual delay (the slow-client
-  scenario) without needing a second machine: clients run on someone
-  else's box, so their think-time is plain virtual sleep.
-
-Scenarios drive sends and receives directly (no transport): the
-websockets/uvicorn layer is what DST deliberately excludes; this fake
-models its observable contract instead.
-"""
-
 import asyncio
 
 from pydantic import BaseModel, Field
@@ -154,8 +131,18 @@ class _Inbox:
 class FirehoseHub:
     """Exchange stand-in: fanout with drop-then-kick backpressure.
 
+    ``send_all`` fans a payload out to per-client inboxes. On a full
+    inbox it applies the same policy as the real Exchange: drop while
+    the head is inside ``kick_grace_s``, kick (close 1013 "try again
+    later") once it is older. Drops and kicks are counted, never
+    silent.
+
+    Scenarios drive sends and receives directly; the websockets/
+    uvicorn transport layer is what DST deliberately excludes, so this
+    fake models its observable contract instead.
+
     Binds to the running VirtualEventLoop's clock when constructed
-    inside a ``dst.run`` scenario (same convention as Machine).
+    inside a ``dst.run`` scenario (same convention as ``running_clock``).
     """
 
     def __init__(self, config: FirehoseHubConfig, clock: VirtualClock | None = None):

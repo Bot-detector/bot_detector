@@ -1,50 +1,3 @@
-"""The real hiscore scraper pipeline on the DST virtual clock.
-
-The scraper runs as three stages wired by bounded asyncio queues:
-consume -> task_queue -> fetch pool -> results_queue -> processors.
-The real stage functions from `bot_detector.hiscore_scraper` run
-unmodified: `consumer.consume` (batched get_many + one commit per
-batch), the fetch loop `fetcher.fetch` (per-proxy RateLimiter windows
-of 20/s + 1200/min, RetryTracker backoff, sticky proxy assignment) and
-`processor.process` (transform + kafka produce). Only the I/O seams are
-replaced:
-
-- kafka: a SimKafka broker per topic with `partitions` (prod: 4)
-  fed at `feed_rate_s` names per virtual second, packed
-  `names_per_message` names per kafka message. One consumer task pulls
-  `consume_batch_size` names per get_many; the commit models the real
-  per-batch commit as a single broker RTT that clears every fetched
-  message at once. Broker RTTs ride the machine's Network model
-  (latency, jitter, `kafka_bandwidth_mbps` transfer time, packet loss,
-  partition) through a `kafka_connection_limit` connection pool
-  (0 = unlimited).
-- jagex: SimHiscoreAPI draws per-fetch outcomes on a seeded RNG:
-  success, not_found (the 404 path) and transient errors (requeue +
-  retry backoff), each lognormal on the panel calibration below,
-  capped by the 30s client timeout, under fleet-wide degradation
-  episodes that stretch every draw ~2-3x.
-- proxies: an in-memory manager with `proxies` proxies; fetchers are
-  assigned sticky by index modulo the pool size, so each proxy's rate
-  windows are shared by fetchers/proxies fetchers.
-
-The scenario answers "where is the pipeline slow" with two lenses:
-stage-time shares (where pipeline time goes) and the binding cap among
-feed, consumer serial path, fetch pool (Little's law: fetchers / mean
-fetch latency) and the per-proxy rate ceilings (proxies x 20/s).
-
-Latency calibration (prod, Nov 2026 Grafana panel
-`hiscore_scraper_fetch_latency`, 6h window): success p50 ~1.45s /
-p99 ~6.1s (the fattest tail), not_found p50 ~1.45s / p99 ~4.5s,
-error p50 ~0.33s / p90 ~0.94s / p99 ~2.4s (failures are fast), and
-error p99 flat-topping at exactly 30s in rare bursts - the client
-timeout. Every outcome is drawn lognormal anchored at its panel
-p50 (`*_latency_s`) and p99 (`*_p99_over_p50`); fleet-wide
-degradation episodes (a few per ~6h, minutes long, every draw
-multiplied ~2-3x together) reproduce the step bumps, and error
-draws flip to the 30s timeout inside an episode, reproducing the
-flat-top. Together: mixture p50 ~1.45s, p99 ~5s.
-"""
-
 import asyncio
 import logging
 import math
@@ -53,12 +6,12 @@ import random
 from collections import deque
 from collections.abc import Callable, Coroutine
 from contextlib import nullcontext
-from datetime import datetime
 from typing import Any
 
 os.environ.setdefault("PROXY_API_KEY", "sim")  # ProxySettings is required-env
 
 import orjson  # noqa: E402
+from aiokafka.errors import KafkaTimeoutError  # noqa: E402
 from bot_detector.event_queue.core import (  # noqa: E402
     Queue,
     QueueBackendProducerProtocol,
@@ -66,7 +19,6 @@ from bot_detector.event_queue.core import (  # noqa: E402
     QueueProducer,
 )
 from bot_detector.event_queue.structs import (  # noqa: E402
-    NotFoundStruct,
     ScrapedStruct,
     ToScrapeStruct,
 )
@@ -92,15 +44,34 @@ from bot_detector.osrs_hs_api.structs import (  # noqa: E402
 )
 from bot_detector.proxy_manager import Settings as ProxySettings  # noqa: E402
 from bot_detector.rate_limiter import RateLimiter, Window  # noqa: E402
-from bot_detector.structs import MetaData, PlayerStruct  # noqa: E402
 from pydantic import BaseModel, Field, ValidationError, model_validator  # noqa: E402
 
-from dst import Machine, MachineConfig, NetworkConfig, virtual_time  # noqa: E402
+from dst import virtual_time  # noqa: E402
+from dst.clock import VirtualClock  # noqa: E402
+from dst.loop import running_clock  # noqa: E402
+from dst.payloads import build_toscrape_pool  # noqa: E402
+from dst.systems import (  # noqa: E402
+    CpuCosts,
+    LinkCosts,
+    SimBroker,
+    SimBrokerConfig,
+    SimMessage,
+)
 
 logger = logging.getLogger(__name__)
 
-TICK_S = 0.01  # feed pacing granularity, matches dst.systems.fake_kafka
+TICK_S = 0.01  # feed pacing granularity, matches SimBroker's feed tick
 Z_99 = 2.3263478740408408  # standard-normal z-score at p99
+
+_TOPIC = "to_scrape"
+_GROUP = "scraper"
+
+# fake-owned broker link profile: the sub-RTT wiggle the retired
+# Machine network model supplied (mean 0.01ms +- 0.005ms), now drawn
+# per attempt on a dedicated counter-based fault stream
+_LINK_MEAN_MS = 0.01
+_LINK_JITTER_MS = 0.005
+_NET_STREAM = "s:net:to_scrape"
 
 
 def _pct(sorted_samples: list[float], q: float) -> float:
@@ -125,7 +96,6 @@ class ScraperThroughputConfig(BaseModel):
     feed_rate_s: int = Field(default=2_000, gt=0)
     partitions: int = Field(default=4, ge=1)
     seed: int = 42
-    machine_seed: int = 7
     # simulated broker costs, virtual seconds per message/call
     fetch_cost_s: float = Field(default=0.002, ge=0.0)
     parse_cost_s: float = Field(default=0.0002, ge=0.0)
@@ -138,9 +108,9 @@ class ScraperThroughputConfig(BaseModel):
     names_per_message: int = Field(default=1, ge=1)
     # simulated broker network link: 0 connections = unlimited pool;
     # 1 serializes the consumer's fetch and commit round trips on a
-    # single connection. RTTs ride the machine's Network model, so
-    # scenario NetworkConfig (mean/jitter/bandwidth/packet loss) and
-    # machine.network.partition() apply to broker traffic as well.
+    # single connection. RTTs pay the fake-owned link costs
+    # (LinkCosts jitter + kafka_bandwidth_mbps transfer), so link
+    # loss surfaces as fetch failures on broker traffic as well.
     kafka_connection_limit: int = Field(default=0, ge=0)
     kafka_payload_bytes: int = Field(default=512, ge=1)
     # broker link bandwidth: 800 Mbps = 100 MB/s (prod-plausible LAN link).
@@ -249,7 +219,6 @@ class ScraperThroughputReport(BaseModel):
     per_partition_produced: list[int]
     per_partition_consumed: list[int]
     scraped_produced: int
-    not_found_produced: int
     outcomes: OutcomeCounts
     latency: dict[str, FetchLatencyStat]
     commits: int
@@ -345,8 +314,9 @@ class Stage:
 class RunState:
     """Per-run accounting shared by the broker, fakes and patches."""
 
-    def __init__(self, machine: Machine) -> None:
-        self.clock = machine.clock
+    def __init__(self, clock: VirtualClock) -> None:
+        assert isinstance(clock, VirtualClock), f"not a clock: {clock!r}"
+        self.clock = clock
         self.stages: dict[str, Stage] = {
             name: Stage()
             for name in (
@@ -421,31 +391,50 @@ class _Degradation:
 
 
 class SimKafka:
-    """One simulated topic: paced multi-partition feed + consumer path.
+    """One simulated topic over a SimBroker log: paced multi-partition
+    feed + consumer path.
 
-    The consumer surface mirrors what the real adapter does per message:
-    a blocked wait for data (all workers park here when the consumer is
-    the bottleneck), a fetch round trip, then real orjson + pydantic
-    parsing charged to the machine's serial core. commit() is a broker
-    RTT under a single-flight lock: one consumer instance serializes
-    every worker's per-message commit, exactly the real adapter's shape.
+    SimBroker owns the partitioned log, the offsets and the backlog
+    (partitions/pacing/backlog moved onto it when the kafka fakes
+    were consolidated). This class keeps what the scraper pipeline
+    uniquely models: names packed `names_per_message` per kafka
+    message (joined with b"\\n" — orjson dumps never contain raw
+    newlines — and split back at parse time), the client-side pending
+    buffer of a partially consumed message, and the cost charging:
+    the consumer surface mirrors what the real adapter does per
+    message — a blocked wait for data (all workers park here when the
+    consumer is the bottleneck), a fetch round trip paid to the
+    fake-owned `LinkCosts` link (jitter + `kafka_bandwidth_mbps`
+    transfer), then real orjson + pydantic parsing charged to the
+    fake's serial-cost counter. commit() is a broker RTT under a
+    single-flight lock: one consumer instance serializes every
+    worker's per-batch commit, exactly the real adapter's shape. RTTs
+    flow through a `kafka_connection_limit` connection pool
+    (0 = unlimited).
     """
 
     def __init__(
         self,
-        machine: Machine,
         config: ScraperThroughputConfig,
         state: RunState,
         *,
         feed: bool,
     ):
-        self.machine = machine
+        assert isinstance(state, RunState), f"not a RunState: {state!r}"
         self.config = config
         self.state = state
         self.feed = feed
-        self._delivery: asyncio.Queue[tuple[int, int, list[bytes]]] = asyncio.Queue(
-            maxsize=config.max_buffer
+        self._broker = SimBroker(
+            SimBrokerConfig(seed=config.seed, payload_bytes=config.kafka_payload_bytes)
         )
+        self._link = LinkCosts(
+            seed=config.seed,
+            stream=_NET_STREAM,
+            mean_ms=_LINK_MEAN_MS,
+            jitter_ms=_LINK_JITTER_MS,
+            bandwidth_mbps=config.kafka_bandwidth_mbps,
+        )
+        self._cpu = CpuCosts()
         self._pending: deque[bytes] = deque()  # names left in the fetched batch
         self._uncommitted = 0  # fetched messages awaiting their one commit
         self._commit_lock = asyncio.Lock()
@@ -454,12 +443,12 @@ class SimKafka:
             asyncio.Semaphore(limit) if limit > 0 else None
         )
         self._pacer: asyncio.Task[None] | None = None
-        self._pool = build_payload_pool(config.pool_size, config.exclude_none_fields)
+        self._pool = build_toscrape_pool(config.pool_size, config.exclude_none_fields)
         self.avg_name_bytes = sum(len(p) for p in self._pool) / len(self._pool)
         self._pool_cursor = 0
         self._out_batch: list[bytes] = []
-        self._round_robin = 0
-        self._batch_offset = 0
+        self._round_robin = 0  # shared: feed ships and keyless requeues
+        self._read_cursor = 0  # round-robin read position over partitions
         self.feed_produced = 0
         self.produced_total = 0
         self.requeues = 0
@@ -469,7 +458,6 @@ class SimKafka:
         self.bytes_transferred = 0
         self.fetch_failures = 0
         self.commit_failures = 0
-        self.produced_per_partition = [0] * config.partitions
         self.consumed_per_partition = [0] * config.partitions
 
     @property
@@ -477,12 +465,26 @@ class SimKafka:
         """Unconsumed to_scrape records: feed + requeues - consumed."""
         return self.feed_produced + self.requeues - self.consumed
 
+    @property
+    def produced_per_partition(self) -> list[int]:
+        """Messages produced per partition: the SimBroker watermarks."""
+        return [
+            self._broker.high_watermark(_TOPIC, p)
+            for p in range(self.config.partitions)
+        ]
+
     def _partition(self, key: str | None) -> int:
         if key is not None:
             return int(key) % self.config.partitions
         partition = self._round_robin % self.config.partitions
         self._round_robin += 1
         return partition
+
+    def _broker_lag(self) -> int:
+        """Total unconsumed messages across the topic's partitions."""
+        return sum(
+            self._broker.lag(_TOPIC, p, _GROUP) for p in range(self.config.partitions)
+        )
 
     async def start_feed(self) -> None:
         if self.feed and self._pacer is None:
@@ -498,39 +500,91 @@ class SimKafka:
             self._pacer = None
 
     async def _pace(self) -> None:
-        """Pack names into messages of names_per_message at feed_rate_s names/s."""
+        """Pack names into messages of names_per_message at feed_rate_s names/s.
+
+        The pacer parks while the SimBroker backlog reaches max_buffer,
+        the same bound the old private delivery queue applied.
+        """
         carry = 0.0
         while True:
             carry += self.config.feed_rate_s * TICK_S
             names = int(carry)
             carry -= names
-            for _ in range(names):
-                payload = self._pool[self._pool_cursor % len(self._pool)]
-                self._pool_cursor += 1
-                self._out_batch.append(payload)
-                if len(self._out_batch) >= self.config.names_per_message:
-                    await self._ship()
+            if names > 0:
+                while self._broker_lag() >= self.config.max_buffer:
+                    await asyncio.sleep(TICK_S)
+                for _ in range(names):
+                    payload = self._pool[self._pool_cursor % len(self._pool)]
+                    self._pool_cursor += 1
+                    self._out_batch.append(payload)
+                    if len(self._out_batch) >= self.config.names_per_message:
+                        await self._ship()
             await asyncio.sleep(TICK_S)
 
     async def _ship(self) -> None:
+        """Ship one packed message into the SimBroker log."""
         payloads = self._out_batch
         self._out_batch = []
         partition = self._round_robin % self.config.partitions
         self._round_robin += 1
-        await self._delivery.put((partition, self._batch_offset, payloads))
-        self._batch_offset += 1
+        error = await self._broker.produce(_TOPIC, partition, b"\n".join(payloads))
+        if error is not None:
+            # unreachable with the scenario's all-zero fault table; a
+            # dropped feed message would silently skew every counter
+            raise RuntimeError(f"sim broker feed rejected a payload: {error}")
         self.feed_produced += len(payloads)
-        self.produced_per_partition[partition] += len(payloads)
+
+    async def _pull(self, count: int) -> list[SimMessage]:
+        """Round-robin pull of up to `count` messages across partitions.
+
+        One SimBroker read per partition; the read cursor rotates so a
+        consumer draining only the first partition cannot starve the
+        rest (the feed round-robins writes the same way).
+        """
+        out: list[SimMessage] = []
+        start = self._read_cursor
+        last = start
+        for i in range(self.config.partitions):
+            if len(out) >= count:
+                break
+            partition = (start + i) % self.config.partitions
+            batch = await self._broker.get_many(
+                _TOPIC, partition, _GROUP, count - len(out)
+            )
+            if batch:
+                last = partition
+                out.extend(self._message(item) for item in batch)
+        # resume after the partition that filled the batch, so the read
+        # cursor keeps rotating instead of pinning one partition
+        self._read_cursor = (last + 1) % self.config.partitions
+        return out
 
     async def _parse(self, payload: bytes) -> ToScrapeStruct | Exception:
-        """orjson + pydantic on the serial core; charged per name."""
+        """orjson + pydantic on the fake's serial-cost counter; per name."""
         try:
             record = ToScrapeStruct.model_validate(orjson.loads(payload))
         except ValidationError as ve:
             return ve
         if self.config.parse_cost_s > 0.0:
-            await self.machine.cpu.work(self.config.parse_cost_s, what="kafka-parse")
+            await self._cpu.work(self.config.parse_cost_s)
         return record
+
+    def _message(self, item: SimMessage | Exception) -> SimMessage:
+        """Narrow a broker fetch result; faults are impossible here.
+
+        The scenario runs the broker with an all-zero fault table, so
+        a fault value would mean a SimBroker bug.
+        """
+        assert isinstance(item, SimMessage), f"unexpected broker fault: {item}"
+        return item
+
+    def _record_names(self, message: SimMessage) -> list[bytes]:
+        """Unpack one kafka message into its per-name payloads."""
+        names = message.payload.split(b"\n")
+        self._uncommitted += 1
+        self.messages_consumed += 1
+        self.consumed_per_partition[message.partition] += len(names)
+        return names
 
     async def consume_one(self) -> ToScrapeStruct | Exception:
         """Next record: continuation names cost parse only; a fresh
@@ -547,26 +601,32 @@ class SimKafka:
             stage.add(self.state.now() - t0)
             return record
         t0 = self.state.now()
-        partition, _offset, payloads = await self._delivery.get()
+        while self._broker_lag() <= 0:
+            # stopped feed with nothing in flight: return the drained
+            # error instead of spinning (a parked loop would defeat
+            # DSTIdleError by keeping the virtual loop non-idle)
+            if self._broker.feed_started and not self._broker.feed_running:
+                return KafkaTimeoutError("to_scrape drained: feed stopped")
+            await asyncio.sleep(TICK_S)
         t_data = self.state.now()
+        fetched = await self._pull(1)
+        message = self._message(fetched[0])
         connection: asyncio.Semaphore | nullcontext = (
             self._connections if self._connections is not None else nullcontext()
         )
         async with connection:
             if self.config.fetch_cost_s > 0.0:
                 await asyncio.sleep(self.config.fetch_cost_s)
-            n_bytes = sum(len(p) for p in payloads)
-            io = await self.machine.network.fetch(n_bytes=n_bytes)
+            n_bytes = len(message.payload)
+            error = await self._link.fetch(n_bytes=n_bytes)
             self.bytes_transferred += n_bytes
-        if io.error is not None:
+        if error is not None:
             # dropped fetch: the worker's error path stalls it for 10s
             self.fetch_failures += 1
-            return io.error
-        self._pending.extend(payloads[1:])
-        self._uncommitted += 1
-        self.messages_consumed += 1
-        self.consumed_per_partition[partition] += len(payloads)
-        record = await self._parse(payloads[0])
+            return error
+        names = self._record_names(message)
+        self._pending.extend(names[1:])
+        record = await self._parse(names[0])
         if isinstance(record, Exception):
             return record
         self.consumed += 1
@@ -582,16 +642,12 @@ class SimKafka:
         """
         stage = self.state.stage("kafka_get")
         t0 = self.state.now()
-        partition, _offset, payloads = await self._delivery.get()
+        while self._broker_lag() <= 0:
+            if self._broker.feed_started and not self._broker.feed_running:
+                return KafkaTimeoutError("to_scrape drained: feed stopped")
+            await asyncio.sleep(TICK_S)
         t_data = self.state.now()
-        batches = [(partition, payloads)]
-        # buffered drain: messages already delivered cost no extra RTT
-        while len(batches) < count:
-            try:
-                p, _o, pl = self._delivery.get_nowait()
-            except asyncio.QueueEmpty:
-                break
-            batches.append((p, pl))
+        messages = await self._pull(count)
 
         connection: asyncio.Semaphore | nullcontext = (
             self._connections if self._connections is not None else nullcontext()
@@ -599,21 +655,17 @@ class SimKafka:
         async with connection:
             if self.config.fetch_cost_s > 0.0:
                 await asyncio.sleep(self.config.fetch_cost_s)
-            n_bytes = sum(len(p) for _, pls in batches for p in pls)
-            io = await self.machine.network.fetch(n_bytes=n_bytes)
+            n_bytes = sum(len(m.payload) for m in messages)
+            error = await self._link.fetch(n_bytes=n_bytes)
             self.bytes_transferred += n_bytes
-        if io.error is not None:
+        if error is not None:
             self.fetch_failures += 1
-            return io.error
+            return error
 
-        for p, pls in batches:
-            self._uncommitted += 1
-            self.messages_consumed += 1
-            self.consumed_per_partition[p] += len(pls)
-
+        names_per_message = [self._record_names(m) for m in messages]
         out: list[ToScrapeStruct] = []
-        for _p, pls in batches:
-            for payload in pls:
+        for names in names_per_message:
+            for payload in names:
                 record = await self._parse(payload)
                 if isinstance(record, Exception):
                     # matches the real adapter: a poison record aborts
@@ -644,9 +696,9 @@ class SimKafka:
                 t_locked = self.state.now()
                 if self.config.commit_cost_s > 0.0:
                     await asyncio.sleep(self.config.commit_cost_s)
-                io = await self.machine.network.fetch(n_bytes=64)
+                error = await self._link.fetch(n_bytes=64)
                 self.bytes_transferred += 64
-                if io.error is not None:
+                if error is not None:
                     # failed commit: the offsets stay owed for retry
                     self.commit_failures += 1
                 else:
@@ -659,9 +711,7 @@ class SimKafka:
         stage = self.state.stage("produce")
         t0 = self.state.now()
         if self.config.serialize_cost_s > 0.0:
-            await self.machine.cpu.work(
-                self.config.serialize_cost_s, what="kafka-serialize"
-            )
+            await self._cpu.work(self.config.serialize_cost_s)
         payload = orjson.dumps(
             message.model_dump(exclude_none=True)
             if self.config.exclude_none_fields
@@ -670,14 +720,14 @@ class SimKafka:
         if self.config.produce_cost_s > 0.0:
             await asyncio.sleep(self.config.produce_cost_s)
         partition = self._partition(key)
-        self.produced_per_partition[partition] += 1
         self.produced_total += 1
         if isinstance(message, ToScrapeStruct):
             # requeued names re-enter the topic as singleton messages
             self.requeues += 1
             if self.feed:
-                await self._delivery.put((partition, self._batch_offset, [payload]))
-                self._batch_offset += 1
+                error = await self._broker.produce(_TOPIC, partition, payload)
+                if error is not None:
+                    raise RuntimeError(f"sim broker rejected a requeue: {error}")
         stage.add(self.state.now() - t0)
 
 
@@ -865,28 +915,6 @@ class SimHiscoreAPI:
         return Ok(value=stats, latency=latency)
 
 
-def build_payload_pool(pool_size: int, exclude_none: bool = False) -> list[bytes]:
-    """Deterministic serialized ToScrapeStruct records, cycled by offset."""
-    pool: list[bytes] = []
-    for i in range(pool_size):
-        player = PlayerStruct(
-            id=i + 1,
-            name=f"sim_player_{i}",
-            created_at=datetime(2024, 1, 1),
-        )
-        record = ToScrapeStruct(
-            metadata=MetaData(version=1, source="sim"),
-            player_data=player,
-        )
-        dump = (
-            record.model_dump(exclude_none=True)
-            if exclude_none
-            else record.model_dump()
-        )
-        pool.append(orjson.dumps(dump))
-    return pool
-
-
 def _timed(
     state: RunState, stage_name: str, fn: Callable[..., Coroutine[Any, Any, Any]]
 ) -> Callable[..., Coroutine[Any, Any, Any]]:
@@ -903,38 +931,47 @@ def _timed(
 
 
 async def main(**kwargs) -> ScraperThroughputReport:
-    """Run the real scraper pipeline against the simulated broker."""
+    """Run the real scraper pipeline against the simulated broker.
+
+    The scraper runs as three stages wired by bounded asyncio queues:
+    consume -> task_queue -> fetch pool -> results_queue -> processors.
+    The real stage functions from ``bot_detector.hiscore_scraper`` run
+    unmodified; only the I/O seams are replaced:
+
+    - kafka: a SimKafka broker per topic, fed at ``feed_rate_s`` names
+      per virtual second, packed ``names_per_message`` names per kafka
+      message. Broker RTTs pay the fake-owned link costs through a
+      ``kafka_connection_limit`` connection pool (0 = unlimited).
+    - jagex: SimHiscoreAPI draws per-fetch outcomes on a seeded RNG,
+      each lognormal on the panel calibration in the config fields,
+      capped by the 30s client timeout, under fleet-wide degradation
+      episodes that stretch every draw ~2-3x together.
+    - proxies: an in-memory manager; fetchers are assigned sticky by
+      index modulo the pool size, so each proxy's rate windows are
+      shared by fetchers/proxies fetchers.
+
+    Answers "where is the pipeline slow" with two lenses: stage-time
+    shares, and the binding cap among feed, consumer serial path,
+    fetch pool (Little's law: fetchers / mean fetch latency) and the
+    per-proxy rate ceilings (proxies x 20/s).
+    """
     config = ScraperThroughputConfig(**kwargs)
     with virtual_time():
         logging.getLogger("bot_detector").setLevel(logging.ERROR)
-        machine = Machine(
-            MachineConfig(
-                seed=config.machine_seed,
-                network=NetworkConfig(
-                    mean_ms=0.01,
-                    jitter_ms=0.005,
-                    bandwidth_mbps=config.kafka_bandwidth_mbps,
-                ),
-            )
-        )
-        state = RunState(machine)
+        clock = running_clock()
+        state = RunState(clock)
         rng = random.Random(config.seed)
 
-        broker = SimKafka(machine, config, state, feed=True)
-        not_found_broker = SimKafka(machine, config, state, feed=False)
-        scraped_broker = SimKafka(machine, config, state, feed=False)
+        broker = SimKafka(config, state, feed=True)
+        scraped_broker = SimKafka(config, state, feed=False)
 
         ts_queue = Queue[ToScrapeStruct](
             SimQueueBackend(broker), name="players.to_scrape"
-        )
-        nf_producer = QueueProducer[NotFoundStruct](
-            SimProducerBackend(not_found_broker), name="players.not_found"
         )
         sc_producer = QueueProducer[ScrapedStruct](
             SimProducerBackend(scraped_broker), name="players.scraped"
         )
 
-        # patch the base's I/O seams; the stage functions run unmodified
         SimHiscoreAPI.config = config
         SimHiscoreAPI.state = state
         SimHiscoreAPI.rng = rng
@@ -948,11 +985,15 @@ async def main(**kwargs) -> ScraperThroughputReport:
         scraper_processor.transform_player_stats = _timed(
             state, "transform", original_transform
         )
+        # RetryTracker jitters every backoff from the process-global RNG;
+        # seed it for the run (restored with the seams below) so two runs
+        # of the same seed replay byte-identically
+        original_random_state = random.getstate()
+        random.seed(config.seed)
 
         proxy_manager = SimProxyManager(config.proxies, state)
         runtime = ProxyRuntime(proxy_manager=proxy_manager)  # type: ignore[arg-type]
         await ts_queue.start()
-        await nf_producer.start()
         await sc_producer.start()
 
         task_queue: asyncio.Queue[ToScrapeStruct] = asyncio.Queue(
@@ -1007,8 +1048,7 @@ async def main(**kwargs) -> ScraperThroughputReport:
                         processor_id=processor_id,
                         results_queue=results_queue,
                         player_ts_queue=ts_queue,
-                        player_nf_producer=nf_producer,  # type: ignore[arg-type]
-                        player_sc_producer=sc_producer,  # type: ignore[arg-type]
+                        player_sc_producer=sc_producer,
                     ),
                     name=f"scraper-processor-{processor_id}",
                 )
@@ -1020,16 +1060,23 @@ async def main(**kwargs) -> ScraperThroughputReport:
             stage_task.cancel()
         await asyncio.gather(*stages, return_exceptions=True)
         await ts_queue.stop()
-        await nf_producer.stop()
         await sc_producer.stop()
+
+        def _restore_seams() -> None:
+            # restore the seams so other scenarios in the process see
+            # product code; must run on the crash path too, or a seeded
+            # global RNG and patched functions leak into the process
+            scraper_runtime.HiscoreOldSchoolAPI = original_api
+            scraper_processor.transform_player_stats = original_transform
+            random.setstate(original_random_state)
+
         if stage_errors:
+            _restore_seams()
             raise RuntimeError(
                 f"{len(stage_errors)} stage tasks crashed, first: {stage_errors[0]!r}"
             )
 
-        # restore the seams so other scenarios in the process see product code
-        scraper_runtime.HiscoreOldSchoolAPI = original_api
-        scraper_processor.transform_player_stats = original_transform
+        _restore_seams()
 
         consumed = broker.consumed
         # throughput counts completed fetches, not consumed names: the
@@ -1052,7 +1099,7 @@ async def main(**kwargs) -> ScraperThroughputReport:
         # actually spent by the pool (rate-limit waits, proxy lookups and
         # fetch latency; transform and produce belong to the processors)
         fleet_cap_s = config.fetchers / mean_active_s if mean_active_s > 0 else 0.0
-        # the consumer's only serial work is now one commit RTT and (on
+        # the consumer's only serial work is one commit RTT and (on
         # a single broker connection) one fetch RTT per consume batch:
         # both amortize over batch x names_per_message players. Parse
         # stays per player on the buffered drain.
@@ -1112,7 +1159,6 @@ async def main(**kwargs) -> ScraperThroughputReport:
             per_partition_produced=broker.produced_per_partition,
             per_partition_consumed=broker.consumed_per_partition,
             scraped_produced=scraped_broker.produced_total,
-            not_found_produced=not_found_broker.produced_total,
             outcomes=state.outcomes,
             latency=latency_stats,
             commits=broker.commits,

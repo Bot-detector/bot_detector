@@ -1,18 +1,9 @@
-"""Deterministic ScrapedStruct payload pool for DST scenarios.
-
-Everything (names, xp, ban flags, timestamps) comes from one seeded
-RNG plus a fixed base time, so the same PayloadConfig builds
-byte-identical payloads across runs. No datetime.now() anywhere: the
-pool must never log the wall clock into created_at/updated_at, which
-would make seeded runs non-replayable.
-"""
-
 import logging
 import random
 from datetime import date, datetime, timedelta
 
 import orjson
-from bot_detector.event_queue.structs import ScrapedStruct
+from bot_detector.event_queue.structs import ScrapedStruct, ToScrapeStruct
 from bot_detector.structs._metadata import MetaData
 from bot_detector.structs.hiscore import HighscoreBaseStruct
 from bot_detector.structs.player import PlayerStruct
@@ -119,7 +110,13 @@ class PlayerFlagPcts(BaseModel):
 
 
 class PayloadConfig(BaseModel):
-    """Config for the simulated payload pool; seed -> same bytes."""
+    """Config for the simulated payload pool; seed -> same bytes.
+
+    One seeded RNG plus the fixed base time build byte-identical
+    payloads across runs. No wall-clock reads anywhere: the pool must
+    never log the wall clock into created_at/updated_at, which would
+    make seeded runs non-replayable.
+    """
 
     seed: int = 0
     pool_size: int = Field(default=2000, ge=1)
@@ -169,4 +166,30 @@ def build_payload_pool(config: PayloadConfig) -> list[bytes]:
         f"sim payload pool ready: {config.pool_size} msgs, "
         f"avg={sum(sizes) / config.pool_size / 1024:.1f}KiB"
     )
+    return pool
+
+
+def build_toscrape_pool(pool_size: int, exclude_none: bool = False) -> list[bytes]:
+    """Deterministic serialized ToScrapeStruct records, cycled by offset.
+
+    No RNG: every record derives from its index, so the pool is
+    identical across runs and seeds.
+    """
+    pool: list[bytes] = []
+    for i in range(pool_size):
+        player = PlayerStruct(
+            id=i + 1,
+            name=f"sim_player_{i}",
+            created_at=datetime(2024, 1, 1),
+        )
+        record = ToScrapeStruct(
+            metadata=MetaData(version=1, source="sim"),
+            player_data=player,
+        )
+        dump = (
+            record.model_dump(exclude_none=True)
+            if exclude_none
+            else record.model_dump()
+        )
+        pool.append(orjson.dumps(dump))
     return pool

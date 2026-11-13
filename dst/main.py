@@ -1,22 +1,3 @@
-"""Generic DST launcher: run any scenario on the virtual clock.
-
-    # zero-wiring target (pure asyncio scenario)
-    uv run python -m dst.main dst.scenarios.kafka_smoke
-
-    # app scenario with knobs: module[:function], runner deadline,
-    # clock start, typed kwargs forwarded to the scenario's main()
-    uv run python -m dst.main dst.scenarios.firehose \
-        --until 120 --seed-independent-clock 0 \
-        --kw duration_s=60 --kw feed_rate_s=1000 --kw n_clients=10
-
-The target function must be a coroutine function; it receives only the
---kw arguments (typed: int, float, bool, else str). The launcher knows
-nothing about the app - seam patching lives in the scenario module.
-
-Output: one JSON object with the SimResult fields plus the scenario's
-return value; exit 0 on a completed scenario, 1 on error/timeout.
-"""
-
 import argparse
 import ast
 import dataclasses
