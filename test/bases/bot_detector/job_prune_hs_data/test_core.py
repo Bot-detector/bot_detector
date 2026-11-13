@@ -1,7 +1,10 @@
 import pytest
 import sqlalchemy as sqla
+from prometheus_client import REGISTRY
 
 from bot_detector.job_prune_hs_data import core
+
+METRIC = "job_prune_hs_data_rows_deleted_total"
 
 
 class FakeResult:
@@ -125,3 +128,18 @@ async def test_prune_advances_cursor_to_batch_max_id() -> None:
     )
     assert first_insert == {"player_id": 0, "limit": 100}
     assert second_insert == {"player_id": 150, "limit": 100}
+
+
+@pytest.mark.asyncio
+async def test_prune_counts_deleted_rows_from_rowcount() -> None:
+    before = REGISTRY.get_sample_value(METRIC) or 0.0
+    factory = FakeSessionFactory(
+        [
+            FakeSession(batch_ids=[1], rowcount=7),
+            FakeSession(batch_ids=[]),
+        ]
+    )
+    await core.prune(factory, limit=100)  # type: ignore[arg-type]
+
+    after = REGISTRY.get_sample_value(METRIC) or 0.0
+    assert after - before == 7
