@@ -114,7 +114,10 @@ async def main():
     settings = Settings()
     start_metrics_server(port=settings.METRICS_PORT)
     async_session, async_engine = get_session_factory(SETTINGS=DBSettings())
-    await prune(async_session, limit=settings.LIMIT)
+    try:
+        await prune(async_session, limit=settings.LIMIT)
+    finally:
+        await async_engine.dispose()
 
 
 async def run_async():
