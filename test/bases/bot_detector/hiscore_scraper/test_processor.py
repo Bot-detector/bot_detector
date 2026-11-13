@@ -113,6 +113,9 @@ async def test_not_found_produces_scraped_struct_with_possible_ban(
     assert produced.highscore_data is None
     assert produced.player_data.possible_ban is True
     assert produced.player_data.updated_at is not None
+    # the not-found signal must not touch ban confirmations: only the
+    # broadcaster sets them, and the scrape must never revert one
+    assert produced.player_data.confirmed_ban is False
     mocks.produce_player_to_scrape.assert_not_awaited()
 
 

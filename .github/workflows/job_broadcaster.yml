@@ -6,7 +6,9 @@ on:
       - bases/bot_detector/job_broadcaster/**
       - components/bot_detector/database/**
       - components/bot_detector/discord_webhook/**
+      - components/bot_detector/event_queue/**
       - components/bot_detector/logfmt/**
+      - components/bot_detector/structs/**
       - components/bot_detector/wide_event/**
       - projects/job_broadcaster/**
   workflow_dispatch:

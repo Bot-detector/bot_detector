@@ -18,8 +18,10 @@ REAL_PLAYER_LABEL = "Real_Player"
 
 # Jagex ban validation via the runemetrics API is gone: a possible ban is
 # now any player whose hiscore scrape came back not-found (possible_ban = 1)
-# that has not been applied yet. The broadcaster announces and applies the
-# predicted-bot subset of that set.
+# that has not been applied yet. confirmed_player = 0 keeps human
+# "this is a real player" confirmations (Discord bot manual detect) out of
+# the candidate set - nothing in the pipeline clears that flag anymore.
+# The broadcaster announces and applies the predicted-bot subset of the set.
 
 
 def _sql_count_banned_players() -> TextClause:
@@ -29,6 +31,7 @@ def _sql_count_banned_players() -> TextClause:
         FROM Players
         WHERE possible_ban = 1
             AND confirmed_ban = 0
+            AND confirmed_player = 0
         """
     )
 
@@ -41,6 +44,7 @@ def _sql_count_banned_real_players() -> TextClause:
         JOIN prediction_latest pr ON pr.player_id = pl.id
         WHERE pl.possible_ban = 1
             AND pl.confirmed_ban = 0
+            AND pl.confirmed_player = 0
             AND pr.prediction = :real_player_label
         """
     )
@@ -53,6 +57,7 @@ def _sql_count_banned_no_data() -> TextClause:
         FROM Players pl
         WHERE pl.possible_ban = 1
             AND pl.confirmed_ban = 0
+            AND pl.confirmed_player = 0
             AND NOT EXISTS (
                 SELECT 1 FROM highscore_data_latest h
                 WHERE h.player_id = pl.id
@@ -70,6 +75,7 @@ def _sql_select_banned_bots_page() -> TextClause:
         JOIN prediction_latest pr ON pr.player_id = pl.id
         WHERE pl.possible_ban = 1
             AND pl.confirmed_ban = 0
+            AND pl.confirmed_player = 0
             AND pl.name IS NOT NULL
             AND pl.id > :player_id
             AND JSON_EXTRACT(pr.predictions, '$."Real_Player"') < 0.5
