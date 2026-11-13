@@ -10,7 +10,6 @@ def test_settings_defaults():
 
 
 def test_settings_rejects_zero_batch_size():
-    # batch_size 0 would make prune_reports loop forever on no-op deletes
     with pytest.raises(ValidationError):
         core.Settings(BATCH_SIZE=0)
 
