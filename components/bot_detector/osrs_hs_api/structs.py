@@ -1,6 +1,6 @@
 from pydantic import BaseModel, field_validator
 
-EXPECTED_SKILL_IDS: frozenset[int] = frozenset(range(24))
+EXPECTED_SKILL_IDS: frozenset[int] = frozenset(range(25))
 
 
 class Skill(BaseModel):
@@ -25,13 +25,15 @@ class PlayerStats(BaseModel):
     @field_validator("skills")
     @classmethod
     def _skills_complete(cls, value: list[Skill]) -> list[Skill]:
-        """Rejects truncated payloads: the lite API reports every skill id."""
-        ids = {skill.id for skill in value}
-        if ids != EXPECTED_SKILL_IDS:
-            missing = sorted(EXPECTED_SKILL_IDS - ids)
-            unexpected = sorted(ids - EXPECTED_SKILL_IDS)
+        """Rejects truncated payloads: every known skill id must be present.
+
+        Unknown extra ids are tolerated, so a Jagex schema addition does
+        not break scrapes; the smoke test flags the drift instead.
+        """
+        missing = EXPECTED_SKILL_IDS - {skill.id for skill in value}
+        if missing:
             raise ValueError(
-                f"skill id set mismatch: missing={missing} unexpected={unexpected}"
+                f"truncated payload: missing skill ids {sorted(missing)}"
             )
         return value
 

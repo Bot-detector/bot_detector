@@ -1,18 +1,22 @@
-"""Tests for HiscoreOldSchoolAPI against a real aiohttp test server.
+"""Unit tests for HiscoreOldSchoolAPI: HTTP simulated, no sockets.
 
-Real redirect following is exercised on purpose: Jagex's edge serves the
-hiscores "down" page as a redirect to /community, and the API must detect
-it via resp.history.
+FakeSession mirrors the aiohttp client surface the brick touches
+(get -> async CM -> response with status/history/json/raise_for_status),
+so the brick's mapping logic is exercised without a transport. What a
+fake cannot prove - real redirect following, real timeout timers, real
+Jagex payload shape vs the validators - is the compose smoke's job:
+make smoke-scraper runs this brick against the live API.
 """
 
 import asyncio
-import socket
-from unittest.mock import AsyncMock, patch
+from contextlib import asynccontextmanager
+from dataclasses import dataclass
+from typing import Optional, Union
+from unittest.mock import AsyncMock
 
 import aiohttp
 import pytest
-from aiohttp import ClientResponseError, ClientTimeout, web
-from aiohttp.test_utils import TestServer
+from aiohttp import ClientResponseError, ClientTimeout, RequestInfo
 from bot_detector.osrs_hs_api.core import HiscoreOldSchoolAPI
 from bot_detector.osrs_hs_api.exceptions import (
     Err,
@@ -24,17 +28,7 @@ from bot_detector.osrs_hs_api.structs import EXPECTED_SKILL_IDS
 from bot_detector.rate_limiter import RateLimiter
 from pydantic import ValidationError
 
-
-def closed_port() -> int:
-    """An ephemeral port with no listener: connect is refused at once.
-
-    Hard-coding a privileged port hangs behind firewalls that DROP
-    instead of REJECT (30s+ connect timeout); a fresh bind-then-close
-    socket fails with a connection-level ClientError everywhere.
-    """
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
+URL = "http://jagex.test/hiscore"
 
 
 def _skill(i: int) -> dict:
@@ -51,33 +45,67 @@ def _valid_hiscore_payload() -> dict:
     }
 
 
-def _build_app(
-    payload: dict, status: int = 200, delay_s: float = 0.0
-) -> web.Application:
-    async def hiscore(request: web.Request) -> web.StreamResponse:
-        if delay_s:
-            await asyncio.sleep(delay_s)
-        if status in (301, 302, 303, 307, 308):
-            return web.Response(status=status, headers={"Location": "/main"})
-        return web.json_response(payload, status=status)
+@dataclass(frozen=True)
+class Hop:
+    """One redirect hop as resp.history reports it."""
 
-    async def main(request: web.Request) -> web.Response:
-        return web.json_response({})
-
-    app = web.Application()
-    app.router.add_get("/hiscore", hiscore)
-    app.router.add_get("/main", main)
-    return app
+    status: int
+    url: str = "http://jagex.test/first"
 
 
-async def _start(payload: dict, status: int = 200, delay_s: float = 0.0) -> TestServer:
-    server = TestServer(_build_app(payload, status, delay_s))
-    await server.start_server()
-    return server
+class FakeResponse:
+    """The slice of aiohttp's ClientResponse the brick consumes."""
+
+    def __init__(
+        self,
+        status: int = 200,
+        payload: Optional[dict] = None,
+        history: tuple[Hop, ...] = (),
+        json_delay_s: float = 0.0,
+    ) -> None:
+        self.status = status
+        self.payload = payload
+        self.history = history
+        self.url = URL
+        self._json_delay_s = json_delay_s
+
+    def raise_for_status(self) -> None:
+        if self.status >= 400:
+            request_info = RequestInfo(
+                url=self.url, method="GET", headers={}, real_url=self.url
+            )
+            raise ClientResponseError(
+                request_info, (), status=self.status, message="fake"
+            )
+
+    async def json(self) -> Optional[dict]:
+        if self._json_delay_s:
+            await asyncio.sleep(self._json_delay_s)
+        return self.payload
 
 
-def _api(server: TestServer, **kwargs) -> HiscoreOldSchoolAPI:
-    return HiscoreOldSchoolAPI(url=str(server.make_url("/hiscore")), **kwargs)
+Outcome = Union[FakeResponse, Exception]
+
+
+class FakeSession:
+    """Session double: each get() pops the next scripted outcome and
+    records the kwargs the brick passed (timeout, proxy, params)."""
+
+    def __init__(self, outcomes: list[Outcome]) -> None:
+        self._outcomes = list(outcomes)
+        self.calls: list[dict] = []
+
+    @asynccontextmanager
+    async def get(self, **kwargs):
+        self.calls.append(kwargs)
+        outcome = self._outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        yield outcome
+
+
+def _api(**kwargs) -> HiscoreOldSchoolAPI:
+    return HiscoreOldSchoolAPI(url=URL, **kwargs)
 
 
 def test_default_timeout_bounds_requests():
@@ -89,29 +117,20 @@ def test_default_timeout_bounds_requests():
 
 @pytest.mark.asyncio
 async def test_get_success():
-    server = await _start(_valid_hiscore_payload())
-    api = _api(server)
-    try:
-        async with aiohttp.ClientSession() as session:
-            result = await api.get("zezima", session)
-    finally:
-        await server.close()
+    session = FakeSession([FakeResponse(200, payload=_valid_hiscore_payload())])
+    result = await _api().get("zezima", session)
 
     assert result.is_ok()
     assert isinstance(result, Ok)
     assert result.value.skills[0].name == "skill_0"
     assert result.latency > 0
+    assert session.calls[0]["params"] == {"player": "zezima"}
 
 
 @pytest.mark.asyncio
 async def test_get_player_not_found():
-    server = await _start({"error": "not found"}, status=404)
-    api = _api(server)
-    try:
-        async with aiohttp.ClientSession() as session:
-            result = await api.get("nonexistent_player", session)
-    finally:
-        await server.close()
+    session = FakeSession([FakeResponse(404, payload={"error": "not found"})])
+    result = await _api().get("nonexistent_player", session)
 
     assert result.is_err()
     assert isinstance(result, Err)
@@ -123,13 +142,10 @@ async def test_get_player_not_found():
 @pytest.mark.asyncio
 async def test_get_unexpected_redirect(status: int):
     # the client follows the redirect; detection relies on resp.history
-    server = await _start({}, status=status)
-    api = _api(server)
-    try:
-        async with aiohttp.ClientSession() as session:
-            result = await api.get("player", session)
-    finally:
-        await server.close()
+    session = FakeSession(
+        [FakeResponse(200, payload={}, history=(Hop(status=status),))]
+    )
+    result = await _api().get("player", session)
 
     assert result.is_err()
     assert isinstance(result, Err)
@@ -139,13 +155,8 @@ async def test_get_unexpected_redirect(status: int):
 
 @pytest.mark.asyncio
 async def test_get_server_error():
-    server = await _start({"error": "boom"}, status=500)
-    api = _api(server)
-    try:
-        async with aiohttp.ClientSession() as session:
-            result = await api.get("player", session)
-    finally:
-        await server.close()
+    session = FakeSession([FakeResponse(500, payload={"error": "boom"})])
+    result = await _api().get("player", session)
 
     assert result.is_err()
     assert isinstance(result, Err)
@@ -156,15 +167,9 @@ async def test_get_server_error():
 
 @pytest.mark.asyncio
 async def test_get_connection_error():
-    # a port with no listener: connect must fail with a client error.
-    # Depending on the OS this surfaces as ClientConnectorError (refused) or
-    # ConnectionTimeoutError (filtered/dropped); both are aiohttp ClientErrors.
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        port = s.getsockname()[1]
-    api = HiscoreOldSchoolAPI(url=f"http://127.0.0.1:{port}/hiscore")
-    async with aiohttp.ClientSession() as session:
-        result = await api.get("player", session)
+    # refused / dropped connections are transport outcomes
+    session = FakeSession([aiohttp.ClientConnectionError("refused")])
+    result = await _api().get("player", session)
 
     assert result.is_err()
     assert isinstance(result, Err)
@@ -172,14 +177,30 @@ async def test_get_connection_error():
 
 
 @pytest.mark.asyncio
+async def test_get_timeout_error():
+    # a transport timeout surfaces as Err, not a raise
+    session = FakeSession([asyncio.TimeoutError()])
+    result = await _api().get("player", session)
+
+    assert result.is_err()
+    assert isinstance(result, Err)
+    assert isinstance(result.error, (aiohttp.ClientError, asyncio.TimeoutError))
+    assert result.latency > 0
+
+
+@pytest.mark.asyncio
+async def test_timeout_is_forwarded_to_session():
+    timeout = ClientTimeout(total=3, connect=1)
+    session = FakeSession([FakeResponse(200, payload=_valid_hiscore_payload())])
+    await _api(timeout=timeout).get("player", session)
+
+    assert session.calls[0]["timeout"] == timeout
+
+
+@pytest.mark.asyncio
 async def test_transform_invalid_data():
-    server = await _start({"invalid": "structure"})
-    api = _api(server)
-    try:
-        async with aiohttp.ClientSession() as session:
-            result = await api.get("player", session)
-    finally:
-        await server.close()
+    session = FakeSession([FakeResponse(200, payload={"invalid": "structure"})])
+    result = await _api().get("player", session)
 
     assert result.is_err()
     assert isinstance(result, Err)
@@ -190,13 +211,8 @@ async def test_transform_invalid_data():
 async def test_transform_error_keeps_fetch_latency():
     # a ValidationError happens after the fetch: the Err must carry the
     # latency the fetch paid, or outcome metrics lose that scrape entirely
-    server = await _start({"invalid": "structure"})
-    api = _api(server)
-    try:
-        async with aiohttp.ClientSession() as session:
-            result = await api.get("player", session)
-    finally:
-        await server.close()
+    session = FakeSession([FakeResponse(200, payload={"invalid": "structure"})])
+    result = await _api().get("player", session)
 
     assert result.is_err()
     assert isinstance(result, Err)
@@ -208,13 +224,8 @@ async def test_truncated_payload_is_err():
     # a degraded response with only some skills must not scrape as success
     payload = _valid_hiscore_payload()
     payload["skills"] = payload["skills"][:1]
-    server = await _start(payload)
-    api = _api(server)
-    try:
-        async with aiohttp.ClientSession() as session:
-            result = await api.get("player", session)
-    finally:
-        await server.close()
+    session = FakeSession([FakeResponse(200, payload=payload)])
+    result = await _api().get("player", session)
 
     assert result.is_err()
     assert isinstance(result, Err)
@@ -223,14 +234,9 @@ async def test_truncated_payload_is_err():
 
 @pytest.mark.asyncio
 async def test_rate_limiter_is_called():
-    server = await _start(_valid_hiscore_payload())
     mock_limiter = AsyncMock()
-    api = _api(server, rate_limiter=mock_limiter)
-    try:
-        async with aiohttp.ClientSession() as session:
-            await api.get("player", session)
-    finally:
-        await server.close()
+    session = FakeSession([FakeResponse(200, payload=_valid_hiscore_payload())])
+    await _api(rate_limiter=mock_limiter).get("player", session)
 
     mock_limiter.check.assert_awaited_once()
 
@@ -243,93 +249,30 @@ async def test_rate_limiter_failure_propagates():
         async def check(self) -> None:
             raise RuntimeError("limiter bug")
 
-    server = await _start(_valid_hiscore_payload())
-    api = _api(server, rate_limiter=ExplodingLimiter(windows=[]))
-    try:
-        async with aiohttp.ClientSession() as session:
-            with pytest.raises(RuntimeError):
-                await api.get("player", session)
-    finally:
-        await server.close()
-
-
-@pytest.mark.asyncio
-async def test_timeout_bounds_slow_response():
-    # the request must fail at the configured timeout, not aiohttp's 300s default
-    server = await _start(_valid_hiscore_payload(), delay_s=1.0)
-    api = _api(server, timeout=ClientTimeout(total=0.2))
-    try:
-        async with aiohttp.ClientSession() as session:
-            result = await api.get("player", session)
-    finally:
-        await server.close()
-
-    assert result.is_err()
-    assert isinstance(result, Err)
-    assert isinstance(result.error, (aiohttp.ClientError, asyncio.TimeoutError))
-    assert result.latency < 0.9
+    session = FakeSession([FakeResponse(200, payload=_valid_hiscore_payload())])
+    with pytest.raises(RuntimeError):
+        await _api(rate_limiter=ExplodingLimiter(windows=[])).get("player", session)
 
 
 @pytest.mark.asyncio
 async def test_cancellation_propagates():
-    # cancellation is BaseException: the broad fetch error handling must
-    # not convert it to an Err value
-    server = await _start(_valid_hiscore_payload(), delay_s=1.0)
-    api = _api(server)
-    try:
-        async with aiohttp.ClientSession() as session:
-            task = asyncio.create_task(api.get("player", session))
-            await asyncio.sleep(0.05)
-            task.cancel()
-            outcomes = await asyncio.gather(task, return_exceptions=True)
-    finally:
-        await server.close()
+    # cancellation is BaseException: the fetch error handling must not
+    # convert it to an Err value, mid-body-read or not
+    session = FakeSession(
+        [FakeResponse(200, payload=_valid_hiscore_payload(), json_delay_s=5.0)]
+    )
+    task = asyncio.create_task(_api().get("player", session))
+    await asyncio.sleep(0.05)
+    task.cancel()
+    outcomes = await asyncio.gather(task, return_exceptions=True)
 
     assert isinstance(outcomes[0], asyncio.CancelledError)
 
 
 @pytest.mark.asyncio
-async def test_latency_is_recorded():
-    server = await _start(_valid_hiscore_payload())
-    api = _api(server)
-    try:
-        async with aiohttp.ClientSession() as session:
-            result = await api.get("zezima", session)
-    finally:
-        await server.close()
-
-    assert result.is_ok()
-    assert isinstance(result.latency, float)
-    assert result.latency >= 0
-
-
-@pytest.mark.asyncio
 async def test_get_with_proxy_passes_to_session():
-    server = await _start(_valid_hiscore_payload())
-    api = _api(server)
     proxy_url = "http://user:pass@proxy.example.com:8080"
-    try:
-        async with aiohttp.ClientSession() as session:
-            with patch.object(session, "get", wraps=session.get) as mock_get:
-                await api.get("zezima", session, proxy=proxy_url)
-                mock_get.assert_called_once()
-                call_kwargs = mock_get.call_args[1]
-                assert call_kwargs.get("proxy") == proxy_url
-    finally:
-        await server.close()
+    session = FakeSession([FakeResponse(200, payload=_valid_hiscore_payload())])
+    await _api().get("zezima", session, proxy=proxy_url)
 
-
-@pytest.mark.asyncio
-async def test_get_with_dead_proxy_returns_err():
-    # a proxy that refuses connections surfaces as an Err result
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        port = s.getsockname()[1]
-    dead_proxy = f"http://user:pass@127.0.0.1:{port}"
-    api = HiscoreOldSchoolAPI()
-    async with aiohttp.ClientSession() as session:
-        result = await api.get("player", session, proxy=dead_proxy)
-
-    assert result.is_err()
-    assert isinstance(result, Err)
-    assert isinstance(result.error, aiohttp.ClientError)
+    assert session.calls[0]["proxy"] == proxy_url
