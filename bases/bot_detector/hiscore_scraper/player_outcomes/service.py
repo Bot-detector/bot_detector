@@ -5,7 +5,6 @@ from typing import TypeVar
 
 from bot_detector.event_queue.core import Queue, QueueProducer
 from bot_detector.event_queue.structs import (
-    NotFoundStruct,
     ScrapedStruct,
     ToScrapeStruct,
 )
@@ -51,20 +50,6 @@ async def produce_player_to_scrape(
             player_data=player,
         ),
         label="produce player to scrape",
-    )
-
-
-async def produce_not_found(
-    player_nf_producer: QueueProducer[NotFoundStruct],
-    player: PlayerStruct,
-) -> Exception | None:
-    return await produce_with_retry(
-        player_nf_producer,
-        lambda: NotFoundStruct(
-            metadata=MetaData(version=1, source="hiscore_scraper"),
-            player_data=player,
-        ),
-        label="produce not found",
     )
 
 

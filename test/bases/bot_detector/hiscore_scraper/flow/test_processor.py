@@ -1,8 +1,8 @@
 """Unit tests for the processor stage.
 
-The processor owns every Kafka side effect: not_found production,
-transient-error requeue, transform + scraped production, and requeue
-when publishing scraped data fails.
+The processor owns every Kafka side effect: possible-ban scraped
+production on hiscore not-found, transient-error requeue, transform +
+scraped production, and requeue when publishing scraped data fails.
 """
 
 import asyncio
@@ -53,12 +53,10 @@ def _patch_producers(
     """Patches transform + the three producer helpers onto the module."""
     mocks = SimpleNamespace(
         transform=AsyncMock(return_value=transform_return),
-        produce_not_found=AsyncMock(return_value=None),
         produce_player_to_scrape=AsyncMock(return_value=None),
         produce_player_scraped=AsyncMock(return_value=None),
     )
     monkeypatch.setattr(processor, "transform_player_stats", mocks.transform)
-    monkeypatch.setattr(processor, "produce_not_found", mocks.produce_not_found)
     monkeypatch.setattr(
         processor, "produce_player_to_scrape", mocks.produce_player_to_scrape
     )
@@ -80,7 +78,6 @@ async def _process_one(results_queue: asyncio.Queue[FetchResult]) -> asyncio.Tas
             processor_id=0,
             results_queue=results_queue,
             player_ts_queue=AsyncMock(),
-            player_nf_producer=AsyncMock(),
             player_sc_producer=AsyncMock(),
         )
     )
@@ -93,7 +90,9 @@ async def _await_calls(mock: AsyncMock) -> None:
 
 
 @pytest.mark.asyncio
-async def test_not_found_produces_not_found_struct(monkeypatch: pytest.MonkeyPatch):
+async def test_not_found_produces_scraped_struct_with_possible_ban(
+    monkeypatch: pytest.MonkeyPatch,
+):
     player = _player()
     mocks = _patch_producers(monkeypatch, transform_return=None)
     results_queue = _enqueue(
@@ -105,12 +104,18 @@ async def test_not_found_produces_not_found_struct(monkeypatch: pytest.MonkeyPat
     )
 
     task = await _process_one(results_queue)
-    await asyncio.wait_for(_await_calls(mocks.produce_not_found), timeout=1.0)
+    await asyncio.wait_for(_await_calls(mocks.produce_player_scraped), timeout=1.0)
     task.cancel()
 
-    mocks.produce_not_found.assert_awaited_once()
-    requeued_player = mocks.produce_not_found.await_args.args[1]
-    assert requeued_player.possible_ban is True
+    mocks.produce_player_scraped.assert_awaited_once()
+    produced = mocks.produce_player_scraped.await_args.args[1]
+    assert produced.metadata.source == "hiscore_scraper"
+    assert produced.highscore_data is None
+    assert produced.player_data.possible_ban is True
+    assert produced.player_data.updated_at is not None
+    # the not-found signal must not touch ban confirmations: only the
+    # broadcaster sets them, and the scrape must never revert one
+    assert produced.player_data.confirmed_ban is False
     mocks.produce_player_to_scrape.assert_not_awaited()
 
 
@@ -129,7 +134,7 @@ async def test_transient_error_requeues_to_kafka(monkeypatch: pytest.MonkeyPatch
     mocks.produce_player_to_scrape.assert_awaited_once()
     requeued_player = mocks.produce_player_to_scrape.await_args.args[1]
     assert requeued_player.id == 1
-    mocks.produce_not_found.assert_not_awaited()
+    mocks.produce_player_scraped.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -328,7 +333,7 @@ async def test_not_found_emits_sampled_info_wide_event(
 
     with caplog.at_level(logging.INFO, logger=PROCESSOR_LOGGER):
         task = await _process_one(results_queue)
-        await asyncio.wait_for(_await_calls(mocks.produce_not_found), timeout=1.0)
+        await asyncio.wait_for(_await_calls(mocks.produce_player_scraped), timeout=1.0)
         task.cancel()
 
     records = _wide_event_records(caplog)

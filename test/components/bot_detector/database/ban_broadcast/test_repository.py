@@ -19,8 +19,21 @@ from bot_detector.database.ban_broadcast.repository import (
 PENDING_PREDICATES = [
     "possible_ban = 1",
     "confirmed_ban = 0",
-    "label_jagex = 2",
+    "confirmed_player = 0",
 ]
+
+
+def test_pending_queries_no_longer_require_jagex_confirmation():
+    """runemetrics (the only producer of label_jagex = 2) is gone; the
+    removal of the confirmation predicate must stay removed - a re-added
+    gate would silently empty the candidate set."""
+    for sql in (
+        _sql_count_banned_players(),
+        _sql_count_banned_real_players(),
+        _sql_count_banned_no_data(),
+        _sql_select_banned_bots_page(),
+    ):
+        assert "label_jagex" not in sql.text, "jagex confirmation gate is back"
 
 
 def test_select_pages_by_id_cursor():

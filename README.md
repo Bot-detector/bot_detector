@@ -111,10 +111,7 @@ flowchart TD
 
     subgraph Scraping
         KafkaToScrape --> HighscoreScraper(Highscore Scraper)
-        HighscoreScraper --> KafkaNotFound[/"Kafka: players.not_found"/]
-        HighscoreScraper --> KafkaScraped[/"Kafka: players.scraped"/]
-        KafkaNotFound --> RunemetricsScraper(Runemetrics Scraper)
-        RunemetricsScraper --> KafkaScraped
+        HighscoreScraper -->|"not found = possible ban"| KafkaScraped[/"Kafka: players.scraped"/]
     end
 
     subgraph Processing
@@ -136,6 +133,9 @@ flowchart TD
         ReportWorker --> MySQL[(MySQL)]
     end
 ```
+
+The ban flow in detail (possible bans, broadcast, report archive): [docs/ban-pipeline.md](docs/ban-pipeline.md)
+
 # interesting commands
 ```sh
 find . -type f -name "pyproject.toml" -not -path "*/.venv/*" -path "*/projects/*" -execdir sh -c 'echo "🔄 Updating lock in $(pwd)"; uv lock' \;
