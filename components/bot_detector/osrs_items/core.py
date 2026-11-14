@@ -2,24 +2,15 @@ import asyncio
 from datetime import datetime, timedelta
 
 import aiohttp
-from pydantic import BaseModel
+import orjson
 
-
-class ItemStruct(BaseModel):
-    id: int
-    name: str
-    examine: str | None = None
-    members: bool
-    lowalch: int | None = None
-    highalch: int | None = None
-    limit: int | None = None
-    value: int | None = None
-    icon: str | None = None
+from bot_detector.osrs_items.structs import ItemStruct
 
 
 class OsrsItemsClient:
     API_URL = "https://prices.runescape.wiki/api/v1/osrs/mapping"
     CACHE_TTL_HOURS = 24
+    REQUEST_TIMEOUT_S = 10
 
     def __init__(self, session: aiohttp.ClientSession, user_agent: str):
         self.session = session
@@ -32,20 +23,26 @@ class OsrsItemsClient:
     async def _load_items(self) -> None:
         headers = {"User-Agent": self.user_agent}
 
-        async with self.session.get(self.API_URL, headers=headers) as resp:
+        async with self.session.get(
+            self.API_URL,
+            headers=headers,
+            timeout=aiohttp.ClientTimeout(total=self.REQUEST_TIMEOUT_S),
+        ) as resp:
             if resp.status != 200:
                 raise RuntimeError(f"Failed to load items: {resp.status}")
 
-            data = await resp.json()
+            data = orjson.loads(await resp.read())
 
-        self._items_by_id = {}
-        self._items_by_name = {}
-
+        # parse fully before swapping; a bad payload must leave the old cache intact
+        by_id: dict[int, ItemStruct] = {}
+        by_name: dict[str, ItemStruct] = {}
         for item_data in data:
             item = ItemStruct(**item_data)
-            self._items_by_id[item.id] = item
-            self._items_by_name[item.name.lower()] = item
+            by_id[item.id] = item
+            by_name[item.name.lower()] = item
 
+        self._items_by_id = by_id
+        self._items_by_name = by_name
         self._loaded_at = datetime.now()
 
     def _is_stale(self) -> bool:

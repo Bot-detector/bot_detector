@@ -11,7 +11,3 @@ class ItemStruct(BaseModel):
     limit: int | None = None
     value: int | None = None
     icon: str | None = None
-
-
-class ItemsDictStruct(BaseModel):
-    items: list[ItemStruct]
