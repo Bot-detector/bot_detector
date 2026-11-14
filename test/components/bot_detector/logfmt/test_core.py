@@ -43,7 +43,7 @@ def test_format_dict_msg_is_prefixed():
 
 
 def test_format_falls_back_to_raw_text_on_bad_payload():
-    record = _record({"headers": {4: "x"}})  # nested non-str key breaks orjson
+    record = _record({"headers": {4: "x"}})
     formatted = core.JsonFormatter().format(record)
     assert formatted.startswith("logfmt_json_fallback: ")
     assert "headers" in formatted

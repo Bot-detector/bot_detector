@@ -30,8 +30,6 @@ def dump_error(error: Exception) -> dict[str, Any]:
             "method": error.request_info.method,
         }
         if error.headers:
-            # str() flattens aiohttp istr keys: orjson rejects str
-            # subclasses as dict keys ("Dict key must be str")
             data["headers"] = {
                 str(key): value
                 for key, value in error.headers.items()

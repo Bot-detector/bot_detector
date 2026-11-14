@@ -60,8 +60,6 @@ def test_set_cookie_never_leaks():
 
 
 def test_headers_keys_are_plain_str_for_orjson():
-    # regression: aiohttp istr keys made orjson.dumps raise
-    # "Dict key must be str", killing the whole log line
     dumped = dump_error(_gateway_error())
 
     assert all(type(key) is str for key in dumped["headers"])

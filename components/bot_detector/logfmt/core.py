@@ -39,8 +39,6 @@ class JsonFormatter(logging.Formatter):
         try:
             return orjson.dumps(log_record, default=str).decode()
         except TypeError:
-            # the JSON-safety contract lives at the log site; when it
-            # breaks, say so loudly instead of passing as plain text
             text = record.getMessage()
             if record.exc_info:
                 text += "\n" + self.formatException(record.exc_info)
