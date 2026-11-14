@@ -1,4 +1,3 @@
-import pytest
 from bot_detector.event_queue.adapters.memory import (
     InMemoryAdapter,
     InMemoryConfig,
@@ -91,14 +90,15 @@ def test_queue_factory_returns_error_for_unknown_queue_type():
     assert str(queue) == "Unknown queue_type: invalid"
 
 
-def test_queue_factory_raises_invalid_config():
-    with pytest.raises(InvalidConfig, match="Expected InMemoryConfig"):
-        QueueFactory.create_queue(
-            PlayerScraped,
-            queue_type="queue",
-            backend_type="memory",
-            config=object(),
-        )
+def test_queue_factory_returns_invalid_config_error():
+    result = QueueFactory.create_queue(
+        PlayerScraped,
+        queue_type="queue",
+        backend_type="memory",
+        config=object(),
+    )
+
+    assert isinstance(result, InvalidConfig)
 
 
 def test_create_lag_probe_memory():

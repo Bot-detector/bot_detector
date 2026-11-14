@@ -27,6 +27,7 @@ def create_adapter_memory(
     QueueBackendProtocol[T]
     | QueueBackendProducerProtocol[T]
     | QueueBackendConsumerProtocol[T]
+    | InvalidConfig
 ):
     from bot_detector.event_queue.adapters.memory import (
         InMemoryAdapter,
@@ -36,7 +37,7 @@ def create_adapter_memory(
     )
 
     if not isinstance(config, InMemoryConfig):
-        raise InvalidConfig(f"Expected InMemoryConfig but got {type(config)}")
+        return InvalidConfig(f"Expected InMemoryConfig but got {type(config)}")
 
     if queue_type == "queue":
         return InMemoryAdapter[model](cls=model, config=config)
@@ -54,6 +55,7 @@ def create_adapter_kafka(
     QueueBackendProtocol[T]
     | QueueBackendProducerProtocol[T]
     | QueueBackendConsumerProtocol[T]
+    | InvalidConfig
 ):
     from bot_detector.event_queue.adapters.kafka import (
         AIOKafkaAdapter,
@@ -63,7 +65,7 @@ def create_adapter_kafka(
     )
 
     if not isinstance(config, KafkaConfig):
-        raise InvalidConfig(f"Expected KafkaConfig but got {type(config)}")
+        return InvalidConfig(f"Expected KafkaConfig but got {type(config)}")
 
     if queue_type == "queue":
         return AIOKafkaAdapter[model](cls=model, config=config)
@@ -103,6 +105,12 @@ class QueueFactory:
         backend_type: Literal["memory", "kafka"],
         config: Any,
     ) -> Queue[T] | QueueProducer[T] | QueueConsumer[T] | Exception:
+        """Errors come back as values (repo convention), never raised.
+
+        Note: memory producer/consumer shapes are standalone adapters with
+        separate queues; only queue_type="queue" yields a connected pair.
+        Kafka pairs work through the shared topic instead.
+        """
         match backend_type:
             case "memory":
                 adapter = create_adapter_memory(model, config, queue_type)
@@ -110,6 +118,9 @@ class QueueFactory:
                 adapter = create_adapter_kafka(model, config, queue_type)
             case _:
                 return ValueError(f"Unknown backend_type: {backend_type}")
+
+        if isinstance(adapter, Exception):
+            return adapter
 
         name = _queue_name(model=model, config=config)
         match queue_type:

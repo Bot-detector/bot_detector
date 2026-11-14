@@ -4,7 +4,7 @@ from typing import Any, Generic, Optional, TypeVar
 
 import orjson
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer, ConsumerRecord
-from aiokafka.errors import KafkaTimeoutError
+from aiokafka.errors import KafkaError
 from bot_detector.event_queue.core.batcher import Batcher
 from bot_detector.event_queue.core.errors import (
     ConsumerConfigError,
@@ -18,6 +18,9 @@ from bot_detector.event_queue.core.interface import (
     QueueBackendConsumerProtocol,
     QueueBackendProducerProtocol,
     QueueBackendProtocol,
+)
+from bot_detector.event_queue.core.metrics import (
+    MESSAGES_SKIPPED,
 )
 from pydantic import BaseModel, ValidationError
 
@@ -74,12 +77,15 @@ class AIOKafkaProducerAdapter(
     producer = None
 
     async def start(self) -> None:
+        # build + assign only after a successful start: a failed start()
+        # must leave producer None so the next start() actually retries
         if self.producer is None:
-            self.producer = AIOKafkaProducer(
+            producer = AIOKafkaProducer(
                 bootstrap_servers=self.config.bootstrap_servers,
                 value_serializer=lambda v: orjson.dumps(v),
             )
-            await self.producer.start()
+            await producer.start()
+            self.producer = producer
 
     async def stop(self) -> None:
         if self.producer:
@@ -105,24 +111,24 @@ class AIOKafkaProducerAdapter(
                 else:
                     raise ValueError("partition_key_fn must return bytes or str")
             retries = 0
-            retry_backoff = 0
             while True:
                 try:
-                    await self.producer.send(
+                    # send_and_wait: send() alone resolves on buffering, not
+                    # broker ack; awaiting only send() silently drops the
+                    # delivery future and its errors
+                    await self.producer.send_and_wait(
                         topic=self.config.topic,
                         value=message.model_dump(exclude_none=_config.exclude_none),
                         key=key,
                     )
                     break
-                except KafkaTimeoutError as e:
+                except KafkaError as e:
                     retries += 1
-                    retry_backoff = min(
-                        retries * 10,
-                        _config.MAX_PRODUCE_RETRY_BACKOFF,
-                    )
-                    await asyncio.sleep(retry_backoff)
-                    if _config.MAX_PRODUCE_RETRIES == retries:
+                    if retries >= _config.MAX_PRODUCE_RETRIES:
                         return e
+                    await asyncio.sleep(
+                        min(retries * 10, _config.MAX_PRODUCE_RETRY_BACKOFF)
+                    )
 
 
 class AIOKafkaConsumerAdapter(
@@ -139,9 +145,11 @@ class AIOKafkaConsumerAdapter(
     async def start(self) -> None:
         if self.config.consumer_config is None:
             raise ConsumerConfigError("Consumer Configuration is None")
+        # build + assign only after a successful start: a failed start()
+        # must leave consumer None so the next start() actually retries
         if self.consumer is None:
             _config = self.config.consumer_config
-            self.consumer = AIOKafkaConsumer(
+            consumer = AIOKafkaConsumer(
                 self.config.topic,
                 bootstrap_servers=self.config.bootstrap_servers,
                 group_id=_config.group_id,
@@ -149,7 +157,8 @@ class AIOKafkaConsumerAdapter(
                 enable_auto_commit=_config.enable_auto_commit,
                 value_deserializer=_deserialize_value,
             )
-            await self.consumer.start()
+            await consumer.start()
+            self.consumer = consumer
 
     async def stop(self) -> None:
         if self.consumer:
@@ -162,7 +171,7 @@ class AIOKafkaConsumerAdapter(
             )
         try:
             record = await self.consumer.getone()
-        except Exception as e:
+        except KafkaError as e:
             return ConsumerFetchError("Failed to fetch message", cause=e)
         if record is None:
             return None
@@ -193,7 +202,7 @@ class AIOKafkaConsumerAdapter(
                     timeout_ms=remaining_ms,
                     max_records=count - batcher.size,
                 )
-            except Exception as e:
+            except KafkaError as e:
                 return ConsumerFetchError("Failed to fetch messages", cause=e)
 
             if not records:
@@ -204,7 +213,13 @@ class AIOKafkaConsumerAdapter(
                 for record in consumer_records:
                     _record = self._validate(record=record)
                     if isinstance(_record, Exception):
-                        return _record
+                        # skip, never return: returning would discard the
+                        # whole batch and stall the partition forever,
+                        # because the offset only advances on commit after
+                        # a successful get_many (commit-after-dequeue)
+                        MESSAGES_SKIPPED.inc()
+                        self.logger.warning(f"skipping invalid record: {_record}")
+                        continue
                     batcher.append(_record, auto=False)
         return batcher.flush()
 
