@@ -336,6 +336,30 @@ def test_embed_rejects_naive_timestamp():
         Embed(title="t", timestamp=datetime(2026, 1, 1))
 
 
+def test_embed_rejects_out_of_range_color():
+    """Discord's color is a 24-bit RGB code; anything outside is a
+    guaranteed 400 at send time."""
+    with pytest.raises(ValidationError):
+        Embed(title="t", color=0xFFFFFF + 1)
+    with pytest.raises(ValidationError):
+        Embed(title="t", color=-1)
+
+
+def test_embed_accepts_color_boundaries():
+    Embed(title="t", color=0)
+    Embed(title="t", color=0xFFFFFF)
+
+
+def test_embed_rejects_non_http_thumbnail_url():
+    """Docs: embed image urls 'only support http(s)' - anything else is a
+    guaranteed 400 at send time."""
+    with pytest.raises(ValidationError):
+        Embed(title="t", thumbnail_url="ftp://example.com/x.gif")
+    with pytest.raises(ValidationError):
+        Embed(title="t", thumbnail_url="/etc/passwd")
+    Embed(title="t", thumbnail_url="https://example.com/x.gif")
+
+
 @pytest.mark.asyncio
 async def test_post_refuses_message_total_over_discord_limit():
     """The 6000-char limit binds per message across all embeds, not per

@@ -37,10 +37,20 @@ class Embed(BaseModel):
 
     title: str = Field(max_length=MAX_TITLE_CHARS)
     description: str | None = Field(default=None, max_length=MAX_DESCRIPTION_CHARS)
-    color: int = 0x000000
+    color: int = Field(default=0x000000, ge=0, le=0xFFFFFF)
     fields: tuple[EmbedField, ...] = Field(default_factory=tuple)
     thumbnail_url: str | None = None
     timestamp: datetime | None = None
+
+    @model_validator(mode="after")
+    def _check_thumbnail_scheme(self) -> "Embed":
+        # docs: embed image urls "only support http(s)" - anything else is
+        # a guaranteed 400 at send time
+        if self.thumbnail_url is not None and not self.thumbnail_url.startswith(
+            ("http://", "https://")
+        ):
+            raise ValueError("thumbnail_url must be an http(s) url")
+        return self
 
     def char_count(self) -> int:
         """Characters Discord counts toward a message's 6000 limit:
