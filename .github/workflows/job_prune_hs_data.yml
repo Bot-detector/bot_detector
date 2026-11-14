@@ -2,6 +2,8 @@ name: job_prune_hs
 
 on:
   push:
+    branches:
+      - develop
     paths:
       - bases/bot_detector/job_prune_hs_data/**
       - components/bot_detector/database/**
@@ -17,6 +19,11 @@ on:
         options:
           - test
           - deploy to prd
+concurrency:
+  # event_name keeps dispatch (deploy) runs in their own group, so a push can't cancel a deploy
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
 env:
   QUAY_REGISTERY: quay.io/bot_detector/job_prune_hs_data
   DOCKERFILE: ./projects/job_prune_hs_data/Dockerfile
