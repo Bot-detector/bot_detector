@@ -37,6 +37,9 @@ def dump_error(error: Exception) -> dict[str, Any]:
                 for key, value in error.headers.items()
                 if key.lower() not in _RESPONSE_HEADER_DENYLIST
             }
+            assert all(type(key) is str for key in data["headers"]), (
+                "header keys are str because orjson rejects str subclasses as dict keys"
+            )
         return data
     message = str(error).strip()
     if message:

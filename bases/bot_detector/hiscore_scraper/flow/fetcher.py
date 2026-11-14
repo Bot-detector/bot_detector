@@ -22,7 +22,9 @@ from bot_detector.structs import PlayerStruct
 from bot_detector.wide_event import WideEventLogger
 
 logger = logging.getLogger(__name__)
-wide_event = WideEventLogger()
+# 1/1000: at ~600 req/s, sampled info events stay at ~0.6 lines/s;
+# warnings and errors are never sampled
+wide_event = WideEventLogger(sample_ratio=0.001)
 
 
 def _force_log() -> None:

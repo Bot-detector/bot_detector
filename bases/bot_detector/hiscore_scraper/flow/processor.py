@@ -23,7 +23,9 @@ from bot_detector.structs import MetaData
 from bot_detector.wide_event import WideEventLogger
 
 logger = logging.getLogger(__name__)
-wide_event = WideEventLogger()
+# 1/1000: at ~600 req/s, sampled info events stay at ~0.6 lines/s;
+# warnings and errors are never sampled
+wide_event = WideEventLogger(sample_ratio=0.001)
 
 
 def _force_log() -> None:
@@ -84,13 +86,13 @@ async def process(
                     # selects it from there.
                     player_data.updated_at = datetime.now()
                     player_data.possible_ban = True
-                    scraped_data = ScrapedStruct(
+                    possible_ban_scraped = ScrapedStruct(
                         metadata=MetaData(version=1, source="hiscore_scraper"),
                         player_data=player_data,
                         highscore_data=None,
                     )
                     error = await produce_player_scraped(
-                        player_sc_producer, scraped_data
+                        player_sc_producer, possible_ban_scraped
                     )
                     if error:
                         wide_event.add(
