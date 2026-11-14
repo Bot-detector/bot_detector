@@ -2,6 +2,8 @@ name: scrape_task_producer
 
 on:
   push:
+    branches:
+      - develop
     paths:
       - bases/bot_detector/scrape_task_producer/**
       - components/bot_detector/database/**
@@ -19,6 +21,11 @@ on:
         options:
           - test
           - deploy to prd
+
+concurrency:
+  # event_name keeps dispatch (deploy) runs in their own group, so a push can't cancel a deploy
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
 
 jobs:
   common:
