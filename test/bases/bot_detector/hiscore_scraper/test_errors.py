@@ -1,5 +1,6 @@
 """Unit tests for dump_error: JSON-safe error serialization."""
 
+import orjson
 from aiohttp import ClientResponseError, RequestInfo
 from bot_detector.hiscore_scraper.errors import dump_error
 from multidict import CIMultiDict
@@ -56,6 +57,15 @@ def test_set_cookie_never_leaks():
     assert dumped["headers"] is not None
     assert all(key.lower() != "set-cookie" for key in dumped["headers"])
     assert "cookie-value" not in str(dumped)
+
+
+def test_headers_keys_are_plain_str_for_orjson():
+    # regression: aiohttp istr keys made orjson.dumps raise
+    # "Dict key must be str", killing the whole log line
+    dumped = dump_error(_gateway_error())
+
+    assert all(type(key) is str for key in dumped["headers"])
+    orjson.dumps(dumped)
 
 
 def test_unknown_class_falls_back_to_text():

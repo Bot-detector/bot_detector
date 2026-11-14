@@ -36,7 +36,12 @@ class JsonFormatter(logging.Formatter):
         if record.exc_info:
             log_record["exception"] = self.formatException(record.exc_info)
 
-        return orjson.dumps(log_record, default=str).decode()
+        try:
+            return orjson.dumps(log_record, default=str).decode()
+        except TypeError:
+            # the JSON-safety contract lives at the log site; a bad
+            # payload (e.g. non-str dict keys) must still emit, as text
+            return record.getMessage()
 
 
 def _build_handlers(settings: Settings) -> list[logging.Handler]:

@@ -42,6 +42,13 @@ def test_format_dict_msg_is_prefixed():
     assert parsed["ts"] != "fake"
 
 
+def test_format_falls_back_to_raw_text_on_bad_payload():
+    record = _record({"headers": {4: "x"}})  # nested non-str key breaks orjson
+    formatted = core.JsonFormatter().format(record)
+    assert "headers" in formatted
+    assert "x" in formatted
+
+
 def test_format_includes_exception_traceback():
     try:
         raise ValueError("boom")
