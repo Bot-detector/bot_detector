@@ -51,7 +51,7 @@ def build_totals_embed(counts: BanCounts, bot_bans: int) -> Embed:
         color=EMBED_COLOR,
         timestamp=utcnow(),
         thumbnail_url=THUMBNAIL_TOTALS,
-        fields=[
+        fields=(
             EmbedField(name="Total Unapplied Bans", value=f"{counts.total_bans:,}"),
             EmbedField(
                 name="Predicted as Real Player (Not Counted)",
@@ -62,7 +62,7 @@ def build_totals_embed(counts: BanCounts, bot_bans: int) -> Embed:
                 value=f"{counts.no_data_bans:,}",
             ),
             EmbedField(name="Predicted as Bots (These Count)", value=f"{bot_bans:,}"),
-        ],
+        ),
     )
 
 
@@ -74,7 +74,7 @@ def build_names_embed(chunk: list[BannedBot]) -> Embed:
         color=EMBED_COLOR,
         timestamp=utcnow(),
         thumbnail_url=THUMBNAIL_NAMES,
-        fields=[EmbedField(name="Bans Being Added", value=names)],
+        fields=(EmbedField(name="Bans Being Added", value=names),),
     )
 
 
@@ -85,5 +85,5 @@ def build_complete_embed(num_bans: int) -> Embed:
         color=EMBED_COLOR,
         timestamp=utcnow(),
         thumbnail_url=THUMBNAIL_COMPLETE,
-        fields=[EmbedField(name="Total Bans Added:", value=f"{num_bans:,}")],
+        fields=(EmbedField(name="Total Bans Added:", value=f"{num_bans:,}"),),
     )

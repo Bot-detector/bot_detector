@@ -7,7 +7,7 @@ import aiohttp
 import orjson
 
 from .interface import WebhookInterface
-from .structs import MAX_EMBEDS_PER_MESSAGE, Embed
+from .structs import MAX_EMBEDS_PER_MESSAGE, MAX_TOTAL_CHARS, Embed
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +47,15 @@ class DiscordWebhookRepo(WebhookInterface):
                 f"webhook post refused: {len(embeds)} embeds exceeds "
                 f"Discord limit {MAX_EMBEDS_PER_MESSAGE}"
             )
+        if embeds:
+            # the 6000-char limit binds per message across all embeds,
+            # not per embed (docs: "across all embeds attached to a message")
+            total = sum(embed.char_count() for embed in embeds)
+            if total > MAX_TOTAL_CHARS:
+                return Exception(
+                    f"webhook post refused: embed total {total} chars exceeds "
+                    f"Discord limit {MAX_TOTAL_CHARS} for one message"
+                )
         if not embeds and not content:
             return Exception(
                 "webhook post refused: empty payload (no embeds, no content)"

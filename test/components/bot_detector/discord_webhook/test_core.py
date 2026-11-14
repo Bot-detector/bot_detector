@@ -10,7 +10,12 @@ from bot_detector.discord_webhook.core import (
     MAX_RETRY_AFTER_SECONDS,
     POST_TIMEOUT_SECONDS,
 )
-from bot_detector.discord_webhook.structs import MAX_EMBEDS_PER_MESSAGE
+from bot_detector.discord_webhook.structs import (
+    MAX_EMBEDS_PER_MESSAGE,
+    MAX_TOTAL_CHARS,
+    EmbedField,
+)
+from pydantic import ValidationError
 
 
 def _resp(
@@ -329,6 +334,52 @@ def test_embed_rejects_naive_timestamp():
     timestamp would silently shift the embed on the wire."""
     with pytest.raises(Exception):
         Embed(title="t", timestamp=datetime(2026, 1, 1))
+
+
+@pytest.mark.asyncio
+async def test_post_refuses_message_total_over_discord_limit():
+    """The 6000-char limit binds per message across all embeds, not per
+    embed (Discord docs: "across all embeds attached to a message"): two
+    individually valid embeds can still total past the limit."""
+    session = MagicMock(post=MagicMock())
+    repo = DiscordWebhookRepo(session=session)
+    half = Embed(title="t", description="d" * 3500)
+    err = await repo.post(url="http://hook", embeds=[half, half])
+    assert isinstance(err, Exception)
+    assert str(MAX_TOTAL_CHARS) in str(err)
+    session.post.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_post_refuses_message_total_at_boundary():
+    """Exactly 6000 chars must pass: the docs measure inclusively."""
+    session = MagicMock(post=MagicMock(return_value=_resp(204)))
+    repo = DiscordWebhookRepo(session=session)
+    # 256 title + 4096 description + (1 name + 1024 value) + (1 name + 622 value)
+    exact = Embed(
+        title="t" * 256,
+        description="d" * 4096,
+        fields=[
+            EmbedField(name="n", value="x" * 1024),
+            EmbedField(name="n", value="x" * 622),
+        ],
+    )
+    assert exact.char_count() == MAX_TOTAL_CHARS
+    err = await repo.post(url="http://hook", embeds=[exact])
+    assert err is None
+    session.post.assert_called_once()
+
+
+def test_embed_is_frozen():
+    """Validators bind at construction only - freezing the model turns
+    post-construction mutation into a loud error instead of a silent
+    bypass of the size limits."""
+    embed = Embed(title="t", fields=[{"name": "n", "value": "v"}])
+    assert isinstance(embed.fields, tuple)
+    with pytest.raises(ValidationError):
+        embed.title = "x" * 300
+    with pytest.raises(AttributeError):
+        embed.fields.append(EmbedField(name="n", value="v"))
 
 
 @pytest.mark.asyncio
