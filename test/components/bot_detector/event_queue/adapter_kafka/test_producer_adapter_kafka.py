@@ -1,10 +1,10 @@
 from datetime import datetime
 from typing import Optional
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import orjson
 import pytest
-from aiokafka.errors import KafkaTimeoutError
+from aiokafka.errors import KafkaError, KafkaTimeoutError
 from bot_detector.event_queue.adapters.kafka import (
     AIOKafkaProducerAdapter,
     KafkaConfig,
@@ -16,7 +16,7 @@ from bot_detector.event_queue.core.errors import (
 )
 from bot_detector.event_queue.structs import ToScrapeStruct
 from bot_detector.structs import MetaData, PlayerStruct
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 
 class PlayerScraped(BaseModel):
@@ -74,14 +74,14 @@ async def test_producer_custom_partition_key():
     ) as mock_producer_class:
         mock_producer = mock_producer_class.return_value
         mock_producer.start = AsyncMock()
-        mock_producer.send = AsyncMock()
+        mock_producer.send_and_wait = AsyncMock()
         mock_producer.stop = AsyncMock()
 
         await adapter.start()
         await adapter.put([PlayerScraped(id=9, username="Alice", score=100)])
 
         expected_key = b"1"
-        mock_producer.send.assert_called_once_with(
+        mock_producer.send_and_wait.assert_called_once_with(
             topic="players",
             value=PlayerScraped(id=9, username="Alice", score=100).model_dump(),
             key=expected_key,
@@ -100,12 +100,12 @@ async def test_producer_partition_key_bytes():
     )
     adapter = AIOKafkaProducerAdapter(PlayerScraped, config)
 
-    adapter.producer = AsyncMock()
-    adapter.producer.send = AsyncMock()
+    adapter.producer = MagicMock()
+    adapter.producer.send_and_wait = AsyncMock()
 
     await adapter.put([PlayerScraped(id=9, username="Alice", score=100)])
 
-    adapter.producer.send.assert_called_once_with(
+    adapter.producer.send_and_wait.assert_called_once_with(
         topic="players",
         value=PlayerScraped(id=9, username="Alice", score=100).model_dump(),
         key=b"bytes",
@@ -123,8 +123,8 @@ async def test_producer_partition_key_invalid_type():
         producer_config=KafkaProducerConfig(partition_key_fn=lambda _: 123),
     )
     adapter = AIOKafkaProducerAdapter(PlayerScraped, config)
-    adapter.producer = AsyncMock()
-    adapter.producer.send = AsyncMock()
+    adapter.producer = MagicMock()
+    adapter.producer.send_and_wait = AsyncMock()
 
     with pytest.raises(ValueError, match="partition_key_fn must return bytes or str"):
         await adapter.put([PlayerScraped(id=9, username="Alice", score=100)])
@@ -213,17 +213,96 @@ async def test_producer_send_failure():
         patch(
             "bot_detector.event_queue.adapters.kafka.adapter.asyncio.sleep",
             new=AsyncMock(),
-        ),
+        ) as sleep_mock,
     ):
         mock_producer = mock_producer_class.return_value
         mock_producer.start = AsyncMock()
-        mock_producer.send = AsyncMock(side_effect=KafkaTimeoutError("fail"))
+        mock_producer.send_and_wait = AsyncMock(side_effect=KafkaTimeoutError("fail"))
         mock_producer.stop = AsyncMock()
 
         await adapter.start()
         result = await adapter.put([PlayerScraped(id=1, username="Alice", score=100)])
 
         assert isinstance(result, KafkaTimeoutError)
+        # give-up check precedes the sleep: no sleep after the final failure
+        sleep_mock.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_producer_send_retries_then_succeeds():
+    config = KafkaConfig(
+        topic="players",
+        bootstrap_servers="localhost:9092",
+        consumer=False,
+        producer=True,
+        consumer_config=None,
+        producer_config=KafkaProducerConfig(
+            partition_key_fn=lambda _: "1",
+            MAX_PRODUCE_RETRIES=3,
+        ),
+    )
+    adapter = AIOKafkaProducerAdapter(PlayerScraped, config)
+
+    with (
+        patch(
+            "bot_detector.event_queue.adapters.kafka.adapter.AIOKafkaProducer"
+        ) as mock_producer_class,
+        patch(
+            "bot_detector.event_queue.adapters.kafka.adapter.asyncio.sleep",
+            new=AsyncMock(),
+        ) as sleep_mock,
+    ):
+        mock_producer = mock_producer_class.return_value
+        mock_producer.start = AsyncMock()
+        mock_producer.send_and_wait = AsyncMock(
+            side_effect=[KafkaTimeoutError("a"), KafkaTimeoutError("b"), None]
+        )
+        mock_producer.stop = AsyncMock()
+
+        await adapter.start()
+        result = await adapter.put([PlayerScraped(id=1, username="Alice", score=100)])
+
+        assert result is None
+        assert mock_producer.send_and_wait.await_count == 3
+        # one backoff sleep per retry, capped between failures only
+        assert sleep_mock.await_count == 2
+
+
+def test_producer_config_rejects_zero_retries():
+    # retries=0 would make the retry loop's cap unreachable (infinite loop)
+    with pytest.raises(ValidationError):
+        KafkaProducerConfig(MAX_PRODUCE_RETRIES=0)
+
+
+@pytest.mark.asyncio
+async def test_producer_start_failure_leaves_none_for_retry():
+    config = KafkaConfig(
+        topic="players",
+        bootstrap_servers="localhost:9092",
+        consumer=False,
+        producer=True,
+        consumer_config=None,
+        producer_config=KafkaProducerConfig(partition_key_fn=lambda _: "1"),
+    )
+    adapter = AIOKafkaProducerAdapter(PlayerScraped, config)
+
+    with patch(
+        "bot_detector.event_queue.adapters.kafka.adapter.AIOKafkaProducer"
+    ) as mock_producer_class:
+        mock_producer = mock_producer_class.return_value
+        mock_producer.start = AsyncMock(side_effect=[KafkaError("broker down"), None])
+        mock_producer.stop = AsyncMock()
+
+        with pytest.raises(KafkaError):
+            await adapter.start()
+
+        assert adapter.producer is None
+
+        await adapter.start()
+
+        # a failed start must not poison the next start(): client rebuilt
+        assert mock_producer_class.call_count == 2
+        assert mock_producer.start.await_count == 2
 
 
 @pytest.mark.asyncio
@@ -273,11 +352,11 @@ async def test_producer_exclude_none_drops_null_fields():
     )
     adapter = AIOKafkaProducerAdapter(PlayerWithNulls, config)
     adapter.producer = AsyncMock()
-    adapter.producer.send = AsyncMock()
+    adapter.producer.send_and_wait = AsyncMock()
 
     await adapter.put([PlayerWithNulls(id=1, username=None, score=100)])
 
-    adapter.producer.send.assert_called_once_with(
+    adapter.producer.send_and_wait.assert_called_once_with(
         topic="players",
         value={"id": 1, "score": 100},
         key=None,
@@ -296,11 +375,11 @@ async def test_producer_exclude_none_keeps_set_fields():
     )
     adapter = AIOKafkaProducerAdapter(PlayerWithNulls, config)
     adapter.producer = AsyncMock()
-    adapter.producer.send = AsyncMock()
+    adapter.producer.send_and_wait = AsyncMock()
 
     await adapter.put([PlayerWithNulls(id=1, username="Alice", score=100)])
 
-    adapter.producer.send.assert_called_once_with(
+    adapter.producer.send_and_wait.assert_called_once_with(
         topic="players",
         value={"id": 1, "username": "Alice", "score": 100},
         key=None,
@@ -319,11 +398,11 @@ async def test_producer_default_keeps_null_fields():
     )
     adapter = AIOKafkaProducerAdapter(PlayerWithNulls, config)
     adapter.producer = AsyncMock()
-    adapter.producer.send = AsyncMock()
+    adapter.producer.send_and_wait = AsyncMock()
 
     await adapter.put([PlayerWithNulls(id=1, username=None, score=100)])
 
-    adapter.producer.send.assert_called_once_with(
+    adapter.producer.send_and_wait.assert_called_once_with(
         topic="players",
         value={"id": 1, "username": None, "score": 100},
         key=None,

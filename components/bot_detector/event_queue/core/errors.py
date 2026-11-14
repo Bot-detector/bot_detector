@@ -28,3 +28,7 @@ class ConsumerFetchError(EventQueueError):
     def __init__(self, message: str, *, cause: Exception) -> None:
         super().__init__(message)
         self.cause = cause
+
+
+class LagProbeError(EventQueueError):
+    """Raised when a lag probe cannot determine consumer lag."""

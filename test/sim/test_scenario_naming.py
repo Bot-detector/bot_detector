@@ -15,6 +15,7 @@ EXPECTED_MODULES: frozenset[str] = frozenset(
         "firehose_parity",
         "firehose_reports_delay",
         "kafka_drain_1m",
+        "kafka_poison_advance",
         "kafka_smoke",
         "scraper_throughput",
     }

@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from aiokafka.errors import KafkaError
 from bot_detector.event_queue.adapters.kafka import (
     AIOKafkaConsumerAdapter,
     KafkaConfig,
@@ -12,7 +13,12 @@ from bot_detector.event_queue.core.errors import (
     ConsumerNotStartedError,
     MessageTypeError,
 )
+from prometheus_client import REGISTRY
 from pydantic import BaseModel, ValidationError
+
+
+def _skipped_total() -> float | None:
+    return REGISTRY.get_sample_value("event_queue_messages_skipped_total")
 
 
 class PlayerScraped(BaseModel):
@@ -273,7 +279,7 @@ async def test_consumer_connection_error():
     adapter = AIOKafkaConsumerAdapter(PlayerScraped, config)
 
     adapter.consumer = AsyncMock()
-    adapter.consumer.getone = AsyncMock(side_effect=Exception("boom"))
+    adapter.consumer.getone = AsyncMock(side_effect=KafkaError("boom"))
 
     result = await adapter.get_one()
     assert isinstance(result, ConsumerFetchError)
@@ -366,7 +372,7 @@ async def test_consumer_get_many_connection_error():
     )
     adapter = AIOKafkaConsumerAdapter(PlayerScraped, config)
     adapter.consumer = AsyncMock()
-    adapter.consumer.getmany = AsyncMock(side_effect=Exception("boom"))
+    adapter.consumer.getmany = AsyncMock(side_effect=KafkaError("boom"))
 
     result = await adapter.get_many(1)
 
@@ -381,7 +387,9 @@ async def test_consumer_get_many_invalid_message_type():
         bootstrap_servers="localhost:9092",
         consumer=True,
         producer=False,
-        consumer_config=KafkaConsumerConfig(group_id="group"),
+        # short timeout: a page of all-invalid records keeps the loop
+        # polling until the batcher's timer ends it
+        consumer_config=KafkaConsumerConfig(group_id="group", consume_timeout_ms=100),
         producer_config=None,
     )
     adapter = AIOKafkaConsumerAdapter(PlayerScraped, config)
@@ -392,9 +400,46 @@ async def test_consumer_get_many_invalid_message_type():
     adapter.consumer = AsyncMock()
     adapter.consumer.getmany = AsyncMock(return_value={0: [fake_record]})
 
+    # invalid records are skipped loudly (counter + log), not returned:
+    # returning would discard the batch and stall the partition forever
+    before = _skipped_total()
     result = await adapter.get_many(1)
 
-    assert isinstance(result, MessageTypeError)
+    assert result == []
+    assert _skipped_total() is not None
+    assert (_skipped_total() or 0) >= (before or 0) + 1
+
+
+@pytest.mark.asyncio
+async def test_consumer_get_many_skips_poison_keeps_valid():
+    config = KafkaConfig(
+        topic="players",
+        bootstrap_servers="localhost:9092",
+        consumer=True,
+        producer=False,
+        consumer_config=KafkaConsumerConfig(group_id="group"),
+        producer_config=None,
+    )
+    adapter = AIOKafkaConsumerAdapter(PlayerScraped, config)
+
+    poison_record = AsyncMock()
+    poison_record.value = {"_poison": True, "raw": "garbage"}
+    valid_record = AsyncMock()
+    valid_record.value = {"id": 1, "username": "Alice", "score": 100}
+
+    adapter.consumer = AsyncMock()
+    adapter.consumer.getmany = AsyncMock(
+        return_value={0: [poison_record, valid_record]}
+    )
+
+    # one page of 2 records against a requested count of 1: the overshoot
+    # fills the batcher immediately, so the loop ends after one call
+    before = _skipped_total()
+    result = await adapter.get_many(1)
+
+    assert not isinstance(result, Exception)
+    assert [item.username for item in result] == ["Alice"]
+    assert _skipped_total() == (before or 0) + 1
 
 
 @pytest.mark.asyncio

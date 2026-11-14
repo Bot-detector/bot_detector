@@ -1,12 +1,13 @@
 import asyncio
 import logging
-from typing import Generic, Optional, Type, TypeVar
+from typing import Any, Generic, Optional, Type, TypeVar
 
 from bot_detector.event_queue.core.interface import (
     QueueBackendConsumerProtocol,
     QueueBackendProducerProtocol,
     QueueBackendProtocol,
 )
+from bot_detector.event_queue.core.metrics import MESSAGES_SKIPPED
 from pydantic import BaseModel, ValidationError
 
 from .config import InMemoryConfig
@@ -24,41 +25,45 @@ class _InMemoryBase(Generic[T]):
         self.logger.info("[Memory] Queue initialized")
 
     async def stop(self) -> None:
-        self.logger.info("[Memory] Queue cleared/stopped")
+        self.logger.info("[Memory] Queue stopped (contents left in place)")
 
-    async def _validate(self, item) -> Optional[T]:
+    async def _validate(self, item: Any) -> T | ValidationError:
         try:
             return self.cls.model_validate(item)
         except ValidationError as e:
-            self.logger.warning(f"Validation failed: {e}")
-            return None
+            return e
 
 
 class InMemoryConsumerAdapter(
     _InMemoryBase[T],
     QueueBackendConsumerProtocol[T],
 ):
-    async def get_one(self) -> Optional[T]:
+    async def get_one(self) -> Optional[T] | Exception:
         try:
             item = self._queue.get_nowait()
-            return await self._validate(item)
         except asyncio.QueueEmpty:
             return None
+        return await self._validate(item)
 
     async def get_many(self, count: int) -> list[T]:
         results = []
         for _ in range(count):
             try:
                 item = self._queue.get_nowait()
-                validated = await self._validate(item)
-                if validated is not None:
-                    results.append(validated)
             except asyncio.QueueEmpty:
                 break
+            validated = await self._validate(item)
+            if isinstance(validated, Exception):
+                MESSAGES_SKIPPED.inc()
+                self.logger.warning(f"skipping invalid message: {validated}")
+                continue
+            results.append(validated)
         return results
 
     async def commit(self) -> Optional[Exception]:
-        self._queue.task_done()
+        # no offsets to commit in memory; task_done() bookkeeping would
+        # raise ValueError whenever commits outnumber dequeues
+        return None
 
 
 class InMemoryProducerAdapter(
@@ -66,6 +71,8 @@ class InMemoryProducerAdapter(
     QueueBackendProducerProtocol[T],
 ):
     async def put(self, messages: list[T]) -> None:
+        # a full queue blocks the producer: bounded-queue backpressure,
+        # on purpose (the paired consumer drains it)
         for message in messages:
             await self._queue.put(message)
 
@@ -74,8 +81,9 @@ class InMemoryAdapter(QueueBackendProtocol[T]):
     def __init__(
         self,
         cls: Type[T],
-        config: InMemoryConfig = InMemoryConfig(),
+        config: InMemoryConfig | None = None,
     ):
+        config = config or InMemoryConfig()
         shared_queue = asyncio.Queue(config.maxsize)
         self.producer = InMemoryProducerAdapter(cls, config)
         self.consumer = InMemoryConsumerAdapter(cls, config)
@@ -95,7 +103,7 @@ class InMemoryAdapter(QueueBackendProtocol[T]):
     async def put(self, messages: list[T]) -> None:
         await self.producer.put(messages)
 
-    async def get_one(self) -> Optional[T]:
+    async def get_one(self) -> Optional[T] | Exception:
         return await self.consumer.get_one()
 
     async def get_many(self, count: int) -> list[T]:

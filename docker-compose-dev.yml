@@ -464,6 +464,102 @@ services:
       retries: 3
       start_period: 30s
 
+  runemetrics_scraper:
+    container_name: runemetrics_scraper
+    image: bd/runemetrics_scraper:dev
+    build:
+      context: ./
+      dockerfile: ./projects/runemetrics_scraper/Dockerfile
+      target: dev
+    networks:
+      - botdetector-network
+    environment:
+      - bootstrap_servers=kafka:9092
+      - DATABASE_URL=mysql+asyncmy://root:root_bot_buster@mysql:3306/playerdata
+    env_file:
+      - .env
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kafka_setup:
+        condition: service_completed_successfully
+      mysql:
+        condition: service_healthy
+      mysql_setup:
+        condition: service_completed_successfully
+
+  worker_prediction:
+    container_name: worker_prediction
+    image: bd/worker_prediction:dev
+    build:
+      context: ./
+      dockerfile: ./projects/worker_prediction/Dockerfile
+      target: dev
+    networks:
+      - botdetector-network
+    environment:
+      - bootstrap_servers=kafka:9092
+      - DATABASE_URL=mysql+asyncmy://root:root_bot_buster@mysql:3306/playerdata
+    env_file:
+      - .env
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kafka_setup:
+        condition: service_completed_successfully
+      mysql:
+        condition: service_healthy
+      mysql_setup:
+        condition: service_completed_successfully
+
+  job_backfill_banned:
+    container_name: job_backfill_banned
+    image: bd/job_backfill_banned:dev
+    build:
+      context: ./
+      dockerfile: ./projects/job_backfill_banned/Dockerfile
+      target: dev
+    networks:
+      - botdetector-network
+    environment:
+      - bootstrap_servers=kafka:9092
+      - DATABASE_URL=mysql+asyncmy://root:root_bot_buster@mysql:3306/playerdata
+    env_file:
+      - .env
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kafka_setup:
+        condition: service_completed_successfully
+      mysql:
+        condition: service_healthy
+      mysql_setup:
+        condition: service_completed_successfully
+
+  job_hs_migration_v3:
+    container_name: job_hs_migration_v3
+    image: bd/job_hs_migration_v3:dev
+    build:
+      context: ./
+      dockerfile: ./projects/job_hs_migration_v3/Dockerfile
+      target: dev
+    networks:
+      - botdetector-network
+    environment:
+      - bootstrap_servers=kafka:9092
+      - DATABASE_URL=mysql+asyncmy://root:root_bot_buster@mysql:3306/playerdata
+    env_file:
+      - .env
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kafka_setup:
+        condition: service_completed_successfully
+      mysql:
+        condition: service_healthy
+      mysql_setup:
+        condition: service_completed_successfully
+
 networks:
   botdetector-network:
     name: bd-network

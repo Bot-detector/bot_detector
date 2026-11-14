@@ -12,6 +12,16 @@ MESSAGES_CONSUMED = Counter(
     labelnames=["queue"],
 )
 
+MESSAGES_SKIPPED = Counter(
+    name="event_queue_messages_skipped",
+    documentation=(
+        "Messages dropped by get_one/get_many because the payload failed "
+        "validation (poison bytes, schema drift, wrong type). Skipping is "
+        "how the consumer advances past a poison record under "
+        "commit-after-dequeue semantics."
+    ),
+)
+
 GET_MANY_OUTCOMES = Counter(
     name="event_queue_get_many_outcomes",
     documentation=(
